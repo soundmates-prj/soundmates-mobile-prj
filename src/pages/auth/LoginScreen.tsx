@@ -1,11 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
     Animated,
     Dimensions,
+    Keyboard,
     KeyboardAvoidingView,
     Platform,
+    Pressable,
     ScrollView,
     StyleSheet,
     Text,
@@ -13,9 +15,11 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { showToast } from '../../../components/ui/Toast';
 import { SoundMateColors } from '../../../constants/theme';
+import { authService } from '../../api';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 interface LoginScreenProps {
     navigation?: any;
@@ -23,12 +27,23 @@ interface LoginScreenProps {
     onNavigateToRegister?: () => void;
 }
 
+// Memoized decorative background component to prevent re-renders
+const DecorativeBackground = React.memo(() => (
+    <>
+        <LinearGradient
+            colors={['#0D0D0D', '#1A1A1A', '#0D0D0D']}
+            style={styles.backgroundGradient}
+        />
+        <View style={styles.decorativeCircle1} />
+        <View style={styles.decorativeCircle2} />
+        <View style={styles.decorativeCircle3} />
+    </>
+));
+
 export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRegister }: LoginScreenProps) {
-    const [email, setEmail] = useState('');
+    const [emailOrUsername, setEmailOrUsername] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    const [isEmailFocused, setIsEmailFocused] = useState(false);
-    const [isPasswordFocused, setIsPasswordFocused] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
     // Animation values
@@ -53,60 +68,101 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
         );
         pulse.start();
         return () => pulse.stop();
-    }, []);
+    }, [logoScale]);
 
-    const handlePressIn = () => {
+    const handlePressIn = useCallback(() => {
         Animated.spring(buttonScale, {
             toValue: 0.95,
             useNativeDriver: true,
         }).start();
-    };
+    }, [buttonScale]);
 
-    const handlePressOut = () => {
+    const handlePressOut = useCallback(() => {
         Animated.spring(buttonScale, {
             toValue: 1,
             friction: 3,
             tension: 40,
             useNativeDriver: true,
         }).start();
-    };
+    }, [buttonScale]);
 
-    const handleLogin = async () => {
+    const dismissKeyboard = useCallback(() => {
+        Keyboard.dismiss();
+    }, []);
+
+    const toggleShowPassword = useCallback(() => {
+        setShowPassword(prev => !prev);
+    }, []);
+
+    const handleLogin = useCallback(async () => {
+        // Validation
+        if (!emailOrUsername.trim()) {
+            showToast.warning('Thiếu thông tin', 'Vui lòng nhập email hoặc tên đăng nhập');
+            return;
+        }
+        if (!password.trim()) {
+            showToast.warning('Thiếu thông tin', 'Vui lòng nhập mật khẩu');
+            return;
+        }
+
         setIsLoading(true);
-        // Simulate login
-        setTimeout(() => {
-            setIsLoading(false);
-            if (onLoginSuccess) {
-                onLoginSuccess();
+
+        try {
+            const response = await authService.login({
+                emailOrUsername: emailOrUsername.trim().toLowerCase(),
+                password: password,
+            });
+
+            if (response.success) {
+                showToast.success('Đăng nhập thành công!', `Chào mừng bạn quay trở lại!`);
+
+                // TODO: Save tokens to secure storage
+                // if (response.data?.accessToken) {
+                //     await AsyncStorage.setItem('accessToken', response.data.accessToken);
+                //     await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
+                // }
+
+                if (onLoginSuccess) {
+                    onLoginSuccess();
+                }
+            } else {
+                showToast.error('Đăng nhập thất bại', response.message || 'Email hoặc mật khẩu không đúng');
             }
-        }, 1500);
-    };
+        } catch (error: any) {
+            console.error('Login error:', error);
+            showToast.error('Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [emailOrUsername, password, onLoginSuccess]);
 
-    const handleForgotPassword = () => {
-        console.log('Forgot password pressed');
-    };
+    const handleForgotPassword = useCallback(() => {
+        showToast.info('Quên mật khẩu', 'Tính năng đang được phát triển');
+    }, []);
 
-    const handleCreateAccount = () => {
+    const handleCreateAccount = useCallback(() => {
         if (onNavigateToRegister) {
             onNavigateToRegister();
         }
-    };
+    }, [onNavigateToRegister]);
+
+    // Memoized logo transform style
+    const logoTransformStyle = useMemo(() => ({
+        transform: [{ scale: logoScale }]
+    }), [logoScale]);
+
+    // Memoized button transform style
+    const buttonTransformStyle = useMemo(() => ({
+        transform: [{ scale: buttonScale }]
+    }), [buttonScale]);
 
     return (
-        <View style={styles.container}>
-            {/* Background with gradient overlay */}
-            <LinearGradient
-                colors={['#0D0D0D', '#1A1A1A', '#0D0D0D']}
-                style={styles.backgroundGradient}
-            />
-
-            {/* Decorative circles */}
-            <View style={styles.decorativeCircle1} />
-            <View style={styles.decorativeCircle2} />
-            <View style={styles.decorativeCircle3} />
+        <Pressable style={styles.container} onPress={dismissKeyboard}>
+            {/* Background - memoized to prevent re-renders */}
+            <DecorativeBackground />
 
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={styles.keyboardView}
             >
                 <ScrollView
@@ -116,12 +172,7 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
                 >
                     {/* Logo/Avatar Section */}
                     <View style={styles.logoSection}>
-                        <Animated.View
-                            style={[
-                                styles.logoContainer,
-                                { transform: [{ scale: logoScale }] }
-                            ]}
-                        >
+                        <Animated.View style={[styles.logoContainer, logoTransformStyle]}>
                             <LinearGradient
                                 colors={[SoundMateColors.primary, SoundMateColors.primaryDark]}
                                 style={styles.logoGradient}
@@ -139,40 +190,32 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
                     <View style={styles.formContainer}>
                         <Text style={styles.title}>Đăng nhập</Text>
 
-                        {/* Email Input */}
-                        <View style={[
-                            styles.inputContainer,
-                            isEmailFocused && styles.inputContainerFocused
-                        ]}>
+                        {/* Email or Username Input */}
+                        <View style={styles.inputContainer}>
                             <Ionicons
-                                name="mail-outline"
+                                name="person-outline"
                                 size={20}
-                                color={isEmailFocused ? SoundMateColors.primary : SoundMateColors.textMuted}
+                                color={SoundMateColors.textMuted}
                                 style={styles.inputIcon}
                             />
                             <TextInput
                                 style={styles.input}
-                                placeholder="Email"
+                                placeholder="Email hoặc tên đăng nhập"
                                 placeholderTextColor={SoundMateColors.textMuted}
-                                value={email}
-                                onChangeText={setEmail}
-                                keyboardType="email-address"
+                                value={emailOrUsername}
+                                onChangeText={setEmailOrUsername}
                                 autoCapitalize="none"
                                 autoCorrect={false}
-                                onFocus={() => setIsEmailFocused(true)}
-                                onBlur={() => setIsEmailFocused(false)}
+                                returnKeyType="next"
                             />
                         </View>
 
                         {/* Password Input */}
-                        <View style={[
-                            styles.inputContainer,
-                            isPasswordFocused && styles.inputContainerFocused
-                        ]}>
+                        <View style={styles.inputContainer}>
                             <Ionicons
                                 name="lock-closed-outline"
                                 size={20}
-                                color={isPasswordFocused ? SoundMateColors.primary : SoundMateColors.textMuted}
+                                color={SoundMateColors.textMuted}
                                 style={styles.inputIcon}
                             />
                             <TextInput
@@ -182,11 +225,11 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
                                 value={password}
                                 onChangeText={setPassword}
                                 secureTextEntry={!showPassword}
-                                onFocus={() => setIsPasswordFocused(true)}
-                                onBlur={() => setIsPasswordFocused(false)}
+                                returnKeyType="done"
+                                onSubmitEditing={handleLogin}
                             />
                             <TouchableOpacity
-                                onPress={() => setShowPassword(!showPassword)}
+                                onPress={toggleShowPassword}
                                 style={styles.eyeIcon}
                             >
                                 <Ionicons
@@ -198,7 +241,7 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
                         </View>
 
                         {/* Login Button */}
-                        <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+                        <Animated.View style={buttonTransformStyle}>
                             <TouchableOpacity
                                 onPressIn={handlePressIn}
                                 onPressOut={handlePressOut}
@@ -269,7 +312,7 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
                     </Text>
                 </ScrollView>
             </KeyboardAvoidingView>
-        </View>
+        </Pressable>
     );
 }
 
@@ -383,15 +426,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         marginBottom: 16,
         height: 58,
-    },
-    inputContainerFocused: {
-        borderColor: SoundMateColors.primary,
-        backgroundColor: SoundMateColors.surfaceLight,
-        shadowColor: SoundMateColors.primary,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.25,
-        shadowRadius: 10,
-        elevation: 5,
     },
     inputIcon: {
         marginRight: 12,

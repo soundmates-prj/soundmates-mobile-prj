@@ -1,11 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Animated,
     Dimensions,
+    Keyboard,
     KeyboardAvoidingView,
     Platform,
+    Pressable,
     ScrollView,
     StyleSheet,
     Text,
@@ -13,9 +15,11 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { showToast } from '../../../components/ui/Toast';
 import { SoundMateColors } from '../../../constants/theme';
+import { authService } from '../../api';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 const OTP_LENGTH = 6;
 
 interface OTPScreenProps {
@@ -26,6 +30,18 @@ interface OTPScreenProps {
     onResendOTP?: () => void;
     onGoBack?: () => void;
 }
+
+// Memoized decorative background component
+const DecorativeBackground = React.memo(() => (
+    <>
+        <LinearGradient
+            colors={['#0D0D0D', '#1A1A1A', '#0D0D0D']}
+            style={styles.backgroundGradient}
+        />
+        <View style={styles.decorativeCircle1} />
+        <View style={styles.decorativeCircle2} />
+    </>
+));
 
 export default function OTPScreen({
     navigation,
@@ -57,23 +73,27 @@ export default function OTPScreen({
         }
     }, [countdown]);
 
-    const handlePressIn = () => {
+    const handlePressIn = useCallback(() => {
         Animated.spring(buttonScale, {
             toValue: 0.95,
             useNativeDriver: true,
         }).start();
-    };
+    }, [buttonScale]);
 
-    const handlePressOut = () => {
+    const handlePressOut = useCallback(() => {
         Animated.spring(buttonScale, {
             toValue: 1,
             friction: 3,
             tension: 40,
             useNativeDriver: true,
         }).start();
-    };
+    }, [buttonScale]);
 
-    const shakeError = () => {
+    const dismissKeyboard = useCallback(() => {
+        Keyboard.dismiss();
+    }, []);
+
+    const shakeError = useCallback(() => {
         Animated.sequence([
             Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
             Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
@@ -81,9 +101,9 @@ export default function OTPScreen({
             Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
             Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
         ]).start();
-    };
+    }, [shakeAnim]);
 
-    const handleOtpChange = (value: string, index: number) => {
+    const handleOtpChange = useCallback((value: string, index: number) => {
         // Only allow numbers
         if (value && !/^\d+$/.test(value)) return;
 
@@ -111,70 +131,124 @@ export default function OTPScreen({
         if (value && index < OTP_LENGTH - 1) {
             inputRefs.current[index + 1]?.focus();
         }
-    };
+    }, [otp]);
 
-    const handleKeyPress = (e: any, index: number) => {
+    const handleKeyPress = useCallback((e: any, index: number) => {
         if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
             inputRefs.current[index - 1]?.focus();
         }
-    };
+    }, [otp]);
 
-    const handleVerify = async () => {
+    const handleVerify = useCallback(async () => {
         const otpCode = otp.join('');
 
         if (otpCode.length !== OTP_LENGTH) {
             shakeError();
+            showToast.warning('Mã OTP chưa đầy đủ', 'Vui lòng nhập đủ 6 số');
+            return;
+        }
+
+        if (!email) {
+            showToast.error('Lỗi', 'Không tìm thấy email để xác thực');
             return;
         }
 
         setIsLoading(true);
-        // Simulate OTP verification
-        setTimeout(() => {
-            setIsLoading(false);
-            if (onVerifySuccess) {
-                onVerifySuccess();
-            }
-        }, 1500);
-    };
 
-    const handleResendOTP = () => {
+        try {
+            const response = await authService.verifyOtp({
+                email: email,
+                otpCode: otpCode,
+            });
+
+            if (response.success) {
+                showToast.success('Xác thực thành công!', 'Tài khoản của bạn đã được kích hoạt');
+                if (onVerifySuccess) {
+                    onVerifySuccess();
+                }
+            } else {
+                shakeError();
+                showToast.error('Xác thực thất bại', response.message || 'Mã OTP không đúng hoặc đã hết hạn');
+                // Clear OTP inputs
+                setOtp(Array(OTP_LENGTH).fill(''));
+                inputRefs.current[0]?.focus();
+            }
+        } catch (error: any) {
+            console.error('Verify OTP error:', error);
+            shakeError();
+            showToast.error('Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [otp, email, shakeError, onVerifySuccess]);
+
+    const handleResendOTP = useCallback(async () => {
         if (!canResend) return;
 
-        setCountdown(60);
-        setCanResend(false);
-        setOtp(Array(OTP_LENGTH).fill(''));
+        if (!email) {
+            showToast.error('Lỗi', 'Không tìm thấy email để gửi lại mã');
+            return;
+        }
+
+        setIsLoading(true);
+
+        try {
+            const response = await authService.resendOtp(email);
+
+            if (response.success) {
+                showToast.success('Đã gửi lại mã OTP', 'Vui lòng kiểm tra email của bạn');
+                setCountdown(60);
+                setCanResend(false);
+                setOtp(Array(OTP_LENGTH).fill(''));
+                inputRefs.current[0]?.focus();
+            } else {
+                showToast.error('Không thể gửi lại mã', response.message || 'Vui lòng thử lại sau');
+            }
+        } catch (error: any) {
+            console.error('Resend OTP error:', error);
+            showToast.error('Lỗi kết nối', 'Không thể kết nối đến máy chủ');
+        } finally {
+            setIsLoading(false);
+        }
 
         if (onResendOTP) {
             onResendOTP();
         }
-    };
+    }, [canResend, email, onResendOTP]);
 
-    const handleGoBack = () => {
+    const handleGoBack = useCallback(() => {
         if (onGoBack) {
             onGoBack();
         }
-    };
+    }, [onGoBack]);
 
-    const maskedContact = email
-        ? email.replace(/(.{2})(.*)(@.*)/, '$1***$3')
-        : phoneNumber
-            ? phoneNumber.replace(/(\d{3})(\d*)(\d{3})/, '$1****$3')
-            : '***';
+    const maskedContact = useMemo(() => {
+        if (email) {
+            return email.replace(/(.{2})(.*)(@.*)/, '$1***$3');
+        }
+        if (phoneNumber) {
+            return phoneNumber.replace(/(\d{3})(\d*)(\d{3})/, '$1****$3');
+        }
+        return '***';
+    }, [email, phoneNumber]);
+
+    // Memoized button transform style
+    const buttonTransformStyle = useMemo(() => ({
+        transform: [{ scale: buttonScale }]
+    }), [buttonScale]);
+
+    // Memoized shake transform style
+    const shakeTransformStyle = useMemo(() => ({
+        transform: [{ translateX: shakeAnim }]
+    }), [shakeAnim]);
 
     return (
-        <View style={styles.container}>
-            {/* Background with gradient overlay */}
-            <LinearGradient
-                colors={['#0D0D0D', '#1A1A1A', '#0D0D0D']}
-                style={styles.backgroundGradient}
-            />
-
-            {/* Decorative circles */}
-            <View style={styles.decorativeCircle1} />
-            <View style={styles.decorativeCircle2} />
+        <Pressable style={styles.container} onPress={dismissKeyboard}>
+            {/* Background - memoized to prevent re-renders */}
+            <DecorativeBackground />
 
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={styles.keyboardView}
             >
                 <ScrollView
@@ -207,12 +281,7 @@ export default function OTPScreen({
                     </View>
 
                     {/* OTP Input Section */}
-                    <Animated.View
-                        style={[
-                            styles.otpContainer,
-                            { transform: [{ translateX: shakeAnim }] }
-                        ]}
-                    >
+                    <Animated.View style={[styles.otpContainer, shakeTransformStyle]}>
                         {otp.map((digit, index) => (
                             <View
                                 key={index}
@@ -237,7 +306,7 @@ export default function OTPScreen({
                     </Animated.View>
 
                     {/* Verify Button */}
-                    <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+                    <Animated.View style={buttonTransformStyle}>
                         <TouchableOpacity
                             onPressIn={handlePressIn}
                             onPressOut={handlePressOut}
@@ -264,8 +333,10 @@ export default function OTPScreen({
                     <View style={styles.resendContainer}>
                         <Text style={styles.resendText}>Không nhận được mã?</Text>
                         {canResend ? (
-                            <TouchableOpacity onPress={handleResendOTP}>
-                                <Text style={styles.resendButton}>Gửi lại</Text>
+                            <TouchableOpacity onPress={handleResendOTP} disabled={isLoading}>
+                                <Text style={[styles.resendButton, isLoading && styles.resendButtonDisabled]}>
+                                    Gửi lại
+                                </Text>
                             </TouchableOpacity>
                         ) : (
                             <Text style={styles.countdownText}>
@@ -275,7 +346,7 @@ export default function OTPScreen({
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
-        </View>
+        </Pressable>
     );
 }
 
@@ -419,6 +490,9 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '700',
         color: SoundMateColors.primary,
+    },
+    resendButtonDisabled: {
+        opacity: 0.5,
     },
     countdownText: {
         fontSize: 14,

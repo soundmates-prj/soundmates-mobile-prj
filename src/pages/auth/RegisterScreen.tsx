@@ -1,11 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
     Animated,
     Dimensions,
+    Keyboard,
     KeyboardAvoidingView,
     Platform,
+    Pressable,
     ScrollView,
     StyleSheet,
     Text,
@@ -13,9 +15,11 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { showToast } from '../../../components/ui/Toast';
 import { SoundMateColors } from '../../../constants/theme';
+import { authService } from '../../api';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 interface RegisterScreenProps {
     navigation?: any;
@@ -23,24 +27,35 @@ interface RegisterScreenProps {
     onNavigateToLogin?: () => void;
 }
 
+// Memoized decorative background component to prevent re-renders
+const DecorativeBackground = React.memo(() => (
+    <>
+        <LinearGradient
+            colors={['#0D0D0D', '#1A1A1A', '#0D0D0D']}
+            style={styles.backgroundGradient}
+        />
+        <View style={styles.decorativeCircle1} />
+        <View style={styles.decorativeCircle2} />
+        <View style={styles.decorativeCircle3} />
+    </>
+));
+
 export default function RegisterScreen({
     navigation,
     onRegisterSuccess,
     onNavigateToLogin
 }: RegisterScreenProps) {
-    const [firstName, setFirstName] = useState('');
-    const [lastName, setLastName] = useState('');
+    // Form states
+    const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [phoneNumber, setPhoneNumber] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
 
-    // Focus states
-    const [isFirstNameFocused, setIsFirstNameFocused] = useState(false);
-    const [isLastNameFocused, setIsLastNameFocused] = useState(false);
-    const [isEmailFocused, setIsEmailFocused] = useState(false);
-    const [isPasswordFocused, setIsPasswordFocused] = useState(false);
-    const [isPhoneFocused, setIsPhoneFocused] = useState(false);
+    // UI states
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
     // Animation values
@@ -65,56 +80,133 @@ export default function RegisterScreen({
         );
         pulse.start();
         return () => pulse.stop();
-    }, []);
+    }, [logoScale]);
 
-    const handlePressIn = () => {
+    const handlePressIn = useCallback(() => {
         Animated.spring(buttonScale, {
             toValue: 0.95,
             useNativeDriver: true,
         }).start();
-    };
+    }, [buttonScale]);
 
-    const handlePressOut = () => {
+    const handlePressOut = useCallback(() => {
         Animated.spring(buttonScale, {
             toValue: 1,
             friction: 3,
             tension: 40,
             useNativeDriver: true,
         }).start();
-    };
+    }, [buttonScale]);
 
-    const handleRegister = async () => {
+    const dismissKeyboard = useCallback(() => {
+        Keyboard.dismiss();
+    }, []);
+
+    const toggleShowPassword = useCallback(() => {
+        setShowPassword(prev => !prev);
+    }, []);
+
+    const toggleShowConfirmPassword = useCallback(() => {
+        setShowConfirmPassword(prev => !prev);
+    }, []);
+
+    const handleRegister = useCallback(async () => {
+        // Validation
+        if (!username.trim()) {
+            showToast.warning('Thiếu thông tin', 'Vui lòng nhập tên đăng nhập');
+            return;
+        }
+        // Username validation - no spaces, alphanumeric and underscore only
+        const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
+        if (!usernameRegex.test(username.trim())) {
+            showToast.error('Tên đăng nhập không hợp lệ', 'Tên đăng nhập phải từ 3-20 ký tự, chỉ bao gồm chữ, số và dấu gạch dưới');
+            return;
+        }
+        if (!email.trim()) {
+            showToast.warning('Thiếu thông tin', 'Vui lòng nhập email của bạn');
+            return;
+        }
+        // Email format validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            showToast.error('Email không hợp lệ', 'Vui lòng nhập đúng định dạng email');
+            return;
+        }
+        if (!password.trim()) {
+            showToast.warning('Thiếu thông tin', 'Vui lòng nhập mật khẩu');
+            return;
+        }
+        if (password.length < 6) {
+            showToast.error('Mật khẩu yếu', 'Mật khẩu phải có ít nhất 6 ký tự');
+            return;
+        }
+        if (!confirmPassword.trim()) {
+            showToast.warning('Thiếu thông tin', 'Vui lòng xác nhận mật khẩu');
+            return;
+        }
+        if (password !== confirmPassword) {
+            showToast.error('Mật khẩu không khớp', 'Mật khẩu và xác nhận mật khẩu phải giống nhau');
+            return;
+        }
+        if (!firstName.trim()) {
+            showToast.warning('Thiếu thông tin', 'Vui lòng nhập họ của bạn');
+            return;
+        }
+        if (!lastName.trim()) {
+            showToast.warning('Thiếu thông tin', 'Vui lòng nhập tên của bạn');
+            return;
+        }
+
         setIsLoading(true);
-        // Simulate register
-        setTimeout(() => {
-            setIsLoading(false);
-            if (onRegisterSuccess) {
-                onRegisterSuccess(email);
-            }
-        }, 1500);
-    };
 
-    const handleNavigateToLogin = () => {
+        try {
+            const response = await authService.register({
+                username: username.trim().toLowerCase(),
+                email: email.trim().toLowerCase(),
+                password: password,
+                firstName: firstName.trim(),
+                lastName: lastName.trim(),
+            });
+
+            if (response.success) {
+                showToast.success('Đăng ký thành công!', 'Vui lòng kiểm tra email để xác thực tài khoản');
+                if (onRegisterSuccess) {
+                    onRegisterSuccess(email);
+                }
+            } else {
+                showToast.error('Đăng ký thất bại', response.message || 'Có lỗi xảy ra, vui lòng thử lại');
+            }
+        } catch (error: any) {
+            console.error('Register error:', error);
+            showToast.error('Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [username, email, password, confirmPassword, firstName, lastName, onRegisterSuccess]);
+
+    const handleNavigateToLogin = useCallback(() => {
         if (onNavigateToLogin) {
             onNavigateToLogin();
         }
-    };
+    }, [onNavigateToLogin]);
+
+    // Memoized logo transform style
+    const logoTransformStyle = useMemo(() => ({
+        transform: [{ scale: logoScale }]
+    }), [logoScale]);
+
+    // Memoized button transform style
+    const buttonTransformStyle = useMemo(() => ({
+        transform: [{ scale: buttonScale }]
+    }), [buttonScale]);
 
     return (
-        <View style={styles.container}>
-            {/* Background with gradient overlay */}
-            <LinearGradient
-                colors={['#0D0D0D', '#1A1A1A', '#0D0D0D']}
-                style={styles.backgroundGradient}
-            />
-
-            {/* Decorative circles */}
-            <View style={styles.decorativeCircle1} />
-            <View style={styles.decorativeCircle2} />
-            <View style={styles.decorativeCircle3} />
+        <Pressable style={styles.container} onPress={dismissKeyboard}>
+            {/* Background - memoized to prevent re-renders */}
+            <DecorativeBackground />
 
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={styles.keyboardView}
             >
                 <ScrollView
@@ -124,19 +216,13 @@ export default function RegisterScreen({
                 >
                     {/* Logo Section */}
                     <View style={styles.logoSection}>
-                        <Animated.View
-                            style={[
-                                styles.logoContainer,
-                                { transform: [{ scale: logoScale }] }
-                            ]}
-                        >
+                        <Animated.View style={[styles.logoContainer, logoTransformStyle]}>
                             <LinearGradient
                                 colors={[SoundMateColors.primary, SoundMateColors.primaryDark]}
                                 style={styles.logoGradient}
                             >
-                                <Ionicons name="musical-notes" size={48} color="#FFFFFF" />
+                                <Ionicons name="musical-notes" size={40} color="#FFFFFF" />
                             </LinearGradient>
-                            {/* Glow effect */}
                             <View style={styles.logoGlow} />
                         </Animated.View>
                         <Text style={styles.appName}>SoundMate</Text>
@@ -149,10 +235,7 @@ export default function RegisterScreen({
                         {/* Name Row - Họ và Tên */}
                         <View style={styles.nameRow}>
                             {/* Họ Input */}
-                            <View style={[
-                                styles.inputContainerHalf,
-                                isFirstNameFocused && styles.inputContainerFocused
-                            ]}>
+                            <View style={styles.inputContainerHalf}>
                                 <TextInput
                                     style={styles.inputHalf}
                                     placeholder="Họ"
@@ -160,16 +243,12 @@ export default function RegisterScreen({
                                     value={firstName}
                                     onChangeText={setFirstName}
                                     autoCapitalize="words"
-                                    onFocus={() => setIsFirstNameFocused(true)}
-                                    onBlur={() => setIsFirstNameFocused(false)}
+                                    returnKeyType="next"
                                 />
                             </View>
 
                             {/* Tên Input */}
-                            <View style={[
-                                styles.inputContainerHalf,
-                                isLastNameFocused && styles.inputContainerFocused
-                            ]}>
+                            <View style={styles.inputContainerHalf}>
                                 <TextInput
                                     style={styles.inputHalf}
                                     placeholder="Tên"
@@ -177,21 +256,38 @@ export default function RegisterScreen({
                                     value={lastName}
                                     onChangeText={setLastName}
                                     autoCapitalize="words"
-                                    onFocus={() => setIsLastNameFocused(true)}
-                                    onBlur={() => setIsLastNameFocused(false)}
+                                    returnKeyType="done"
+                                    onSubmitEditing={handleRegister}
                                 />
                             </View>
                         </View>
 
+                        {/* Username Input */}
+                        <View style={styles.inputContainer}>
+                            <Ionicons
+                                name="person-outline"
+                                size={20}
+                                color={SoundMateColors.textMuted}
+                                style={styles.inputIcon}
+                            />
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Tên đăng nhập"
+                                placeholderTextColor={SoundMateColors.textMuted}
+                                value={username}
+                                onChangeText={setUsername}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                returnKeyType="next"
+                            />
+                        </View>
+
                         {/* Email Input */}
-                        <View style={[
-                            styles.inputContainer,
-                            isEmailFocused && styles.inputContainerFocused
-                        ]}>
+                        <View style={styles.inputContainer}>
                             <Ionicons
                                 name="mail-outline"
                                 size={20}
-                                color={isEmailFocused ? SoundMateColors.primary : SoundMateColors.textMuted}
+                                color={SoundMateColors.textMuted}
                                 style={styles.inputIcon}
                             />
                             <TextInput
@@ -203,20 +299,16 @@ export default function RegisterScreen({
                                 keyboardType="email-address"
                                 autoCapitalize="none"
                                 autoCorrect={false}
-                                onFocus={() => setIsEmailFocused(true)}
-                                onBlur={() => setIsEmailFocused(false)}
+                                returnKeyType="next"
                             />
                         </View>
 
                         {/* Password Input */}
-                        <View style={[
-                            styles.inputContainer,
-                            isPasswordFocused && styles.inputContainerFocused
-                        ]}>
+                        <View style={styles.inputContainer}>
                             <Ionicons
                                 name="lock-closed-outline"
                                 size={20}
-                                color={isPasswordFocused ? SoundMateColors.primary : SoundMateColors.textMuted}
+                                color={SoundMateColors.textMuted}
                                 style={styles.inputIcon}
                             />
                             <TextInput
@@ -226,11 +318,10 @@ export default function RegisterScreen({
                                 value={password}
                                 onChangeText={setPassword}
                                 secureTextEntry={!showPassword}
-                                onFocus={() => setIsPasswordFocused(true)}
-                                onBlur={() => setIsPasswordFocused(false)}
+                                returnKeyType="next"
                             />
                             <TouchableOpacity
-                                onPress={() => setShowPassword(!showPassword)}
+                                onPress={toggleShowPassword}
                                 style={styles.eyeIcon}
                             >
                                 <Ionicons
@@ -241,31 +332,37 @@ export default function RegisterScreen({
                             </TouchableOpacity>
                         </View>
 
-                        {/* Phone Number Input */}
-                        <View style={[
-                            styles.inputContainer,
-                            isPhoneFocused && styles.inputContainerFocused
-                        ]}>
+                        {/* Confirm Password Input */}
+                        <View style={styles.inputContainer}>
                             <Ionicons
-                                name="call-outline"
+                                name="lock-closed-outline"
                                 size={20}
-                                color={isPhoneFocused ? SoundMateColors.primary : SoundMateColors.textMuted}
+                                color={SoundMateColors.textMuted}
                                 style={styles.inputIcon}
                             />
                             <TextInput
                                 style={styles.input}
-                                placeholder="Số điện thoại"
+                                placeholder="Xác nhận mật khẩu"
                                 placeholderTextColor={SoundMateColors.textMuted}
-                                value={phoneNumber}
-                                onChangeText={setPhoneNumber}
-                                keyboardType="phone-pad"
-                                onFocus={() => setIsPhoneFocused(true)}
-                                onBlur={() => setIsPhoneFocused(false)}
+                                value={confirmPassword}
+                                onChangeText={setConfirmPassword}
+                                secureTextEntry={!showConfirmPassword}
+                                returnKeyType="next"
                             />
+                            <TouchableOpacity
+                                onPress={toggleShowConfirmPassword}
+                                style={styles.eyeIcon}
+                            >
+                                <Ionicons
+                                    name={showConfirmPassword ? "eye-outline" : "eye-off-outline"}
+                                    size={20}
+                                    color={SoundMateColors.textMuted}
+                                />
+                            </TouchableOpacity>
                         </View>
 
                         {/* Register Button */}
-                        <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+                        <Animated.View style={buttonTransformStyle}>
                             <TouchableOpacity
                                 onPressIn={handlePressIn}
                                 onPressOut={handlePressOut}
@@ -308,7 +405,7 @@ export default function RegisterScreen({
                     </Text>
                 </ScrollView>
             </KeyboardAvoidingView>
-        </View>
+        </Pressable>
     );
 }
 
@@ -361,16 +458,16 @@ const styles = StyleSheet.create({
     },
     logoSection: {
         alignItems: 'center',
-        marginBottom: 24,
+        marginBottom: 16,
     },
     logoContainer: {
-        marginBottom: 12,
+        marginBottom: 8,
         position: 'relative',
     },
     logoGradient: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
+        width: 80,
+        height: 80,
+        borderRadius: 40,
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: SoundMateColors.primary,
@@ -381,29 +478,29 @@ const styles = StyleSheet.create({
     },
     logoGlow: {
         position: 'absolute',
-        top: -10,
-        left: -10,
-        right: -10,
-        bottom: -10,
-        borderRadius: 60,
+        top: -8,
+        left: -8,
+        right: -8,
+        bottom: -8,
+        borderRadius: 48,
         backgroundColor: SoundMateColors.primary,
         opacity: 0.15,
         zIndex: -1,
     },
     appName: {
-        fontSize: 28,
+        fontSize: 24,
         fontWeight: '800',
         color: SoundMateColors.textPrimary,
         letterSpacing: 2,
     },
     formContainer: {
-        marginBottom: 24,
+        marginBottom: 16,
     },
     title: {
-        fontSize: 28,
+        fontSize: 24,
         fontWeight: '700',
         color: SoundMateColors.textPrimary,
-        marginBottom: 24,
+        marginBottom: 20,
         textAlign: 'center',
     },
     nameRow: {
@@ -417,51 +514,42 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: SoundMateColors.surface,
-        borderRadius: 16,
+        borderRadius: 14,
         borderWidth: 1.5,
         borderColor: SoundMateColors.border,
-        paddingHorizontal: 16,
-        height: 58,
+        paddingHorizontal: 14,
+        height: 52,
     },
     inputHalf: {
         flex: 1,
-        fontSize: 16,
+        fontSize: 15,
         color: SoundMateColors.textPrimary,
     },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: SoundMateColors.surface,
-        borderRadius: 16,
+        borderRadius: 14,
         borderWidth: 1.5,
         borderColor: SoundMateColors.border,
-        paddingHorizontal: 16,
-        marginBottom: 16,
-        height: 58,
-    },
-    inputContainerFocused: {
-        borderColor: SoundMateColors.primary,
-        backgroundColor: SoundMateColors.surfaceLight,
-        shadowColor: SoundMateColors.primary,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.25,
-        shadowRadius: 10,
-        elevation: 5,
+        paddingHorizontal: 14,
+        marginBottom: 14,
+        height: 52,
     },
     inputIcon: {
-        marginRight: 12,
+        marginRight: 10,
     },
     input: {
         flex: 1,
-        fontSize: 16,
+        fontSize: 15,
         color: SoundMateColors.textPrimary,
     },
     eyeIcon: {
         padding: 4,
     },
     registerButton: {
-        height: 58,
-        borderRadius: 16,
+        height: 52,
+        borderRadius: 14,
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: SoundMateColors.primary,
@@ -471,7 +559,7 @@ const styles = StyleSheet.create({
         elevation: 10,
     },
     registerButtonText: {
-        fontSize: 18,
+        fontSize: 17,
         fontWeight: '700',
         color: '#FFFFFF',
         letterSpacing: 0.5,
@@ -482,24 +570,24 @@ const styles = StyleSheet.create({
     },
     loginLinkContainer: {
         alignItems: 'center',
-        marginTop: 24,
-        marginBottom: 24,
+        marginTop: 16,
+        marginBottom: 16,
     },
     loginLinkText: {
-        fontSize: 16,
+        fontSize: 15,
         color: SoundMateColors.textSecondary,
-        marginBottom: 8,
+        marginBottom: 6,
     },
     loginLinkButton: {
-        fontSize: 18,
+        fontSize: 17,
         fontWeight: '700',
         color: SoundMateColors.primary,
     },
     footerText: {
-        fontSize: 12,
+        fontSize: 11,
         color: SoundMateColors.textMuted,
         textAlign: 'center',
-        lineHeight: 20,
+        lineHeight: 18,
     },
     linkText: {
         color: SoundMateColors.primary,

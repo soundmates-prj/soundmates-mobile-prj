@@ -2,6 +2,8 @@ import { registerRootComponent } from 'expo';
 import React, { useCallback, useState } from 'react';
 import { StatusBar, StyleSheet } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
+import { toastConfig } from './components/ui/Toast';
 import { SoundMateColors } from './constants/theme';
 import { HomeScreen, LoginScreen, OTPScreen, RegisterScreen } from './src/pages';
 
@@ -92,6 +94,8 @@ function App() {
             <SafeAreaView style={styles.container} edges={['top']}>
                 {renderScreen()}
             </SafeAreaView>
+            {/* Toast notification component - must be at the end */}
+            <Toast config={toastConfig} />
         </SafeAreaProvider>
     );
 }
