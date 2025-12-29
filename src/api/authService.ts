@@ -48,6 +48,30 @@ export interface VerifyOtpResponse {
     message?: string;
 }
 
+export interface UpdateProfileOptionsRequest {
+    bio?: string;
+    phone?: string;
+    gender?: string;
+    dateOfBirth?: string;
+    profileImageUrl?: string;
+    backgroundImageUrl?: string;
+    location?: string;
+    website?: string;
+}
+
+export interface UpdateProfileOptionsResponse {
+    id: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    bio?: string;
+    phone?: string;
+    gender?: string;
+    dateOfBirth?: string;
+    location?: string;
+    website?: string;
+}
+
 // Auth Service class
 class AuthService {
     /**
@@ -223,6 +247,30 @@ class AuthService {
             return {
                 success: true,
                 message: 'Đăng xuất thành công!',
+            };
+        } catch (error: any) {
+            return {
+                success: false,
+                message: handleApiError(error),
+            };
+        }
+    }
+
+    /**
+     * Update profile options (Bio, Phone, Gender, DOB, etc.)
+     * Requires authentication
+     */
+    async updateProfileOptions(data: UpdateProfileOptionsRequest): Promise<ApiResponse<UpdateProfileOptionsResponse>> {
+        try {
+            const response = await authApiClient.put<UpdateProfileOptionsResponse>(
+                AUTH_ENDPOINTS.PROFILE_OPTIONS,
+                data
+            );
+
+            return {
+                success: true,
+                data: response.data,
+                message: 'Cập nhật thông tin thành công!',
             };
         } catch (error: any) {
             return {

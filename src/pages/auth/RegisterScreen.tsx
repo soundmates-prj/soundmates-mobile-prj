@@ -23,7 +23,7 @@ const { height } = Dimensions.get('window');
 
 interface RegisterScreenProps {
     navigation?: any;
-    onRegisterSuccess?: (email?: string) => void;
+    onRegisterSuccess?: (email?: string, password?: string) => void;
     onNavigateToLogin?: () => void;
 }
 
@@ -171,7 +171,8 @@ export default function RegisterScreen({
             if (response.success) {
                 showToast.success('Đăng ký thành công!', 'Vui lòng kiểm tra email để xác thực tài khoản');
                 if (onRegisterSuccess) {
-                    onRegisterSuccess(email);
+                    // Pass both email and password for auto-login after OTP verification
+                    onRegisterSuccess(email.trim().toLowerCase(), password);
                 }
             } else {
                 showToast.error('Đăng ký thất bại', response.message || 'Có lỗi xảy ra, vui lòng thử lại');

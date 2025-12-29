@@ -23,8 +23,9 @@ const { height } = Dimensions.get('window');
 
 interface LoginScreenProps {
     navigation?: any;
-    onLoginSuccess?: () => void;
+    onLoginSuccess?: (response?: any) => void;
     onNavigateToRegister?: () => void;
+    onUnverifiedEmail?: (email: string, password: string) => void;
 }
 
 // Memoized decorative background component to prevent re-renders
@@ -40,7 +41,7 @@ const DecorativeBackground = React.memo(() => (
     </>
 ));
 
-export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRegister }: LoginScreenProps) {
+export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRegister, onUnverifiedEmail }: LoginScreenProps) {
     const [emailOrUsername, setEmailOrUsername] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -113,28 +114,39 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
                 password: password,
             });
 
-            if (response.success) {
+            if (response.success && response.data) {
                 showToast.success('Đăng nhập thành công!', `Chào mừng bạn quay trở lại!`);
 
-                // TODO: Save tokens to secure storage
-                // if (response.data?.accessToken) {
-                //     await AsyncStorage.setItem('accessToken', response.data.accessToken);
-                //     await AsyncStorage.setItem('refreshToken', response.data.refreshToken);
-                // }
-
                 if (onLoginSuccess) {
-                    onLoginSuccess();
+                    onLoginSuccess(response.data);
                 }
             } else {
-                showToast.error('Đăng nhập thất bại', response.message || 'Email hoặc mật khẩu không đúng');
+                // Check if email is not verified (error code 403)
+                const errorMessage = response.message || '';
+                const isUnverifiedEmail = errorMessage.toLowerCase().includes('verify') ||
+                    errorMessage.includes('403') ||
+                    errorMessage.toLowerCase().includes('email');
+
+                if (isUnverifiedEmail && onUnverifiedEmail) {
+                    // Call handler to redirect to OTP screen and resend verification
+                    onUnverifiedEmail(emailOrUsername.trim().toLowerCase(), password);
+                } else {
+                    showToast.error('Đăng nhập thất bại', response.message || 'Email hoặc mật khẩu không đúng');
+                }
             }
         } catch (error: any) {
             console.error('Login error:', error);
-            showToast.error('Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.');
+
+            // Check for 403 error in axios response
+            if (error?.response?.status === 403 && onUnverifiedEmail) {
+                onUnverifiedEmail(emailOrUsername.trim().toLowerCase(), password);
+            } else {
+                showToast.error('Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.');
+            }
         } finally {
             setIsLoading(false);
         }
-    }, [emailOrUsername, password, onLoginSuccess]);
+    }, [emailOrUsername, password, onLoginSuccess, onUnverifiedEmail]);
 
     const handleForgotPassword = useCallback(() => {
         showToast.info('Quên mật khẩu', 'Tính năng đang được phát triển');

@@ -9,6 +9,7 @@ export type TabName = 'home' | 'live' | 'create' | 'library' | 'profile';
 interface BottomNavigationProps {
     activeTab: TabName;
     onTabPress: (tab: TabName) => void;
+    onLogout?: () => void;
 }
 
 interface NavItemProps {
@@ -31,7 +32,7 @@ const NavItem = ({ icon, iconActive, label, isActive, onPress }: NavItemProps) =
     </TouchableOpacity>
 );
 
-export default function BottomNavigation({ activeTab, onTabPress }: BottomNavigationProps) {
+export default function BottomNavigation({ activeTab, onTabPress, onLogout }: BottomNavigationProps) {
     return (
         <View style={styles.container}>
             <NavItem
@@ -73,14 +74,16 @@ export default function BottomNavigation({ activeTab, onTabPress }: BottomNaviga
                 isActive={activeTab === 'library'}
                 onPress={() => onTabPress('library')}
             />
-            <NavItem
-                name="profile"
-                icon="person-outline"
-                iconActive="person"
-                label="Tôi"
-                isActive={activeTab === 'profile'}
-                onPress={() => onTabPress('profile')}
-            />
+
+            {/* Logout Button (temporary) */}
+            <TouchableOpacity style={styles.navItem} onPress={onLogout} activeOpacity={0.7}>
+                <Ionicons
+                    name="log-out-outline"
+                    size={24}
+                    color={SoundMateColors.textMuted}
+                />
+                <Text style={styles.navText}>Đăng xuất</Text>
+            </TouchableOpacity>
         </View>
     );
 }

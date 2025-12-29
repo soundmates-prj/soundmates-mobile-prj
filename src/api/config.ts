@@ -36,6 +36,7 @@ export const AUTH_ENDPOINTS = {
     RESET_PASSWORD: '/auth/reset-password',
     REFRESH_TOKEN: '/auth/refresh-token',
     LOGOUT: '/auth/logout',
+    PROFILE_OPTIONS: '/auth/profile/options', // Update optional profile info (bio, phone, gender, dob, etc.)
 };
 
 export default API_CONFIG;

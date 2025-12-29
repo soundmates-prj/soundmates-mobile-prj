@@ -362,7 +362,7 @@ export default function HomeScreen({ navigation, onLogout }: HomeScreenProps) {
             </Animated.ScrollView>
 
             {/* Bottom Navigation */}
-            <BottomNavigation activeTab={activeTab} onTabPress={handleTabPress} />
+            <BottomNavigation activeTab={activeTab} onTabPress={handleTabPress} onLogout={onLogout} />
         </View>
     );
 }
