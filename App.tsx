@@ -5,9 +5,9 @@ import { StatusBar, StyleSheet } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { showToast, toastConfig } from './components/ui/Toast';
-import { SoundMateColors } from './constants/theme';
+import { SoundMateLightColors } from './constants/theme';
 import { authService } from './src/api';
-import { HomeScreen, LoginScreen, OTPScreen, ProfileSetupScreen, RegisterScreen } from './src/pages';
+import { HomeScreen, LoginScreen, OTPScreen, ProfileScreen, ProfileSetupScreen, RegisterScreen } from './src/pages';
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -25,6 +25,7 @@ enum Screen {
     REGISTER = 'register',
     OTP = 'otp',
     PROFILE_SETUP = 'profile_setup',
+    PROFILE = 'profile',
 }
 
 function App() {
@@ -217,6 +218,14 @@ function App() {
         setCurrentScreen(Screen.LOGIN);
     }, [clearAuthTokens]);
 
+    const handleNavigateToProfile = useCallback(() => {
+        setCurrentScreen(Screen.PROFILE);
+    }, []);
+
+    const handleBackToHome = useCallback(() => {
+        setCurrentScreen(Screen.HOME);
+    }, []);
+
     const renderScreen = () => {
         switch (currentScreen) {
             case Screen.LOGIN:
@@ -228,7 +237,9 @@ function App() {
                     />
                 );
             case Screen.HOME:
-                return <HomeScreen onLogout={handleLogout} />;
+                return <HomeScreen onLogout={handleLogout} onNavigateToProfile={handleNavigateToProfile} />;
+            case Screen.PROFILE:
+                return <ProfileScreen onBackToHome={handleBackToHome} />;
             case Screen.REGISTER:
                 return (
                     <RegisterScreen
@@ -241,7 +252,7 @@ function App() {
                     <OTPScreen
                         email={userEmail}
                         onVerifySuccess={handleOTPVerifySuccess}
-                        onGoBack={handleOTPGoBack}
+                        onNavigateBack={handleOTPGoBack}
                     />
                 );
             case Screen.PROFILE_SETUP:
@@ -265,8 +276,8 @@ function App() {
     return (
         <SafeAreaProvider>
             <StatusBar
-                barStyle="light-content"
-                backgroundColor={SoundMateColors.background}
+                barStyle="dark-content"
+                backgroundColor={SoundMateLightColors.background}
                 translucent
             />
             <SafeAreaView style={styles.container} edges={['top']}>
@@ -281,11 +292,11 @@ function App() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: SoundMateColors.background,
+        backgroundColor: SoundMateLightColors.background,
     },
     placeholder: {
         flex: 1,
-        backgroundColor: SoundMateColors.background,
+        backgroundColor: SoundMateLightColors.background,
     },
 });
 

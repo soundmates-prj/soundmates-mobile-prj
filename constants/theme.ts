@@ -28,7 +28,7 @@ export const Colors = {
   },
 };
 
-// SoundMate Brand Colors
+// SoundMate Brand Colors - Dark Theme (Original)
 export const SoundMateColors = {
   // Primary - Vibrant Orange
   primary: '#FF6B35',
@@ -68,6 +68,55 @@ export const SoundMateColors = {
     orangeLight: ['#FF8A5C', '#FF6B35'],
     orangeGold: ['#FF6B35', '#FFB347'],
     dark: ['#0D0D0D', '#1A1A1A', '#0D0D0D'],
+  },
+};
+
+// SoundMate Light Theme - Cyan Blue (#55C5F1)
+export const SoundMateLightColors = {
+  // Primary - Cyan Blue
+  primary: '#55C5F1',
+  primaryDark: '#3BB5E8',
+  primaryLight: '#7DD4F5',
+  primaryGradientStart: '#7DD4F5',
+  primaryGradientEnd: '#55C5F1',
+
+  // Accent
+  accent: '#55C5F1',
+  accentDark: '#3BB5E8',
+  accentLight: '#A8E4FA',
+
+  // Background - Light
+  background: '#FAFAFA',
+  surface: '#FFFFFF',
+  surfaceLight: '#F5F5F5',
+  surfaceElevated: '#FFFFFF',
+
+  // Text
+  textPrimary: '#1E293B',
+  textSecondary: '#6B7280',
+  textMuted: '#9CA3AF',
+  textInverse: '#FFFFFF',
+  textPlaceholder: '#55C5F1',
+
+  // Borders
+  border: '#1E293B',
+  borderLight: '#D1D5DB',
+  borderActive: '#55C5F1',
+
+  // Status
+  success: '#10B981',
+  warning: '#F59E0B',
+  error: '#EF4444',
+  info: '#55C5F1',
+
+  // Social
+  google: '#4285F4',
+  facebook: '#1877F2',
+
+  // Gradients
+  gradient: {
+    primary: ['#7DD4F5', '#55C5F1'],
+    light: ['#FAFAFA', '#FFFFFF'],
   },
 };
 

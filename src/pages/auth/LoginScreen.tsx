@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
     Animated,
-    Dimensions,
+    Image,
     Keyboard,
     KeyboardAvoidingView,
     Platform,
@@ -16,10 +16,8 @@ import {
     View,
 } from 'react-native';
 import { showToast } from '../../../components/ui/Toast';
-import { SoundMateColors } from '../../../constants/theme';
+import { SoundMateLightColors } from '../../../constants/theme';
 import { authService } from '../../api';
-
-const { height } = Dimensions.get('window');
 
 interface LoginScreenProps {
     navigation?: any;
@@ -27,19 +25,6 @@ interface LoginScreenProps {
     onNavigateToRegister?: () => void;
     onUnverifiedEmail?: (email: string, password: string) => void;
 }
-
-// Memoized decorative background component to prevent re-renders
-const DecorativeBackground = React.memo(() => (
-    <>
-        <LinearGradient
-            colors={['#0D0D0D', '#1A1A1A', '#0D0D0D']}
-            style={styles.backgroundGradient}
-        />
-        <View style={styles.decorativeCircle1} />
-        <View style={styles.decorativeCircle2} />
-        <View style={styles.decorativeCircle3} />
-    </>
-));
 
 export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRegister, onUnverifiedEmail }: LoginScreenProps) {
     const [emailOrUsername, setEmailOrUsername] = useState('');
@@ -49,31 +34,10 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
 
     // Animation values
     const buttonScale = useRef(new Animated.Value(1)).current;
-    const logoScale = useRef(new Animated.Value(1)).current;
-
-    // Logo pulse animation
-    React.useEffect(() => {
-        const pulse = Animated.loop(
-            Animated.sequence([
-                Animated.timing(logoScale, {
-                    toValue: 1.05,
-                    duration: 1500,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(logoScale, {
-                    toValue: 1,
-                    duration: 1500,
-                    useNativeDriver: true,
-                }),
-            ])
-        );
-        pulse.start();
-        return () => pulse.stop();
-    }, [logoScale]);
 
     const handlePressIn = useCallback(() => {
         Animated.spring(buttonScale, {
-            toValue: 0.95,
+            toValue: 0.97,
             useNativeDriver: true,
         }).start();
     }, [buttonScale]);
@@ -128,9 +92,18 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
                     errorMessage.toLowerCase().includes('email');
 
                 if (isUnverifiedEmail && onUnverifiedEmail) {
-                    // Call handler to redirect to OTP screen and resend verification
-                    onUnverifiedEmail(emailOrUsername.trim().toLowerCase(), password);
+                    // Show error toast first before redirecting
+                    showToast.warning(
+                        'Email chưa xác thực', 
+                        'Vui lòng xác thực email để tiếp tục. Chúng tôi sẽ gửi lại mã OTP cho bạn.'
+                    );
+                    
+                    // Wait a bit for user to see the toast, then redirect to OTP
+                    setTimeout(() => {
+                        onUnverifiedEmail(emailOrUsername.trim().toLowerCase(), password);
+                    }, 1500);
                 } else {
+                    // Show error for other login failures
                     showToast.error('Đăng nhập thất bại', response.message || 'Email hoặc mật khẩu không đúng');
                 }
             }
@@ -139,9 +112,21 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
 
             // Check for 403 error in axios response
             if (error?.response?.status === 403 && onUnverifiedEmail) {
-                onUnverifiedEmail(emailOrUsername.trim().toLowerCase(), password);
+                showToast.warning(
+                    'Email chưa xác thực', 
+                    'Vui lòng xác thực email để tiếp tục. Chúng tôi sẽ gửi lại mã OTP cho bạn.'
+                );
+                
+                // Wait a bit for user to see the toast, then redirect to OTP
+                setTimeout(() => {
+                    onUnverifiedEmail(emailOrUsername.trim().toLowerCase(), password);
+                }, 1500);
             } else {
-                showToast.error('Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.');
+                // Show error message from API or generic error
+                const errorMessage = error?.response?.data?.message || 
+                                   error?.message || 
+                                   'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.';
+                showToast.error('Lỗi đăng nhập', errorMessage);
             }
         } finally {
             setIsLoading(false);
@@ -158,10 +143,13 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
         }
     }, [onNavigateToRegister]);
 
-    // Memoized logo transform style
-    const logoTransformStyle = useMemo(() => ({
-        transform: [{ scale: logoScale }]
-    }), [logoScale]);
+    const handleGoogleLogin = useCallback(() => {
+        showToast.info('Đăng nhập Google', 'Tính năng đang được phát triển');
+    }, []);
+
+    const handleFacebookLogin = useCallback(() => {
+        showToast.info('Đăng nhập Facebook', 'Tính năng đang được phát triển');
+    }, []);
 
     // Memoized button transform style
     const buttonTransformStyle = useMemo(() => ({
@@ -170,9 +158,6 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
 
     return (
         <Pressable style={styles.container} onPress={dismissKeyboard}>
-            {/* Background - memoized to prevent re-renders */}
-            <DecorativeBackground />
-
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={styles.keyboardView}
@@ -182,42 +167,37 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                 >
-                    {/* Logo/Avatar Section */}
+                    {/* Logo Section */}
                     <View style={styles.logoSection}>
-                        <Animated.View style={[styles.logoContainer, logoTransformStyle]}>
-                            <LinearGradient
-                                colors={[SoundMateColors.primary, SoundMateColors.primaryDark]}
-                                style={styles.logoGradient}
-                            >
-                                <Ionicons name="musical-notes" size={48} color="#FFFFFF" />
-                            </LinearGradient>
-                            {/* Glow effect */}
-                            <View style={styles.logoGlow} />
-                        </Animated.View>
-                        <Text style={styles.appName}>SoundMate</Text>
-                        <Text style={styles.appTagline}>Kết nối âm nhạc</Text>
+                        <Image
+                            source={require('../../../assets/light_logo.png')}
+                            style={{ width: 60, height: 60 }}
+                            resizeMode="contain"
+                        />
                     </View>
+
+                    {/* Title */}
+                    <Text style={styles.title}>Đăng nhập</Text>
 
                     {/* Login Form */}
                     <View style={styles.formContainer}>
-                        <Text style={styles.title}>Đăng nhập</Text>
-
-                        {/* Email or Username Input */}
+                        {/* Email Input */}
                         <View style={styles.inputContainer}>
                             <Ionicons
-                                name="person-outline"
-                                size={20}
-                                color={SoundMateColors.textMuted}
+                                name="mail-outline"
+                                size={22}
+                                color={SoundMateLightColors.textPrimary}
                                 style={styles.inputIcon}
                             />
                             <TextInput
                                 style={styles.input}
-                                placeholder="Email hoặc tên đăng nhập"
-                                placeholderTextColor={SoundMateColors.textMuted}
+                                placeholder="Email"
+                                placeholderTextColor={SoundMateLightColors.textPlaceholder}
                                 value={emailOrUsername}
                                 onChangeText={setEmailOrUsername}
                                 autoCapitalize="none"
                                 autoCorrect={false}
+                                keyboardType="email-address"
                                 returnKeyType="next"
                             />
                         </View>
@@ -226,14 +206,14 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
                         <View style={styles.inputContainer}>
                             <Ionicons
                                 name="lock-closed-outline"
-                                size={20}
-                                color={SoundMateColors.textMuted}
+                                size={22}
+                                color={SoundMateLightColors.textPrimary}
                                 style={styles.inputIcon}
                             />
                             <TextInput
                                 style={styles.input}
                                 placeholder="Mật khẩu"
-                                placeholderTextColor={SoundMateColors.textMuted}
+                                placeholderTextColor={SoundMateLightColors.textPlaceholder}
                                 value={password}
                                 onChangeText={setPassword}
                                 secureTextEntry={!showPassword}
@@ -246,14 +226,14 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
                             >
                                 <Ionicons
                                     name={showPassword ? "eye-outline" : "eye-off-outline"}
-                                    size={20}
-                                    color={SoundMateColors.textMuted}
+                                    size={22}
+                                    color={SoundMateLightColors.textMuted}
                                 />
                             </TouchableOpacity>
                         </View>
 
                         {/* Login Button */}
-                        <Animated.View style={buttonTransformStyle}>
+                        <Animated.View style={[styles.loginButtonWrapper, buttonTransformStyle]}>
                             <TouchableOpacity
                                 onPressIn={handlePressIn}
                                 onPressOut={handlePressOut}
@@ -262,7 +242,7 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
                                 activeOpacity={0.9}
                             >
                                 <LinearGradient
-                                    colors={[SoundMateColors.primary, SoundMateColors.primaryDark]}
+                                    colors={[SoundMateLightColors.primaryLight, SoundMateLightColors.primary]}
                                     start={{ x: 0, y: 0 }}
                                     end={{ x: 1, y: 0 }}
                                     style={styles.loginButton}
@@ -278,32 +258,32 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
                             </TouchableOpacity>
                         </Animated.View>
 
-                        {/* Forgot Password */}
-                        <TouchableOpacity
-                            onPress={handleForgotPassword}
-                            style={styles.forgotPasswordContainer}
-                        >
-                            <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Divider */}
-                    <View style={styles.dividerContainer}>
-                        <View style={styles.divider} />
-                        <Text style={styles.dividerText}>hoặc</Text>
-                        <View style={styles.divider} />
+                        {/* Forgot Password with dividers below */}
+                        <View style={styles.forgotPasswordContainer}>
+                            <TouchableOpacity onPress={handleForgotPassword}>
+                                <Text style={styles.forgotPasswordText}>Quên mật khẩu ?</Text>
+                            </TouchableOpacity>
+                            <View style={styles.dividerRow}>
+                                <View style={styles.divider} />
+                                <View style={styles.dividerGap} />
+                                <View style={styles.divider} />
+                            </View>
+                        </View>
                     </View>
 
                     {/* Social Login */}
                     <View style={styles.socialContainer}>
-                        <TouchableOpacity style={styles.socialButton}>
-                            <Ionicons name="logo-google" size={24} color="#FFFFFF" />
+                        <TouchableOpacity
+                            style={styles.socialButton}
+                            onPress={handleGoogleLogin}
+                        >
+                            <Text style={styles.googleText}>G</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.socialButton}>
-                            <Ionicons name="logo-apple" size={24} color="#FFFFFF" />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.socialButton}>
-                            <Ionicons name="logo-facebook" size={24} color="#FFFFFF" />
+                        <TouchableOpacity
+                            style={styles.socialButton}
+                            onPress={handleFacebookLogin}
+                        >
+                            <Text style={styles.facebookText}>f</Text>
                         </TouchableOpacity>
                     </View>
 
@@ -317,10 +297,11 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
 
                     {/* Footer */}
                     <Text style={styles.footerText}>
-                        Bằng việc đăng nhập, bạn đồng ý với{' '}
+                        Bằng việc đăng ký, bạn đồng ý với{' '}
                         <Text style={styles.linkText}>Điều khoản dịch vụ</Text>
                         {' '}và{' '}
-                        <Text style={styles.linkText}>Chính sách bảo mật</Text>
+                        <Text style={styles.linkText}>Chính{'\n'}sách bảo mật</Text>
+                        {' '}của chúng tôi
                     </Text>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -331,40 +312,7 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: SoundMateColors.background,
-    },
-    backgroundGradient: {
-        ...StyleSheet.absoluteFillObject,
-    },
-    decorativeCircle1: {
-        position: 'absolute',
-        top: -100,
-        right: -100,
-        width: 300,
-        height: 300,
-        borderRadius: 150,
-        backgroundColor: SoundMateColors.primary,
-        opacity: 0.1,
-    },
-    decorativeCircle2: {
-        position: 'absolute',
-        bottom: -150,
-        left: -100,
-        width: 350,
-        height: 350,
-        borderRadius: 175,
-        backgroundColor: SoundMateColors.accent,
-        opacity: 0.08,
-    },
-    decorativeCircle3: {
-        position: 'absolute',
-        top: height * 0.4,
-        right: -50,
-        width: 150,
-        height: 150,
-        borderRadius: 75,
-        backgroundColor: SoundMateColors.primaryLight,
-        opacity: 0.05,
+        backgroundColor: SoundMateLightColors.background,
     },
     keyboardView: {
         flex: 1,
@@ -372,72 +320,38 @@ const styles = StyleSheet.create({
     scrollContent: {
         flexGrow: 1,
         paddingHorizontal: 24,
-        paddingTop: 10,
-        paddingBottom: 40,
+        paddingTop: 60,
+        paddingBottom: 30,
     },
     logoSection: {
         alignItems: 'center',
-        marginBottom: 40,
+        marginBottom: 30,
     },
-    logoContainer: {
-        marginBottom: 16,
-        position: 'relative',
-    },
-    logoGradient: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: SoundMateColors.primary,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.5,
-        shadowRadius: 20,
-        elevation: 15,
-    },
-    logoGlow: {
-        position: 'absolute',
-        top: -10,
-        left: -10,
-        right: -10,
-        bottom: -10,
-        borderRadius: 60,
-        backgroundColor: SoundMateColors.primary,
-        opacity: 0.15,
-        zIndex: -1,
-    },
-    appName: {
-        fontSize: 32,
-        fontWeight: '800',
-        color: SoundMateColors.textPrimary,
-        letterSpacing: 2,
-    },
-    appTagline: {
-        fontSize: 14,
-        color: SoundMateColors.textSecondary,
-        marginTop: 4,
-        letterSpacing: 1,
+    title: {
+        fontSize: 26,
+        fontWeight: '700',
+        color: SoundMateLightColors.primary,
+        marginBottom: 28,
+        textAlign: 'center',
     },
     formContainer: {
         marginBottom: 24,
     },
-    title: {
-        fontSize: 28,
-        fontWeight: '700',
-        color: SoundMateColors.textPrimary,
-        marginBottom: 24,
-        textAlign: 'center',
-    },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: SoundMateColors.surface,
-        borderRadius: 16,
-        borderWidth: 1.5,
-        borderColor: SoundMateColors.border,
+        backgroundColor: SoundMateLightColors.surface,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: SoundMateLightColors.border,
         paddingHorizontal: 16,
         marginBottom: 16,
-        height: 58,
+        height: 56,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+        elevation: 1,
     },
     inputIcon: {
         marginRight: 12,
@@ -445,97 +359,119 @@ const styles = StyleSheet.create({
     input: {
         flex: 1,
         fontSize: 16,
-        color: SoundMateColors.textPrimary,
+        color: SoundMateLightColors.textPrimary,
     },
     eyeIcon: {
         padding: 4,
     },
+    loginButtonWrapper: {
+        marginTop: 8,
+    },
     loginButton: {
-        height: 58,
-        borderRadius: 16,
+        height: 54,
+        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: SoundMateColors.primary,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.5,
-        shadowRadius: 20,
-        elevation: 10,
+        shadowColor: SoundMateLightColors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
     },
     loginButtonText: {
-        fontSize: 18,
-        fontWeight: '700',
+        fontSize: 17,
+        fontWeight: '600',
         color: '#FFFFFF',
-        letterSpacing: 0.5,
+        letterSpacing: 0.3,
     },
     loadingContainer: {
         flexDirection: 'row',
         alignItems: 'center',
     },
     forgotPasswordContainer: {
-        alignItems: 'flex-end',
-        marginTop: 16,
+        alignItems: 'center',
+        marginTop: 24,
+        marginBottom: 16,
     },
     forgotPasswordText: {
-        fontSize: 14,
-        color: SoundMateColors.primary,
-        fontWeight: '600',
+        fontSize: 15,
+        color: SoundMateLightColors.textSecondary,
+        fontWeight: '500',
+        marginBottom: 12,
     },
-    dividerContainer: {
+    dividerRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginVertical: 28,
+        width: '100%',
     },
     divider: {
         flex: 1,
         height: 1,
-        backgroundColor: SoundMateColors.border,
+        backgroundColor: SoundMateLightColors.border,
     },
-    dividerText: {
-        paddingHorizontal: 16,
-        fontSize: 14,
-        color: SoundMateColors.textMuted,
-        fontWeight: '500',
+    dividerGap: {
+        width: 60,
     },
     socialContainer: {
         flexDirection: 'row',
         justifyContent: 'center',
-        gap: 20,
+        gap: 50,
         marginBottom: 28,
     },
     socialButton: {
-        width: 60,
-        height: 60,
-        borderRadius: 16,
-        backgroundColor: SoundMateColors.surface,
+        width: 56,
+        height: 56,
+        borderRadius: 12,
+        backgroundColor: SoundMateLightColors.surface,
         borderWidth: 1.5,
-        borderColor: SoundMateColors.border,
+        borderColor: SoundMateLightColors.border,
         justifyContent: 'center',
         alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    googleText: {
+        fontSize: 24,
+        fontWeight: '600',
+        color: SoundMateLightColors.textPrimary,
+    },
+    facebookText: {
+        fontSize: 28,
+        fontWeight: '700',
+        color: SoundMateLightColors.textPrimary,
     },
     createAccountButton: {
-        height: 58,
-        borderRadius: 16,
-        borderWidth: 2,
-        borderColor: SoundMateColors.primary,
+        height: 54,
+        borderRadius: 12,
+        borderWidth: 1.5,
+        borderColor: SoundMateLightColors.border,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 28,
-        backgroundColor: 'transparent',
+        marginBottom: 24,
+        backgroundColor: SoundMateLightColors.surface,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+        elevation: 1,
     },
     createAccountText: {
         fontSize: 16,
-        fontWeight: '700',
-        color: SoundMateColors.primary,
-        letterSpacing: 0.5,
+        fontWeight: '600',
+        color: SoundMateLightColors.textPrimary,
+        letterSpacing: 0.3,
     },
     footerText: {
         fontSize: 12,
-        color: SoundMateColors.textMuted,
+        color: SoundMateLightColors.textPrimary,
         textAlign: 'center',
         lineHeight: 20,
     },
     linkText: {
-        color: SoundMateColors.primary,
-        fontWeight: '600',
+        color: SoundMateLightColors.primary,
+        fontWeight: '500',
     },
 });

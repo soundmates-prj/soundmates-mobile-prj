@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
     Animated,
-    Dimensions,
+    Image,
     Keyboard,
     KeyboardAvoidingView,
     Platform,
@@ -16,29 +16,14 @@ import {
     View,
 } from 'react-native';
 import { showToast } from '../../../components/ui/Toast';
-import { SoundMateColors } from '../../../constants/theme';
+import { SoundMateLightColors } from '../../../constants/theme';
 import { authService } from '../../api';
-
-const { height } = Dimensions.get('window');
 
 interface RegisterScreenProps {
     navigation?: any;
     onRegisterSuccess?: (email?: string, password?: string) => void;
     onNavigateToLogin?: () => void;
 }
-
-// Memoized decorative background component to prevent re-renders
-const DecorativeBackground = React.memo(() => (
-    <>
-        <LinearGradient
-            colors={['#0D0D0D', '#1A1A1A', '#0D0D0D']}
-            style={styles.backgroundGradient}
-        />
-        <View style={styles.decorativeCircle1} />
-        <View style={styles.decorativeCircle2} />
-        <View style={styles.decorativeCircle3} />
-    </>
-));
 
 export default function RegisterScreen({
     navigation,
@@ -60,31 +45,10 @@ export default function RegisterScreen({
 
     // Animation values
     const buttonScale = useRef(new Animated.Value(1)).current;
-    const logoScale = useRef(new Animated.Value(1)).current;
-
-    // Logo pulse animation
-    React.useEffect(() => {
-        const pulse = Animated.loop(
-            Animated.sequence([
-                Animated.timing(logoScale, {
-                    toValue: 1.05,
-                    duration: 1500,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(logoScale, {
-                    toValue: 1,
-                    duration: 1500,
-                    useNativeDriver: true,
-                }),
-            ])
-        );
-        pulse.start();
-        return () => pulse.stop();
-    }, [logoScale]);
 
     const handlePressIn = useCallback(() => {
         Animated.spring(buttonScale, {
-            toValue: 0.95,
+            toValue: 0.97,
             useNativeDriver: true,
         }).start();
     }, [buttonScale]);
@@ -112,14 +76,22 @@ export default function RegisterScreen({
 
     const handleRegister = useCallback(async () => {
         // Validation
+        if (!firstName.trim()) {
+            showToast.warning('Thiếu thông tin', 'Vui lòng nhập họ của bạn');
+            return;
+        }
+        if (!lastName.trim()) {
+            showToast.warning('Thiếu thông tin', 'Vui lòng nhập tên của bạn');
+            return;
+        }
         if (!username.trim()) {
-            showToast.warning('Thiếu thông tin', 'Vui lòng nhập tên đăng nhập');
+            showToast.warning('Thiếu thông tin', 'Vui lòng nhập tên người dùng');
             return;
         }
         // Username validation - no spaces, alphanumeric and underscore only
         const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
         if (!usernameRegex.test(username.trim())) {
-            showToast.error('Tên đăng nhập không hợp lệ', 'Tên đăng nhập phải từ 3-20 ký tự, chỉ bao gồm chữ, số và dấu gạch dưới');
+            showToast.error('Tên người dùng không hợp lệ', 'Tên người dùng phải từ 3-20 ký tự, chỉ bao gồm chữ, số và dấu gạch dưới');
             return;
         }
         if (!email.trim()) {
@@ -148,14 +120,6 @@ export default function RegisterScreen({
             showToast.error('Mật khẩu không khớp', 'Mật khẩu và xác nhận mật khẩu phải giống nhau');
             return;
         }
-        if (!firstName.trim()) {
-            showToast.warning('Thiếu thông tin', 'Vui lòng nhập họ của bạn');
-            return;
-        }
-        if (!lastName.trim()) {
-            showToast.warning('Thiếu thông tin', 'Vui lòng nhập tên của bạn');
-            return;
-        }
 
         setIsLoading(true);
 
@@ -179,7 +143,10 @@ export default function RegisterScreen({
             }
         } catch (error: any) {
             console.error('Register error:', error);
-            showToast.error('Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.');
+            const errorMessage = error?.response?.data?.message ||
+                error?.message ||
+                'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.';
+            showToast.error('Lỗi đăng ký', errorMessage);
         } finally {
             setIsLoading(false);
         }
@@ -191,11 +158,6 @@ export default function RegisterScreen({
         }
     }, [onNavigateToLogin]);
 
-    // Memoized logo transform style
-    const logoTransformStyle = useMemo(() => ({
-        transform: [{ scale: logoScale }]
-    }), [logoScale]);
-
     // Memoized button transform style
     const buttonTransformStyle = useMemo(() => ({
         transform: [{ scale: buttonScale }]
@@ -203,8 +165,13 @@ export default function RegisterScreen({
 
     return (
         <Pressable style={styles.container} onPress={dismissKeyboard}>
-            {/* Background - memoized to prevent re-renders */}
-            <DecorativeBackground />
+            {/* Back Button */}
+            <TouchableOpacity
+                style={styles.backButton}
+                onPress={handleNavigateToLogin}
+            >
+                <Ionicons name="chevron-back" size={28} color={SoundMateLightColors.primary} />
+            </TouchableOpacity>
 
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -217,30 +184,32 @@ export default function RegisterScreen({
                 >
                     {/* Logo Section */}
                     <View style={styles.logoSection}>
-                        <Animated.View style={[styles.logoContainer, logoTransformStyle]}>
-                            <LinearGradient
-                                colors={[SoundMateColors.primary, SoundMateColors.primaryDark]}
-                                style={styles.logoGradient}
-                            >
-                                <Ionicons name="musical-notes" size={40} color="#FFFFFF" />
-                            </LinearGradient>
-                            <View style={styles.logoGlow} />
-                        </Animated.View>
-                        <Text style={styles.appName}>SoundMate</Text>
+                        <Image
+                            source={require('../../../assets/light_logo.png')}
+                            style={{ width: 60, height: 60 }}
+                            resizeMode="contain"
+                        />
                     </View>
+
+                    {/* Title */}
+                    <Text style={styles.title}>Đăng ký</Text>
 
                     {/* Register Form */}
                     <View style={styles.formContainer}>
-                        <Text style={styles.title}>Đăng ký</Text>
-
                         {/* Name Row - Họ và Tên */}
                         <View style={styles.nameRow}>
                             {/* Họ Input */}
                             <View style={styles.inputContainerHalf}>
+                                <Ionicons
+                                    name="people-outline"
+                                    size={22}
+                                    color={SoundMateLightColors.textPrimary}
+                                    style={styles.inputIcon}
+                                />
                                 <TextInput
                                     style={styles.inputHalf}
                                     placeholder="Họ"
-                                    placeholderTextColor={SoundMateColors.textMuted}
+                                    placeholderTextColor={SoundMateLightColors.textPlaceholder}
                                     value={firstName}
                                     onChangeText={setFirstName}
                                     autoCapitalize="words"
@@ -250,15 +219,20 @@ export default function RegisterScreen({
 
                             {/* Tên Input */}
                             <View style={styles.inputContainerHalf}>
+                                <Ionicons
+                                    name="people-outline"
+                                    size={22}
+                                    color={SoundMateLightColors.textPrimary}
+                                    style={styles.inputIcon}
+                                />
                                 <TextInput
                                     style={styles.inputHalf}
                                     placeholder="Tên"
-                                    placeholderTextColor={SoundMateColors.textMuted}
+                                    placeholderTextColor={SoundMateLightColors.textPlaceholder}
                                     value={lastName}
                                     onChangeText={setLastName}
                                     autoCapitalize="words"
-                                    returnKeyType="done"
-                                    onSubmitEditing={handleRegister}
+                                    returnKeyType="next"
                                 />
                             </View>
                         </View>
@@ -266,15 +240,15 @@ export default function RegisterScreen({
                         {/* Username Input */}
                         <View style={styles.inputContainer}>
                             <Ionicons
-                                name="person-outline"
-                                size={20}
-                                color={SoundMateColors.textMuted}
+                                name="people-outline"
+                                size={22}
+                                color={SoundMateLightColors.textPrimary}
                                 style={styles.inputIcon}
                             />
                             <TextInput
                                 style={styles.input}
-                                placeholder="Tên đăng nhập"
-                                placeholderTextColor={SoundMateColors.textMuted}
+                                placeholder="Tên người dùng"
+                                placeholderTextColor={SoundMateLightColors.textPlaceholder}
                                 value={username}
                                 onChangeText={setUsername}
                                 autoCapitalize="none"
@@ -287,14 +261,14 @@ export default function RegisterScreen({
                         <View style={styles.inputContainer}>
                             <Ionicons
                                 name="mail-outline"
-                                size={20}
-                                color={SoundMateColors.textMuted}
+                                size={22}
+                                color={SoundMateLightColors.textPrimary}
                                 style={styles.inputIcon}
                             />
                             <TextInput
                                 style={styles.input}
                                 placeholder="Email"
-                                placeholderTextColor={SoundMateColors.textMuted}
+                                placeholderTextColor={SoundMateLightColors.textPlaceholder}
                                 value={email}
                                 onChangeText={setEmail}
                                 keyboardType="email-address"
@@ -308,14 +282,14 @@ export default function RegisterScreen({
                         <View style={styles.inputContainer}>
                             <Ionicons
                                 name="lock-closed-outline"
-                                size={20}
-                                color={SoundMateColors.textMuted}
+                                size={22}
+                                color={SoundMateLightColors.textPrimary}
                                 style={styles.inputIcon}
                             />
                             <TextInput
                                 style={styles.input}
                                 placeholder="Mật khẩu"
-                                placeholderTextColor={SoundMateColors.textMuted}
+                                placeholderTextColor={SoundMateLightColors.textPlaceholder}
                                 value={password}
                                 onChangeText={setPassword}
                                 secureTextEntry={!showPassword}
@@ -327,8 +301,8 @@ export default function RegisterScreen({
                             >
                                 <Ionicons
                                     name={showPassword ? "eye-outline" : "eye-off-outline"}
-                                    size={20}
-                                    color={SoundMateColors.textMuted}
+                                    size={22}
+                                    color={SoundMateLightColors.textMuted}
                                 />
                             </TouchableOpacity>
                         </View>
@@ -337,18 +311,19 @@ export default function RegisterScreen({
                         <View style={styles.inputContainer}>
                             <Ionicons
                                 name="lock-closed-outline"
-                                size={20}
-                                color={SoundMateColors.textMuted}
+                                size={22}
+                                color={SoundMateLightColors.textPrimary}
                                 style={styles.inputIcon}
                             />
                             <TextInput
                                 style={styles.input}
                                 placeholder="Xác nhận mật khẩu"
-                                placeholderTextColor={SoundMateColors.textMuted}
+                                placeholderTextColor={SoundMateLightColors.textPlaceholder}
                                 value={confirmPassword}
                                 onChangeText={setConfirmPassword}
                                 secureTextEntry={!showConfirmPassword}
-                                returnKeyType="next"
+                                returnKeyType="done"
+                                onSubmitEditing={handleRegister}
                             />
                             <TouchableOpacity
                                 onPress={toggleShowConfirmPassword}
@@ -356,14 +331,14 @@ export default function RegisterScreen({
                             >
                                 <Ionicons
                                     name={showConfirmPassword ? "eye-outline" : "eye-off-outline"}
-                                    size={20}
-                                    color={SoundMateColors.textMuted}
+                                    size={22}
+                                    color={SoundMateLightColors.textMuted}
                                 />
                             </TouchableOpacity>
                         </View>
 
                         {/* Register Button */}
-                        <Animated.View style={buttonTransformStyle}>
+                        <Animated.View style={[styles.registerButtonWrapper, buttonTransformStyle]}>
                             <TouchableOpacity
                                 onPressIn={handlePressIn}
                                 onPressOut={handlePressOut}
@@ -372,7 +347,7 @@ export default function RegisterScreen({
                                 activeOpacity={0.9}
                             >
                                 <LinearGradient
-                                    colors={[SoundMateColors.primary, SoundMateColors.primaryDark]}
+                                    colors={[SoundMateLightColors.primaryLight, SoundMateLightColors.primary]}
                                     start={{ x: 0, y: 0 }}
                                     end={{ x: 1, y: 0 }}
                                     style={styles.registerButton}
@@ -391,7 +366,7 @@ export default function RegisterScreen({
 
                     {/* Navigate to Login */}
                     <View style={styles.loginLinkContainer}>
-                        <Text style={styles.loginLinkText}>Đã có tài khoản!</Text>
+                        <Text style={styles.loginLinkText}>Đã có tài khoản !</Text>
                         <TouchableOpacity onPress={handleNavigateToLogin}>
                             <Text style={styles.loginLinkButton}>Đăng nhập</Text>
                         </TouchableOpacity>
@@ -402,7 +377,8 @@ export default function RegisterScreen({
                         Bằng việc đăng ký, bạn đồng ý với{' '}
                         <Text style={styles.linkText}>Điều khoản dịch vụ</Text>
                         {' '}và{' '}
-                        <Text style={styles.linkText}>Chính sách bảo mật</Text>
+                        <Text style={styles.linkText}>Chính{'\n'}sách bảo mật</Text>
+                        {' '}của chúng tôi
                     </Text>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -413,40 +389,17 @@ export default function RegisterScreen({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: SoundMateColors.background,
+        backgroundColor: SoundMateLightColors.background,
     },
-    backgroundGradient: {
-        ...StyleSheet.absoluteFillObject,
-    },
-    decorativeCircle1: {
+    backButton: {
         position: 'absolute',
-        top: -100,
-        right: -100,
-        width: 300,
-        height: 300,
-        borderRadius: 150,
-        backgroundColor: SoundMateColors.primary,
-        opacity: 0.1,
-    },
-    decorativeCircle2: {
-        position: 'absolute',
-        bottom: -150,
-        left: -100,
-        width: 350,
-        height: 350,
-        borderRadius: 175,
-        backgroundColor: SoundMateColors.accent,
-        opacity: 0.08,
-    },
-    decorativeCircle3: {
-        position: 'absolute',
-        top: height * 0.5,
-        right: -50,
-        width: 150,
-        height: 150,
-        borderRadius: 75,
-        backgroundColor: SoundMateColors.primaryLight,
-        opacity: 0.05,
+        top: 10,
+        left: 10,
+        zIndex: 10,
+        width: 44,
+        height: 44,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     keyboardView: {
         flex: 1,
@@ -454,55 +407,22 @@ const styles = StyleSheet.create({
     scrollContent: {
         flexGrow: 1,
         paddingHorizontal: 24,
-        paddingTop: 10,
+        paddingTop: 50,
         paddingBottom: 40,
     },
     logoSection: {
         alignItems: 'center',
-        marginBottom: 16,
+        marginBottom: 24,
     },
-    logoContainer: {
-        marginBottom: 8,
-        position: 'relative',
-    },
-    logoGradient: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: SoundMateColors.primary,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.5,
-        shadowRadius: 20,
-        elevation: 15,
-    },
-    logoGlow: {
-        position: 'absolute',
-        top: -8,
-        left: -8,
-        right: -8,
-        bottom: -8,
-        borderRadius: 48,
-        backgroundColor: SoundMateColors.primary,
-        opacity: 0.15,
-        zIndex: -1,
-    },
-    appName: {
-        fontSize: 24,
-        fontWeight: '800',
-        color: SoundMateColors.textPrimary,
-        letterSpacing: 2,
+    title: {
+        fontSize: 26,
+        fontWeight: '700',
+        color: SoundMateLightColors.primary,
+        marginBottom: 24,
+        textAlign: 'center',
     },
     formContainer: {
         marginBottom: 16,
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: SoundMateColors.textPrimary,
-        marginBottom: 20,
-        textAlign: 'center',
     },
     nameRow: {
         flexDirection: 'row',
@@ -514,56 +434,69 @@ const styles = StyleSheet.create({
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: SoundMateColors.surface,
-        borderRadius: 14,
-        borderWidth: 1.5,
-        borderColor: SoundMateColors.border,
+        backgroundColor: SoundMateLightColors.surface,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: SoundMateLightColors.border,
         paddingHorizontal: 14,
-        height: 52,
+        height: 54,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+        elevation: 1,
     },
     inputHalf: {
         flex: 1,
-        fontSize: 15,
-        color: SoundMateColors.textPrimary,
+        fontSize: 16,
+        color: SoundMateLightColors.textPrimary,
     },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: SoundMateColors.surface,
-        borderRadius: 14,
-        borderWidth: 1.5,
-        borderColor: SoundMateColors.border,
-        paddingHorizontal: 14,
-        marginBottom: 14,
-        height: 52,
+        backgroundColor: SoundMateLightColors.surface,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: SoundMateLightColors.border,
+        paddingHorizontal: 16,
+        marginBottom: 16,
+        height: 54,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+        elevation: 1,
     },
     inputIcon: {
-        marginRight: 10,
+        marginRight: 12,
     },
     input: {
         flex: 1,
-        fontSize: 15,
-        color: SoundMateColors.textPrimary,
+        fontSize: 16,
+        color: SoundMateLightColors.textPrimary,
     },
     eyeIcon: {
         padding: 4,
     },
+    registerButtonWrapper: {
+        marginTop: 8,
+    },
     registerButton: {
-        height: 52,
-        borderRadius: 14,
+        height: 54,
+        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: SoundMateColors.primary,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.5,
-        shadowRadius: 20,
-        elevation: 10,
+        shadowColor: SoundMateLightColors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
     },
     registerButtonText: {
         fontSize: 17,
-        fontWeight: '700',
+        fontWeight: '600',
         color: '#FFFFFF',
-        letterSpacing: 0.5,
+        letterSpacing: 0.3,
     },
     loadingContainer: {
         flexDirection: 'row',
@@ -571,27 +504,28 @@ const styles = StyleSheet.create({
     },
     loginLinkContainer: {
         alignItems: 'center',
-        marginTop: 16,
-        marginBottom: 16,
+        marginTop: 32,
+        marginBottom: 32,
     },
     loginLinkText: {
         fontSize: 15,
-        color: SoundMateColors.textSecondary,
+        color: SoundMateLightColors.textSecondary,
         marginBottom: 6,
     },
     loginLinkButton: {
         fontSize: 17,
-        fontWeight: '700',
-        color: SoundMateColors.primary,
+        fontWeight: '600',
+        color: SoundMateLightColors.primary,
+        textDecorationLine: 'underline',
     },
     footerText: {
-        fontSize: 11,
-        color: SoundMateColors.textMuted,
+        fontSize: 12,
+        color: SoundMateLightColors.textPrimary,
         textAlign: 'center',
-        lineHeight: 18,
+        lineHeight: 20,
     },
     linkText: {
-        color: SoundMateColors.primary,
-        fontWeight: '600',
+        color: SoundMateLightColors.primary,
+        fontWeight: '500',
     },
 });
