@@ -147,7 +147,10 @@ export default function OTPScreen({
             }
         } catch (error: any) {
             console.error('Verify OTP error:', error);
-            showToast.error('Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.');
+            const errorMessage = error?.response?.data?.message || 
+                               error?.message || 
+                               'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.';
+            showToast.error('Lỗi xác thực', errorMessage);
             shakeInputs();
         } finally {
             setIsLoading(false);
@@ -169,9 +172,12 @@ export default function OTPScreen({
             } else {
                 showToast.error('Gửi mã thất bại', response.message || 'Không thể gửi lại mã OTP');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Resend OTP error:', error);
-            showToast.error('Lỗi kết nối', 'Không thể kết nối đến máy chủ');
+            const errorMessage = error?.response?.data?.message || 
+                               error?.message || 
+                               'Không thể kết nối đến máy chủ';
+            showToast.error('Lỗi gửi mã', errorMessage);
         }
     }, [canResend, email]);
 

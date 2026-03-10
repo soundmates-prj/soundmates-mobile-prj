@@ -8,3 +8,7 @@ export { default as RegisterScreen } from './auth/RegisterScreen';
 // Home screens
 export { default as HomeScreen } from './home/HomeScreen';
 
+// Profile screens
+export { default as EditProfileScreen } from './profile/EditProfileScreen';
+export { default as ProfileScreen } from './profile/ProfileScreen';
+
