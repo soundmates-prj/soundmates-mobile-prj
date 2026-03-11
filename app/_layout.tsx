@@ -1,22 +1,22 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
-import { SoundMateColors } from '@/constants/theme';
+import { SoundMateLightColors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-// Custom dark theme with SoundMate colors
-const SoundMateDarkTheme = {
-  ...DarkTheme,
+// Custom light theme with SoundMate colors
+const SoundMateLightTheme = {
+  ...DefaultTheme,
   colors: {
-    ...DarkTheme.colors,
-    primary: SoundMateColors.primary,
-    background: SoundMateColors.background,
-    card: SoundMateColors.surface,
-    text: SoundMateColors.textPrimary,
-    border: SoundMateColors.border,
-    notification: SoundMateColors.primary,
+    ...DefaultTheme.colors,
+    primary: SoundMateLightColors.primary,
+    background: SoundMateLightColors.background,
+    card: SoundMateLightColors.surface,
+    text: SoundMateLightColors.textPrimary,
+    border: SoundMateLightColors.border,
+    notification: SoundMateLightColors.primary,
   },
 };
 
@@ -28,13 +28,13 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? SoundMateDarkTheme : DefaultTheme}>
+    <ThemeProvider value={SoundMateLightTheme}>
       <Stack>
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
     </ThemeProvider>
   );
 }

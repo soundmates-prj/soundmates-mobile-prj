@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SoundMateColors } from '../../constants/theme';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SoundMateLightColors } from '../../constants/theme';
 
-export type TabName = 'home' | 'live' | 'create' | 'library' | 'profile';
+export type TabName = 'home' | 'blog' | 'live' | 'podcast' | 'profile';
 
 interface BottomNavigationProps {
     activeTab: TabName;
@@ -26,7 +26,7 @@ const NavItem = ({ icon, iconActive, label, isActive, onPress }: NavItemProps) =
         <Ionicons
             name={isActive ? iconActive : icon}
             size={24}
-            color={isActive ? SoundMateColors.primary : SoundMateColors.textMuted}
+            color={isActive ? SoundMateLightColors.primary : SoundMateLightColors.textMuted}
         />
         <Text style={[styles.navText, isActive && styles.navTextActive]}>{label}</Text>
     </TouchableOpacity>
@@ -43,46 +43,46 @@ export default function BottomNavigation({ activeTab, onTabPress, onLogout }: Bo
                 isActive={activeTab === 'home'}
                 onPress={() => onTabPress('home')}
             />
+
             <NavItem
-                name="live"
-                icon="radio-outline"
-                iconActive="radio"
-                label="Live"
-                isActive={activeTab === 'live'}
-                onPress={() => onTabPress('live')}
+                name="podcast"
+                icon="mic-outline"
+                iconActive="mic"
+                label="Podcast"
+                isActive={activeTab === 'podcast'}
+                onPress={() => onTabPress('podcast')}
             />
 
             {/* Center Create Button */}
             <TouchableOpacity
                 style={styles.navItemCenter}
-                onPress={() => onTabPress('create')}
+                onPress={() => onTabPress('live')}
                 activeOpacity={0.8}
             >
                 <LinearGradient
-                    colors={[SoundMateColors.primary, SoundMateColors.primaryDark]}
+                    colors={[SoundMateLightColors.primary, SoundMateLightColors.primaryDark]}
                     style={styles.navItemCenterGradient}
                 >
-                    <Ionicons name="add" size={28} color="#FFFFFF" />
+                    <Ionicons name="radio" size={28} color="#FFFFFF" />
                 </LinearGradient>
             </TouchableOpacity>
 
             <NavItem
-                name="library"
-                icon="library-outline"
-                iconActive="library"
-                label="Thư viện"
-                isActive={activeTab === 'library'}
-                onPress={() => onTabPress('library')}
+                name="blog"
+                icon="newspaper-outline"
+                iconActive="newspaper"
+                label="Blog"
+                isActive={activeTab === 'blog'}
+                onPress={() => onTabPress('blog')}
             />
 
             {/* Logout Button (temporary) */}
-            <TouchableOpacity style={styles.navItem} onPress={onLogout} activeOpacity={0.7}>
-                <Ionicons
-                    name="log-out-outline"
-                    size={24}
-                    color={SoundMateColors.textMuted}
+            <TouchableOpacity style={styles.navItem} onPress={() => onTabPress('profile')} activeOpacity={0.7}>
+                <Image
+                    source={{ uri: 'https://i.pravatar.cc/150?img=10' }}
+                    style={styles.userAvatar}
                 />
-                <Text style={styles.navText}>Đăng xuất</Text>
+                <Text style={styles.navText}>Trang Cá Nhân</Text>
             </TouchableOpacity>
         </View>
     );
@@ -95,11 +95,9 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         flexDirection: 'row',
-        backgroundColor: SoundMateColors.surface,
-        borderTopWidth: 1,
-        borderTopColor: SoundMateColors.border,
-        paddingBottom: 20,
-        paddingTop: 12,
+        backgroundColor: SoundMateLightColors.surface,
+        paddingBottom: 10,
+        paddingTop: 10,
         paddingHorizontal: 20,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -4 },
@@ -123,7 +121,7 @@ const styles = StyleSheet.create({
         borderRadius: 28,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: SoundMateColors.primary,
+        shadowColor: SoundMateLightColors.primary,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.4,
         shadowRadius: 12,
@@ -131,12 +129,19 @@ const styles = StyleSheet.create({
     },
     navText: {
         fontSize: 11,
-        color: SoundMateColors.textMuted,
+        color: SoundMateLightColors.textMuted,
         marginTop: 4,
         fontWeight: '500',
     },
     navTextActive: {
-        color: SoundMateColors.primary,
+        color: SoundMateLightColors.primary,
         fontWeight: '600',
+    },
+    userAvatar: {
+        width: 25,
+        height: 25,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: SoundMateLightColors.primary,
     },
 });

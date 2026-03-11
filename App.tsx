@@ -5,9 +5,10 @@ import { StatusBar, StyleSheet } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { showToast, toastConfig } from './components/ui/Toast';
-import { SoundMateColors } from './constants/theme';
+import { SoundMateLightColors } from './constants/theme';
 import { authService } from './src/api';
-import { HomeScreen, LoginScreen, OTPScreen, ProfileSetupScreen, RegisterScreen } from './src/pages';
+import { UserData, UserProvider, useUser } from './src/context/UserContext';
+import { ForgotPasswordScreen, HomeScreen, LoginScreen, OTPScreen, ProfileScreen, ProfileSetupScreen, RegisterScreen } from './src/pages';
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -25,9 +26,12 @@ enum Screen {
     REGISTER = 'register',
     OTP = 'otp',
     PROFILE_SETUP = 'profile_setup',
+    PROFILE = 'profile',
+    FORGOT_PASSWORD = 'forgot_password',
 }
 
-function App() {
+function AppContent() {
+    const { saveUser, clearUser } = useUser();
     const [currentScreen, setCurrentScreen] = useState<Screen>(Screen.LOGIN);
     const [userEmail, setUserEmail] = useState<string>('');
     const [pendingPassword, setPendingPassword] = useState<string>('');
@@ -49,38 +53,54 @@ function App() {
         checkAuth();
     }, []);
 
-    // Save authentication tokens
-    const saveAuthTokens = useCallback(async (accessToken: string, refreshToken: string, userData?: any) => {
+    // Save authentication tokens and user data
+    const saveAuthTokens = useCallback(async (accessToken: string, refreshToken: string, userData?: UserData) => {
         try {
+            console.log('[App.tsx] saveAuthTokens called with userData:', userData);
             await AsyncStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
             await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
             if (userData) {
-                await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(userData));
+                console.log('[App.tsx] Calling saveUser with:', userData);
+                await saveUser(userData);
             }
         } catch (error) {
             console.error('Error saving auth tokens:', error);
         }
-    }, []);
+    }, [saveUser]);
 
-    // Clear authentication tokens
+    // Clear authentication tokens and user data
     const clearAuthTokens = useCallback(async () => {
         try {
+            await clearUser();
             await AsyncStorage.multiRemove([
                 STORAGE_KEYS.ACCESS_TOKEN,
                 STORAGE_KEYS.REFRESH_TOKEN,
-                STORAGE_KEYS.USER_DATA,
                 STORAGE_KEYS.PENDING_EMAIL,
                 STORAGE_KEYS.PENDING_PASSWORD,
             ]);
         } catch (error) {
             console.error('Error clearing auth tokens:', error);
         }
-    }, []);
+    }, [clearUser]);
 
     // Handle successful login
     const handleLoginSuccess = useCallback(async (response: any) => {
-        if (response?.accessToken && response?.refreshToken) {
-            await saveAuthTokens(response.accessToken, response.refreshToken, response.user);
+        console.log('[App.tsx] handleLoginSuccess called with:', response);
+        
+        // Handle case where response might be wrapped or unwrapped
+        let userData = response;
+        
+        // If response has 'data' property, it's wrapped
+        if (response?.data) {
+            userData = response.data;
+            console.log('[App.tsx] Unwrapped response.data:', userData);
+        }
+        
+        if (userData?.accessToken && userData?.refreshToken) {
+            // Extract user data (excluding tokens)
+            const { accessToken, refreshToken, ...userInfo } = userData;
+            console.log('[App.tsx] Extracted userInfo:', userInfo);
+            await saveAuthTokens(accessToken, refreshToken, userInfo as UserData);
         }
         setCurrentScreen(Screen.HOME);
     }, [saveAuthTokens]);
@@ -144,12 +164,16 @@ function App() {
                 });
 
                 if (loginResponse.success && loginResponse.data) {
-                    // Save tokens
-                    await saveAuthTokens(
-                        loginResponse.data.accessToken,
-                        loginResponse.data.refreshToken,
-                        loginResponse.data.user
-                    );
+                    console.log('[App.tsx] OTP auto-login success, data:', loginResponse.data);
+                    
+                    // Extract user data (excluding tokens)
+                    const { accessToken, refreshToken, ...userData } = loginResponse.data;
+                    console.log('[App.tsx] OTP extracted userData:', userData);
+                    
+                    // Save tokens and user data
+                    if (accessToken && refreshToken) {
+                        await saveAuthTokens(accessToken, refreshToken, userData as UserData);
+                    }
 
                     // Clear pending credentials
                     await AsyncStorage.multiRemove([
@@ -217,6 +241,22 @@ function App() {
         setCurrentScreen(Screen.LOGIN);
     }, [clearAuthTokens]);
 
+    const handleNavigateToProfile = useCallback(() => {
+        setCurrentScreen(Screen.PROFILE);
+    }, []);
+
+    const handleBackToHome = useCallback(() => {
+        setCurrentScreen(Screen.HOME);
+    }, []);
+
+    const handleNavigateToForgotPassword = useCallback(() => {
+        setCurrentScreen(Screen.FORGOT_PASSWORD);
+    }, []);
+
+    const handleForgotPasswordBack = useCallback(() => {
+        setCurrentScreen(Screen.LOGIN);
+    }, []);
+
     const renderScreen = () => {
         switch (currentScreen) {
             case Screen.LOGIN:
@@ -225,10 +265,19 @@ function App() {
                         onLoginSuccess={handleLoginSuccess}
                         onNavigateToRegister={handleNavigateToRegister}
                         onUnverifiedEmail={handleUnverifiedEmail}
+                        onNavigateToForgotPassword={handleNavigateToForgotPassword}
                     />
                 );
             case Screen.HOME:
-                return <HomeScreen onLogout={handleLogout} />;
+                return <HomeScreen onLogout={handleLogout} onNavigateToProfile={handleNavigateToProfile} />;
+            case Screen.PROFILE:
+                return (
+                    <ProfileScreen 
+                        onBackToHome={handleBackToHome} 
+                        onNavigateToForgotPassword={handleNavigateToForgotPassword}
+                        onLogout={handleLogout}
+                    />
+                );
             case Screen.REGISTER:
                 return (
                     <RegisterScreen
@@ -241,7 +290,7 @@ function App() {
                     <OTPScreen
                         email={userEmail}
                         onVerifySuccess={handleOTPVerifySuccess}
-                        onGoBack={handleOTPGoBack}
+                        onNavigateBack={handleOTPGoBack}
                     />
                 );
             case Screen.PROFILE_SETUP:
@@ -249,6 +298,13 @@ function App() {
                     <ProfileSetupScreen
                         onSetupComplete={handleProfileSetupComplete}
                         onSkip={handleProfileSetupSkip}
+                    />
+                );
+            case Screen.FORGOT_PASSWORD:
+                return (
+                    <ForgotPasswordScreen
+                        onBack={handleForgotPasswordBack}
+                        prefillEmail={userEmail}
                     />
                 );
             default:
@@ -265,8 +321,8 @@ function App() {
     return (
         <SafeAreaProvider>
             <StatusBar
-                barStyle="light-content"
-                backgroundColor={SoundMateColors.background}
+                barStyle="dark-content"
+                backgroundColor={SoundMateLightColors.background}
                 translucent
             />
             <SafeAreaView style={styles.container} edges={['top']}>
@@ -281,13 +337,22 @@ function App() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: SoundMateColors.background,
+        backgroundColor: SoundMateLightColors.background,
     },
     placeholder: {
         flex: 1,
-        backgroundColor: SoundMateColors.background,
+        backgroundColor: SoundMateLightColors.background,
     },
 });
+
+// Root App component with UserProvider
+function App() {
+    return (
+        <UserProvider>
+            <AppContent />
+        </UserProvider>
+    );
+}
 
 // Register the root component
 registerRootComponent(App);

@@ -6,7 +6,7 @@
 import { AUTH_BASE_URL as ENV_AUTH_BASE_URL } from '@env';
 
 // Default values (fallback if env not loaded)
-const DEFAULT_AUTH_BASE_URL = 'http://localhost:8001/api/v1';
+const DEFAULT_AUTH_BASE_URL = 'http://localhost:8080/api/v1';
 
 // Base URLs for different services
 export const API_CONFIG = {
@@ -14,7 +14,7 @@ export const API_CONFIG = {
     AUTH_BASE_URL: ENV_AUTH_BASE_URL || DEFAULT_AUTH_BASE_URL,
 
     // Add more service URLs here as needed
-    // MAIN_BASE_URL: process.env.MAIN_BASE_URL || 'http://localhost:8000/api/v1',
+    // MAIN_BASE_URL: process.env.MAIN_BASE_URL || 'http://localhost:8080/api/v1',
 
     // Request timeout in milliseconds
     TIMEOUT: 30000,
@@ -32,7 +32,7 @@ export const AUTH_ENDPOINTS = {
     LOGIN: '/auth/login',
     VERIFY_OTP: '/auth/verify-email',
     RESEND_OTP: '/auth/resend-otp',
-    FORGOT_PASSWORD: '/auth/forgot-password',
+    FORGET_PASSWORD: '/auth/forget-password',
     RESET_PASSWORD: '/auth/reset-password',
     REFRESH_TOKEN: '/auth/refresh-token',
     LOGOUT: '/auth/logout',

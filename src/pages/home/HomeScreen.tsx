@@ -1,177 +1,343 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     Animated,
     Dimensions,
+    Easing,
     FlatList,
     Image,
+    ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     View
 } from 'react-native';
-import { SoundMateColors } from '../../../constants/theme';
+import { SoundMateLightColors } from '../../../constants/theme';
 import BottomNavigation, { TabName } from '../BottomNavigation';
 
 const { width } = Dimensions.get('window');
 
-// Mock data for demo
-const LIVE_SESSIONS = [
+// Mock data based on web version
+const PLAYLISTS = [
     {
         id: '1',
-        title: 'Tâm sự đêm khuya',
-        host: 'DJ Tâm An',
-        listeners: 234,
-        mood: 'Chill',
-        isLive: true,
-        avatar: 'https://i.pravatar.cc/150?img=1',
+        title: 'Aethereal Flow',
+        subtitle: 'Celestial Waves',
+        image: 'https://picsum.photos/200/200?random=1',
     },
     {
         id: '2',
-        title: 'Những bản tình ca',
-        host: 'MC Thanh Tùng',
-        listeners: 156,
-        mood: 'Romantic',
-        isLive: true,
-        avatar: 'https://i.pravatar.cc/150?img=2',
+        title: 'Skyward Serenade',
+        subtitle: 'Celeste',
+        image: 'https://picsum.photos/200/200?random=2',
     },
     {
         id: '3',
-        title: 'Healing Session',
-        host: 'Mindful Luna',
-        listeners: 89,
-        mood: 'Peaceful',
-        isLive: true,
-        avatar: 'https://i.pravatar.cc/150?img=3',
+        title: 'Purr-fect Beats',
+        subtitle: 'Luna Paws',
+        image: 'https://picsum.photos/200/200?random=3',
+    },
+    {
+        id: '4',
+        title: 'Radio Waves',
+        subtitle: 'The Vintage Sound',
+        image: 'https://picsum.photos/200/200?random=4',
+    },
+    {
+        id: '5',
+        title: 'Rainy Day Coffee',
+        subtitle: 'Warmth & Wood',
+        image: 'https://picsum.photos/200/200?random=5',
+    },
+    {
+        id: '6',
+        title: 'Lofi Chill',
+        subtitle: 'Relaxing Vibes',
+        image: 'https://picsum.photos/200/200?random=6',
+    },
+    {
+        id: '7',
+        title: 'Jazz Night',
+        subtitle: 'Smooth Sessions',
+        image: 'https://picsum.photos/200/200?random=7',
     },
 ];
 
-const PODCAST_LETTERS = [
+const PLAYLIST_TABS = ['Mới', 'Thịnh Hành', 'EDM', 'Acoustic', 'Nhạc', 'Bolê', 'Phim'];
+
+const SCHEDULE_ITEMS = [
     {
         id: '1',
-        title: 'Gửi người tôi từng yêu',
-        author: 'Anonymous',
-        duration: '5:32',
-        likes: 1234,
-        mood: 'Melancholy',
-        cover: 'https://picsum.photos/200/200?random=1',
+        time: '23:00',
+        period: 'Đang phát',
+        title: 'Đêm nhạc bolero học',
+        host: '❤ Emily_vui',
+        isLive: true,
     },
     {
         id: '2',
-        title: 'Lá thư gửi bản thân 10 năm sau',
-        author: 'Minh Anh',
-        duration: '8:15',
-        likes: 892,
-        mood: 'Hopeful',
-        cover: 'https://picsum.photos/200/200?random=2',
+        time: '23:00',
+        period: 'Sắp tới',
+        title: 'KPOP Party Mix',
+        host: '🎧 Minh',
+        isLive: false,
     },
     {
         id: '3',
-        title: 'Khi cô đơn gõ cửa',
-        author: 'Người lạ',
-        duration: '6:45',
-        likes: 567,
-        mood: 'Lonely',
-        cover: 'https://picsum.photos/200/200?random=3',
+        time: '00:00',
+        period: 'Sắp tới',
+        title: 'Bùa biêng và em hát',
+        host: '🎵 Luna_DJ',
+        isLive: false,
+    },
+    {
+        id: '4',
+        time: '3:00',
+        period: 'Sắp tới',
+        title: 'Dawn Coffee',
+        host: '☕ Lan_vy_ơi',
+        isLive: false,
+    },
+    {
+        id: '5',
+        time: '21:00',
+        period: 'Sắp tới',
+        title: 'Late night Afterunon',
+        host: '💫 Jacky_oi',
+        isLive: false,
     },
 ];
 
-const MOOD_PLAYLISTS = [
-    { id: '1', name: 'Chill', emoji: '😌', color: '#4ECDC4' },
-    { id: '2', name: 'Happy', emoji: '😊', color: '#FFE66D' },
-    { id: '3', name: 'Sad', emoji: '😢', color: '#6C5CE7' },
-    { id: '4', name: 'Romantic', emoji: '💕', color: '#FD79A8' },
-    { id: '5', name: 'Energetic', emoji: '⚡', color: '#FF6B35' },
-    { id: '6', name: 'Peaceful', emoji: '🧘', color: '#00B894' },
-];
-
-const TRENDING_CONTENT = [
+const FORUM_POSTS = [
     {
         id: '1',
-        type: 'podcast',
-        title: 'Câu chuyện của những người xa quê',
-        plays: '12.5K',
-        cover: 'https://picsum.photos/300/200?random=4',
+        author: 'Phan Minh',
+        badge: 'Premium',
+        avatar: 'https://i.pravatar.cc/100?img=1',
+        title: 'Playlist tổng hợp các bài nhạc chill cùng team music',
+        likes: 32,
+        comments: 24,
+        time: '10 phút',
     },
     {
         id: '2',
-        type: 'playlist',
-        title: 'Những bản nhạc ru ngủ',
-        plays: '8.2K',
-        cover: 'https://picsum.photos/300/200?random=5',
+        author: 'Anh Tuấn Music',
+        badge: 'Artist',
+        avatar: 'https://i.pravatar.cc/100?img=2',
+        title: 'Các anh chị ơi mình cần chọn loại Tai nghe gì?',
+        likes: 56,
+        comments: 200,
+        time: '24 giờ',
     },
     {
         id: '3',
-        type: 'podcast',
-        title: 'Tình yêu thời công nghệ',
-        plays: '6.8K',
-        cover: 'https://picsum.photos/300/200?random=6',
+        author: 'Nhạc Việt DJ',
+        badge: 'VIP',
+        avatar: 'https://i.pravatar.cc/100?img=3',
+        title: 'lài số lùi của bản bọ không hiện lên loai ho, mọi người...',
+        likes: 128,
+        comments: 89,
+        time: '2 ngày',
+    },
+];
+
+const PODCASTS = [
+    {
+        id: '1',
+        title: 'Podcast 1',
+        subtitle: 'mật thư',
+        image: 'https://picsum.photos/200/200?random=8',
+    },
+    {
+        id: '2',
+        title: 'Podcast 2',
+        subtitle: 'câu chuyện chúng ta',
+        image: 'https://picsum.photos/200/200?random=9',
+    },
+    {
+        id: '3',
+        title: 'Podcast 3',
+        subtitle: 'tâm trạng',
+        image: 'https://picsum.photos/200/200?random=10',
+    },
+    {
+        id: '4',
+        title: 'Podcast 4',
+        subtitle: 'tự sự',
+        image: 'https://picsum.photos/200/200?random=11',
+    },
+    {
+        id: '5',
+        title: 'Podcast 5',
+        subtitle: 'yêu lành',
+        image: 'https://picsum.photos/200/200?random=12',
+    },
+    {
+        id: '6',
+        title: 'Podcast 6',
+        subtitle: 'kể chuyện',
+        image: 'https://picsum.photos/200/200?random=13',
     },
 ];
 
 interface HomeScreenProps {
     navigation?: any;
     onLogout?: () => void;
+    onNavigateToProfile?: () => void;
 }
 
-export default function HomeScreen({ navigation, onLogout }: HomeScreenProps) {
+// Animated Subscription Button Component
+const AnimatedSubscriptionButton = () => {
+    const bounceAnim = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(bounceAnim, {
+                    toValue: 1.05,
+                    duration: 1500,
+                    easing: Easing.inOut(Easing.ease),
+                    useNativeDriver: true,
+                }),
+                Animated.timing(bounceAnim, {
+                    toValue: 1,
+                    duration: 1500,
+                    easing: Easing.inOut(Easing.ease),
+                    useNativeDriver: true,
+                }),
+            ])
+        ).start();
+    }, []);
+
+    const handlePressIn = () => {
+        Animated.spring(bounceAnim, {
+            toValue: 0.95,
+            useNativeDriver: true,
+        }).start();
+    };
+
+    const handlePressOut = () => {
+        Animated.spring(bounceAnim, {
+            toValue: 1,
+            friction: 3,
+            tension: 40,
+            useNativeDriver: true,
+        }).start();
+    };
+
+    return (
+        <Animated.View style={{ transform: [{ scale: bounceAnim }] }}>
+            <TouchableOpacity 
+                style={styles.subscriptionButton}
+                activeOpacity={1}
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+            >
+                <Text style={styles.subscriptionButtonText}>Đăng Ký Ngay</Text>
+                <Ionicons name="arrow-forward" size={18} color="#55C5F1" />
+            </TouchableOpacity>
+        </Animated.View>
+    );
+};
+
+export default function HomeScreen({ navigation, onLogout, onNavigateToProfile }: HomeScreenProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState<TabName>('home');
+    const [activePlaylistTab, setActivePlaylistTab] = useState('Mới');
     const scrollY = useRef(new Animated.Value(0)).current;
+
+    // Animation values
+    const heroFadeAnim = useRef(new Animated.Value(0)).current;
+    const heroSlideAnim = useRef(new Animated.Value(50)).current;
+    const pulseAnim = useRef(new Animated.Value(1)).current;
+    const waveAnims = useRef([
+        new Animated.Value(0),
+        new Animated.Value(0),
+        new Animated.Value(0),
+        new Animated.Value(0),
+        new Animated.Value(0),
+    ]).current;
+
+    // Initialize animations on mount
+    useEffect(() => {
+        // Hero section fade in and slide up
+        Animated.parallel([
+            Animated.timing(heroFadeAnim, {
+                toValue: 1,
+                duration: 800,
+                easing: Easing.out(Easing.cubic),
+                useNativeDriver: true,
+            }),
+            Animated.timing(heroSlideAnim, {
+                toValue: 0,
+                duration: 800,
+                easing: Easing.out(Easing.cubic),
+                useNativeDriver: true,
+            }),
+        ]).start();
+
+        // Pulse animation for live badge
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, {
+                    toValue: 1.2,
+                    duration: 1000,
+                    easing: Easing.inOut(Easing.ease),
+                    useNativeDriver: true,
+                }),
+                Animated.timing(pulseAnim, {
+                    toValue: 1,
+                    duration: 1000,
+                    easing: Easing.inOut(Easing.ease),
+                    useNativeDriver: true,
+                }),
+            ])
+        ).start();
+
+        // Wave animation for music bars
+        const waveAnimations = waveAnims.map((anim, index) =>
+            Animated.loop(
+                Animated.sequence([
+                    Animated.timing(anim, {
+                        toValue: 1,
+                        duration: 300 + index * 100,
+                        easing: Easing.inOut(Easing.ease),
+                        useNativeDriver: false,
+                    }),
+                    Animated.timing(anim, {
+                        toValue: 0,
+                        duration: 300 + index * 100,
+                        easing: Easing.inOut(Easing.ease),
+                        useNativeDriver: false,
+                    }),
+                ])
+            )
+        );
+
+        Animated.stagger(100, waveAnimations).start();
+    }, []);
 
     const handleTabPress = (tab: TabName) => {
         setActiveTab(tab);
-        // Handle navigation based on tab
         console.log('Tab pressed:', tab);
+        
+        // Navigate to profile screen when profile tab is pressed
+        if (tab === 'profile' && onNavigateToProfile) {
+            onNavigateToProfile();
+        }
     };
 
-    const renderLiveSessionCard = ({ item }: { item: typeof LIVE_SESSIONS[0] }) => (
-        <TouchableOpacity style={styles.liveSessionCard} activeOpacity={0.8}>
-            <LinearGradient
-                colors={[SoundMateColors.primary, SoundMateColors.primaryDark]}
-                style={styles.liveSessionGradient}
-            >
-                <View style={styles.liveBadge}>
-                    <View style={styles.liveDot} />
-                    <Text style={styles.liveText}>LIVE</Text>
-                </View>
-                <View style={styles.liveSessionContent}>
-                    <Image source={{ uri: item.avatar }} style={styles.hostAvatar} />
-                    <Text style={styles.liveSessionTitle} numberOfLines={1}>{item.title}</Text>
-                    <Text style={styles.liveSessionHost}>{item.host}</Text>
-                    <View style={styles.listenersContainer}>
-                        <Ionicons name="headset" size={14} color="#FFFFFF" />
-                        <Text style={styles.listenersText}>{item.listeners}</Text>
-                    </View>
-                </View>
-                <View style={styles.moodTag}>
-                    <Text style={styles.moodTagText}>{item.mood}</Text>
-                </View>
-            </LinearGradient>
-        </TouchableOpacity>
-    );
-
-    const renderPodcastLetterCard = ({ item }: { item: typeof PODCAST_LETTERS[0] }) => (
-        <TouchableOpacity style={styles.podcastCard} activeOpacity={0.8}>
-            <Image source={{ uri: item.cover }} style={styles.podcastCover} />
+    // Animated Playlist Card with scale effect
+    const renderPlaylistCard = ({ item, index }: { item: typeof PLAYLISTS[0], index: number }) => (
+        <TouchableOpacity style={styles.playlistCard} activeOpacity={0.7}>
+            <Image source={{ uri: item.image }} style={styles.playlistImage} />
             <LinearGradient
                 colors={['transparent', 'rgba(0,0,0,0.8)']}
-                style={styles.podcastOverlay}
+                style={styles.playlistOverlay}
             >
-                <Text style={styles.podcastTitle} numberOfLines={2}>{item.title}</Text>
-                <Text style={styles.podcastAuthor}>{item.author}</Text>
-                <View style={styles.podcastMeta}>
-                    <View style={styles.podcastDuration}>
-                        <Ionicons name="time-outline" size={12} color="#FFFFFF" />
-                        <Text style={styles.podcastMetaText}>{item.duration}</Text>
-                    </View>
-                    <View style={styles.podcastLikes}>
-                        <Ionicons name="heart" size={12} color={SoundMateColors.primary} />
-                        <Text style={styles.podcastMetaText}>{item.likes}</Text>
-                    </View>
-                </View>
+                <Text style={styles.playlistTitle} numberOfLines={1}>{item.title}</Text>
+                <Text style={styles.playlistSubtitle} numberOfLines={1}>{item.subtitle}</Text>
             </LinearGradient>
             <TouchableOpacity style={styles.playButton}>
                 <Ionicons name="play" size={20} color="#FFFFFF" />
@@ -179,44 +345,96 @@ export default function HomeScreen({ navigation, onLogout }: HomeScreenProps) {
         </TouchableOpacity>
     );
 
-    const renderMoodPlaylist = ({ item }: { item: typeof MOOD_PLAYLISTS[0] }) => (
-        <TouchableOpacity style={styles.moodCard} activeOpacity={0.8}>
-            <View style={[styles.moodGradient, { backgroundColor: item.color }]}>
-                <Text style={styles.moodEmoji}>{item.emoji}</Text>
+    // Render Schedule Item with animated wave
+    const renderScheduleItem = ({ item, index }: { item: typeof SCHEDULE_ITEMS[0], index: number }) => (
+        <TouchableOpacity style={styles.scheduleItem} activeOpacity={0.8}>
+            <View style={styles.scheduleTime}>
+                <Text style={styles.scheduleTimeValue}>{item.time}</Text>
+                <Text style={styles.scheduleTimePeriod}>{item.period}</Text>
             </View>
-            <Text style={styles.moodName}>{item.name}</Text>
+            <View style={styles.musicWave}>
+                {waveAnims.map((anim, i) => {
+                    const baseHeight = [12, 8, 16, 10, 14][i];
+                    const animatedHeight = anim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [baseHeight * 0.5, baseHeight],
+                    });
+
+                    return (
+                        <Animated.View 
+                            key={i}
+                            style={[
+                                styles.musicBar, 
+                                { height: item.isLive ? animatedHeight : baseHeight }
+                            ]} 
+                        />
+                    );
+                })}
+            </View>
+            <View style={styles.scheduleContent}>
+                <Text style={styles.scheduleTitle} numberOfLines={1}>{item.title}</Text>
+                <Text style={styles.scheduleHost} numberOfLines={1}>{item.host}</Text>
+            </View>
+            <View style={[styles.scheduleAction, item.isLive && styles.scheduleActionLive]}>
+                <Text style={styles.scheduleActionText}>
+                    {item.isLive ? 'Đang Phát' : 'Thông báo'}
+                </Text>
+            </View>
         </TouchableOpacity>
     );
 
-    const renderTrendingCard = ({ item }: { item: typeof TRENDING_CONTENT[0] }) => (
-        <TouchableOpacity style={styles.trendingCard} activeOpacity={0.8}>
-            <Image source={{ uri: item.cover }} style={styles.trendingCover} />
-            <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.9)']}
-                style={styles.trendingOverlay}
-            >
-                <View style={styles.trendingType}>
-                    <Ionicons
-                        name={item.type === 'podcast' ? 'mic' : 'musical-notes'}
-                        size={12}
-                        color="#FFFFFF"
-                    />
-                    <Text style={styles.trendingTypeText}>
-                        {item.type === 'podcast' ? 'Podcast' : 'Playlist'}
-                    </Text>
+    // Render Forum Post
+    const renderForumPost = ({ item, index }: { item: typeof FORUM_POSTS[0], index: number }) => (
+        <TouchableOpacity style={styles.forumItem} activeOpacity={0.8}>
+            <Image source={{ uri: item.avatar }} style={styles.forumAvatar} />
+            <View style={styles.forumContent}>
+                <View style={styles.forumHeader}>
+                    <Text style={styles.forumAuthor}>{item.author}</Text>
+                    <View style={styles.forumBadge}>
+                        <Text style={styles.forumBadgeText}>{item.badge}</Text>
+                    </View>
                 </View>
-                <Text style={styles.trendingTitle} numberOfLines={2}>{item.title}</Text>
-                <Text style={styles.trendingPlays}>{item.plays} lượt nghe</Text>
+                <Text style={styles.forumTitle} numberOfLines={2}>{item.title}</Text>
+                <View style={styles.forumMeta}>
+                    <View style={styles.forumMetaItem}>
+                        <Ionicons name="heart" size={14} color={SoundMateLightColors.textSecondary} />
+                        <Text style={styles.forumMetaText}>{item.likes}</Text>
+                    </View>
+                    <View style={styles.forumMetaItem}>
+                        <Ionicons name="chatbubble" size={14} color={SoundMateLightColors.textSecondary} />
+                        <Text style={styles.forumMetaText}>{item.comments}</Text>
+                    </View>
+                    <View style={styles.forumMetaItem}>
+                        <Ionicons name="time" size={14} color={SoundMateLightColors.textSecondary} />
+                        <Text style={styles.forumMetaText}>{item.time}</Text>
+                    </View>
+                </View>
+            </View>
+            <TouchableOpacity style={styles.forumAction}>
+                <Text style={styles.forumActionText}>Xem</Text>
+            </TouchableOpacity>
+        </TouchableOpacity>
+    );
+
+    // Render Podcast Card
+    const renderPodcastCard = ({ item, index }: { item: typeof PODCASTS[0], index: number }) => (
+        <TouchableOpacity style={styles.podcastCard} activeOpacity={0.7}>
+            <Image source={{ uri: item.image }} style={styles.podcastImage} />
+            <LinearGradient
+                colors={['transparent', 'rgba(0,0,0,0.8)']}
+                style={styles.podcastOverlay}
+            >
+                <Text style={styles.podcastTitle} numberOfLines={1}>{item.title}</Text>
+                <Text style={styles.podcastSubtitle} numberOfLines={1}>{item.subtitle}</Text>
             </LinearGradient>
+            <TouchableOpacity style={styles.playButton}>
+                <Ionicons name="play" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
         </TouchableOpacity>
     );
 
     return (
         <View style={styles.container}>
-            <LinearGradient
-                colors={['#0D0D0D', '#1A1A1A', '#0D0D0D']}
-                style={styles.backgroundGradient}
-            />
 
             <Animated.ScrollView
                 showsVerticalScrollIndicator={false}
@@ -229,21 +447,23 @@ export default function HomeScreen({ navigation, onLogout }: HomeScreenProps) {
                 {/* Header */}
                 <View style={styles.header}>
                     <View style={styles.headerLeft}>
-                        <TouchableOpacity style={styles.avatarContainer}>
-                            <Image
-                                source={{ uri: 'https://i.pravatar.cc/150?img=10' }}
-                                style={styles.userAvatar}
-                            />
-                            <View style={styles.onlineIndicator} />
-                        </TouchableOpacity>
-                        <View style={styles.greeting}>
-                            <Text style={styles.greetingText}>Xin chào,</Text>
-                            <Text style={styles.userName}>User 👋</Text>
-                        </View>
+                        <Image
+                            source={require('../../../assets/logo_notext.png')}
+                            style={{ width: 70, height: 70 }}
+                            resizeMode="contain"
+                        />
+                        <Image
+                            source={require('../../../assets/logo_text.png')}
+                            style={{ width: 100, height: 100, position: 'relative', bottom: 5, right: 20 }}
+                            resizeMode="contain"
+                        />
                     </View>
                     <View style={styles.headerRight}>
                         <TouchableOpacity style={styles.headerButton}>
-                            <Ionicons name="notifications-outline" size={24} color={SoundMateColors.textPrimary} />
+                            <Ionicons name="search" size={24} color={SoundMateLightColors.textPrimary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.headerButton}>
+                            <Ionicons name="notifications-outline" size={24} color={SoundMateLightColors.textPrimary} />
                             <View style={styles.notificationBadge}>
                                 <Text style={styles.notificationCount}>3</Text>
                             </View>
@@ -251,86 +471,174 @@ export default function HomeScreen({ navigation, onLogout }: HomeScreenProps) {
                     </View>
                 </View>
 
-                {/* Search Bar */}
-                <View style={styles.searchContainer}>
-                    <Ionicons name="search" size={20} color={SoundMateColors.textMuted} />
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Tìm podcast, bài hát, phiên live..."
-                        placeholderTextColor={SoundMateColors.textMuted}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
+                {/* Hero Section */}
+                <Animated.View
+                    style={{
+                        opacity: heroFadeAnim,
+                        transform: [{ translateY: heroSlideAnim }]
+                    }}
+                >
+                    <LinearGradient
+                        colors={['rgba(85, 197, 241, 0.15)', 'transparent']}
+                        style={styles.heroSection}
+                    >
+                        <Text style={styles.heroTitle}>Listen</Text>
+                        <LinearGradient
+                            colors={['#55C5F1', '#A78BFA']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.gradientText}
+                        >
+                            <Text style={styles.heroTitleGradient}>Together</Text>
+                        </LinearGradient>
+                        <Text style={styles.heroSubtitle}>Chia sẻ âm nhạc của bạn</Text>
+                        <TouchableOpacity style={styles.heroCTA}>
+                            <LinearGradient
+                                colors={['#55C5F1', '#3AA8D4']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={styles.heroCTAGradient}
+                            >
+                                <Ionicons name="play" size={18} color="#FFFFFF" />
+                                <Text style={styles.heroCTAText}>Bắt Đầu</Text>
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    </LinearGradient>
+                </Animated.View>
+
+                {/* Playlist Section */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>Playlist đề cử</Text>
+                    </View>
+                    
+                    {/* Playlist Tabs */}
+                    <ScrollView 
+                        horizontal 
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.tabsContainer}
+                    >
+                        {PLAYLIST_TABS.map((tab) => (
+                            <TouchableOpacity
+                                key={tab}
+                                style={[
+                                    styles.tab,
+                                    activePlaylistTab === tab && styles.tabActive
+                                ]}
+                                onPress={() => setActivePlaylistTab(tab)}
+                            >
+                                <Text style={[
+                                    styles.tabText,
+                                    activePlaylistTab === tab && styles.tabTextActive
+                                ]}>
+                                    {tab}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+
+                    <FlatList
+                        data={PLAYLISTS}
+                        renderItem={renderPlaylistCard}
+                        keyExtractor={(item) => item.id}
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.horizontalList}
                     />
-                    <TouchableOpacity>
-                        <Ionicons name="options-outline" size={20} color={SoundMateColors.textMuted} />
+                </View>
+
+                {/* Live Room Section */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>Phòng Đang Phát</Text>
+                        {/* <TouchableOpacity>
+                            <Text style={styles.seeAll}>Xem thêm</Text>
+                        </TouchableOpacity> */}
+                    </View>
+                    
+                    <TouchableOpacity style={styles.liveRoomCard} activeOpacity={0.8}>
+                        <LinearGradient
+                            colors={['#D6F2FC', '#fce7f3']}
+                            style={styles.liveRoomGradient}
+                        >
+                            <Animated.View 
+                                style={[
+                                    styles.liveBadge,
+                                    { transform: [{ scale: pulseAnim }] }
+                                ]}
+                            >
+                                <Animated.View style={[
+                                    styles.liveDot,
+                                    { opacity: pulseAnim }
+                                ]} />
+                                <Text style={styles.liveText}>LIVE</Text>
+                            </Animated.View>
+                            <View style={styles.liveRoomContent}>
+                                <Text style={styles.liveRoomTitle}>Đêm nhạc cổ điển êm dịu</Text>
+                                <View style={styles.liveRoomMeta}>
+                                    <View style={styles.liveRoomMetaItem}>
+                                        <Ionicons name="people" size={16} color="#55C5F1" />
+                                        <Text style={styles.liveRoomMetaText}>33 Kết nối</Text>
+                                    </View>
+                                    <View style={styles.liveRoomMetaItem}>
+                                        <Ionicons name="heart" size={16} color="#55C5F1" />
+                                        <Text style={styles.liveRoomMetaText}>156 lượt thích</Text>
+                                    </View>
+                                </View>
+                            </View>
+                            <TouchableOpacity style={styles.liveRoomJoinButton}>
+                                <Ionicons name="headset" size={18} color="#FFFFFF" />
+                                <Text style={styles.liveRoomJoinText}>Tham Gia</Text>
+                            </TouchableOpacity>
+                        </LinearGradient>
                     </TouchableOpacity>
                 </View>
 
-                {/* Live Sessions */}
+                {/* Schedule Section */}
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
-                        <View style={styles.sectionTitleContainer}>
-                            <View style={styles.liveDotLarge} />
-                            <Text style={styles.sectionTitle}>Phiên Live đang diễn ra</Text>
-                        </View>
+                        <Text style={styles.sectionTitle}>Lịch phát sóng</Text>
                         <TouchableOpacity>
                             <Text style={styles.seeAll}>Xem tất cả</Text>
                         </TouchableOpacity>
                     </View>
                     <FlatList
-                        data={LIVE_SESSIONS}
-                        renderItem={renderLiveSessionCard}
+                        data={SCHEDULE_ITEMS}
+                        renderItem={renderScheduleItem}
                         keyExtractor={(item) => item.id}
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.horizontalList}
+                        scrollEnabled={false}
+                        contentContainerStyle={styles.scheduleList}
                     />
                 </View>
 
-                {/* Mood Playlists */}
+                {/* Forum Section */}
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Tâm trạng hôm nay</Text>
-                    </View>
-                    <FlatList
-                        data={MOOD_PLAYLISTS}
-                        renderItem={renderMoodPlaylist}
-                        keyExtractor={(item) => item.id}
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.horizontalList}
-                    />
-                </View>
-
-                {/* Podcast Letters */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Thư Podcast nổi bật</Text>
+                        <Text style={styles.sectionTitle}>Diễn đàn SoundMates</Text>
                         <TouchableOpacity>
                             <Text style={styles.seeAll}>Xem tất cả</Text>
                         </TouchableOpacity>
                     </View>
                     <FlatList
-                        data={PODCAST_LETTERS}
-                        renderItem={renderPodcastLetterCard}
+                        data={FORUM_POSTS}
+                        renderItem={renderForumPost}
                         keyExtractor={(item) => item.id}
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.horizontalList}
+                        scrollEnabled={false}
+                        contentContainerStyle={styles.forumList}
                     />
                 </View>
 
-                {/* Trending */}
+                {/* Podcast Section */}
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>🔥 Xu hướng</Text>
+                        <Text style={styles.sectionTitle}>Các thư Podcast yêu thích</Text>
                         <TouchableOpacity>
                             <Text style={styles.seeAll}>Xem tất cả</Text>
                         </TouchableOpacity>
                     </View>
                     <FlatList
-                        data={TRENDING_CONTENT}
-                        renderItem={renderTrendingCard}
+                        data={PODCASTS}
+                        renderItem={renderPodcastCard}
                         keyExtractor={(item) => item.id}
                         horizontal
                         showsHorizontalScrollIndicator={false}
@@ -338,24 +646,24 @@ export default function HomeScreen({ navigation, onLogout }: HomeScreenProps) {
                     />
                 </View>
 
-                {/* Create Content CTA */}
-                <TouchableOpacity style={styles.createCTA} activeOpacity={0.9}>
+                {/* Subscription CTA */}
+                <View style={styles.subscriptionSection}>
                     <LinearGradient
-                        colors={[SoundMateColors.primary, SoundMateColors.primaryDark]}
+                        colors={['#55C5F1', '#A78BFA']}
                         start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.createCTAGradient}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.subscriptionGradient}
                     >
-                        <View style={styles.createCTAContent}>
-                            <Ionicons name="mic" size={32} color="#FFFFFF" />
-                            <View style={styles.createCTAText}>
-                                <Text style={styles.createCTATitle}>Viết thư Podcast của bạn</Text>
-                                <Text style={styles.createCTASubtitle}>Chia sẻ cảm xúc, kết nối yêu thương</Text>
-                            </View>
+                        <View style={styles.subscriptionBadge}>
+                            <Text style={styles.subscriptionBadgeText}>Subscription</Text>
                         </View>
-                        <Ionicons name="arrow-forward" size={24} color="#FFFFFF" />
+                        <Text style={styles.subscriptionTitle}>Trở thành Hội Viên SoundMates</Text>
+                        <Text style={styles.subscriptionDescription}>
+                            Chỉ với <Text style={styles.subscriptionPrice}>159.000đ / tháng</Text>, bạn mở khóa toàn bộ đặc quyền dành riêng cho những người thật sự sống cuồng nhiệt cùng âm nhạc.
+                        </Text>
+                        <AnimatedSubscriptionButton />
                     </LinearGradient>
-                </TouchableOpacity>
+                </View>
 
                 {/* Spacer for bottom nav */}
                 <View style={{ height: 100 }} />
@@ -370,7 +678,7 @@ export default function HomeScreen({ navigation, onLogout }: HomeScreenProps) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: SoundMateColors.background,
+        backgroundColor: SoundMateLightColors.background,
     },
     backgroundGradient: {
         ...StyleSheet.absoluteFillObject,
@@ -380,8 +688,9 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 20,
-        paddingTop: 10,
-        paddingBottom: 16,
+        maxHeight: 50,
+        // paddingTop: 10,
+        // paddingBottom: 16,
     },
     headerLeft: {
         flexDirection: 'row',
@@ -395,7 +704,7 @@ const styles = StyleSheet.create({
         height: 48,
         borderRadius: 24,
         borderWidth: 2,
-        borderColor: SoundMateColors.primary,
+        borderColor: SoundMateLightColors.primary,
     },
     onlineIndicator: {
         position: 'absolute',
@@ -406,19 +715,19 @@ const styles = StyleSheet.create({
         borderRadius: 6,
         backgroundColor: '#10B981',
         borderWidth: 2,
-        borderColor: SoundMateColors.background,
+        borderColor: SoundMateLightColors.background,
     },
     greeting: {
         marginLeft: 12,
     },
     greetingText: {
         fontSize: 14,
-        color: SoundMateColors.textSecondary,
+        color: SoundMateLightColors.textSecondary,
     },
     userName: {
         fontSize: 18,
         fontWeight: '700',
-        color: SoundMateColors.textPrimary,
+        color: SoundMateLightColors.textPrimary,
     },
     headerRight: {
         flexDirection: 'row',
@@ -431,7 +740,7 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: 4,
         right: 4,
-        backgroundColor: SoundMateColors.primary,
+        backgroundColor: SoundMateLightColors.primary,
         borderRadius: 10,
         minWidth: 18,
         height: 18,
@@ -446,20 +755,20 @@ const styles = StyleSheet.create({
     searchContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: SoundMateColors.surface,
+        backgroundColor: SoundMateLightColors.surface,
         marginHorizontal: 20,
         marginBottom: 20,
         borderRadius: 16,
         paddingHorizontal: 16,
         height: 50,
         borderWidth: 1,
-        borderColor: SoundMateColors.border,
+        borderColor: SoundMateLightColors.border,
     },
     searchInput: {
         flex: 1,
         marginLeft: 12,
         fontSize: 15,
-        color: SoundMateColors.textPrimary,
+        color: SoundMateLightColors.textPrimary,
     },
     section: {
         marginBottom: 24,
@@ -478,7 +787,7 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 20,
         fontWeight: '700',
-        color: SoundMateColors.textPrimary,
+        color: SoundMateLightColors.textPrimary,
     },
     liveDotLarge: {
         width: 10,
@@ -489,24 +798,13 @@ const styles = StyleSheet.create({
     },
     seeAll: {
         fontSize: 14,
-        color: SoundMateColors.primary,
+        color: SoundMateLightColors.primary,
         fontWeight: '600',
     },
     horizontalList: {
         paddingHorizontal: 20,
     },
-    // Live Session Card
-    liveSessionCard: {
-        width: 180,
-        height: 200,
-        marginRight: 16,
-        borderRadius: 20,
-        overflow: 'hidden',
-    },
-    liveSessionGradient: {
-        flex: 1,
-        padding: 16,
-    },
+    // Live Badge
     liveBadge: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -528,51 +826,308 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#FFFFFF',
     },
-    liveSessionContent: {
-        flex: 1,
-        justifyContent: 'flex-end',
+    // Hero Section
+    heroSection: {
+        paddingHorizontal: 20,
+        paddingVertical: 40,
+        alignItems: 'center',
+        marginBottom: 20,
     },
-    hostAvatar: {
-        width: 40,
-        height: 40,
+    heroTitle: {
+        fontSize: 52,
+        fontWeight: '700',
+        color: SoundMateLightColors.textPrimary,
+        fontFamily: 'BeVietnamPro_100Thin',
+    },
+    gradientText: {
+        borderRadius: 8,
+        paddingHorizontal: 8,
+    },
+    heroTitleGradient: {
+        fontSize: 52,
+        fontWeight: '700',
+        color: '#FFFFFF',
+        fontFamily: 'BeVietnamPro_100Thin',
+    },
+    heroSubtitle: {
+        fontSize: 16,
+        color: SoundMateLightColors.textSecondary,
+        marginTop: 8,
+        marginBottom: 24,
+    },
+    heroCTA: {
+        borderRadius: 12,
+        overflow: 'hidden',
+    },
+    heroCTAGradient: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        gap: 8,
+    },
+    heroCTAText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#FFFFFF',
+    },
+    // Tabs
+    tabsContainer: {
+        paddingHorizontal: 20,
+        marginBottom: 16,
+    },
+    tab: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        marginRight: 12,
         borderRadius: 20,
-        marginBottom: 12,
-        borderWidth: 2,
-        borderColor: 'rgba(255,255,255,0.3)',
+        backgroundColor: SoundMateLightColors.surface,
+        borderWidth: 1,
+        borderColor: SoundMateLightColors.border,
     },
-    liveSessionTitle: {
+    tabActive: {
+        backgroundColor: '#55C5F1',
+        borderColor: '#55C5F1',
+    },
+    tabText: {
+        fontSize: 14,
+        color: SoundMateLightColors.textSecondary,
+        fontWeight: '600',
+    },
+    tabTextActive: {
+        color: '#FFFFFF',
+    },
+    // Playlist Card
+    playlistCard: {
+        width: 160,
+        height: 200,
+        marginRight: 16,
+        borderRadius: 16,
+        overflow: 'hidden',
+        backgroundColor: SoundMateLightColors.surface,
+    },
+    playlistImage: {
+        width: '100%',
+        height: '100%',
+    },
+    playlistOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'flex-end',
+        padding: 12,
+    },
+    playlistTitle: {
         fontSize: 16,
         fontWeight: '700',
         color: '#FFFFFF',
         marginBottom: 4,
     },
-    liveSessionHost: {
+    playlistSubtitle: {
         fontSize: 12,
-        color: 'rgba(255,255,255,0.8)',
-        marginBottom: 8,
+        color: 'rgba(255,255,255,0.7)',
     },
-    listenersContainer: {
-        flexDirection: 'row',
+    playButton: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#55C5F1',
+        justifyContent: 'center',
         alignItems: 'center',
     },
-    listenersText: {
-        fontSize: 12,
+    // Live Room Card
+    liveRoomCard: {
+        marginHorizontal: 20,
+        borderRadius: 20,
+        overflow: 'hidden',
+    },
+    liveRoomGradient: {
+        padding: 20,
+    },
+    liveRoomContent: {
+        marginTop: 12,
+        marginBottom: 16,
+    },
+    liveRoomTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#000000',
+        marginBottom: 12,
+    },
+    liveRoomMeta: {
+        flexDirection: 'row',
+        gap: 20,
+    },
+    liveRoomMetaItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    liveRoomMetaText: {
+        fontSize: 14,
+        color: '#000000',
+    },
+    liveRoomJoinButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#55C5F1',
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 12,
+        alignSelf: 'flex-start',
+        gap: 8,
+    },
+    liveRoomJoinText: {
+        fontSize: 16,
+        fontWeight: '700',
         color: '#FFFFFF',
-        marginLeft: 4,
     },
-    moodTag: {
-        position: 'absolute',
-        top: 16,
-        right: 16,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 8,
+    // Schedule Item
+    scheduleList: {
+        paddingHorizontal: 20,
     },
-    moodTagText: {
+    scheduleItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: SoundMateLightColors.surface,
+        padding: 16,
+        borderRadius: 16,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: SoundMateLightColors.border,
+    },
+    scheduleTime: {
+        marginRight: 10,
+        alignItems: 'center',
+        width: 52,
+    },
+    scheduleTimeValue: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#55C5F1',
+    },
+    scheduleTimePeriod: {
         fontSize: 10,
-        color: '#FFFFFF',
+        color: SoundMateLightColors.textSecondary,
+        marginTop: 2,
+    },
+    musicWave: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+        marginRight: 12,
+    },
+    musicBar: {
+        width: 3,
+        backgroundColor: '#55C5F1',
+        borderRadius: 2,
+    },
+    scheduleContent: {
+        flex: 1,
+    },
+    scheduleTitle: {
+        fontSize: 14,
         fontWeight: '600',
+        color: SoundMateLightColors.textPrimary,
+        marginBottom: 4,
+    },
+    scheduleHost: {
+        fontSize: 12,
+        color: SoundMateLightColors.textSecondary,
+    },
+    scheduleAction: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+        backgroundColor: SoundMateLightColors.surfaceLight,
+        borderWidth: 1,
+        borderColor: SoundMateLightColors.border,
+    },
+    scheduleActionLive: {
+        backgroundColor: '#EF4444',
+        borderColor: '#EF4444',
+    },
+    scheduleActionText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: SoundMateLightColors.textPrimary,
+    },
+    // Forum Item
+    forumList: {
+        paddingHorizontal: 20,
+    },
+    forumItem: {
+        flexDirection: 'row',
+        backgroundColor: SoundMateLightColors.surface,
+        padding: 16,
+        borderRadius: 16,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: SoundMateLightColors.border,
+    },
+    forumAvatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        marginRight: 12,
+    },
+    forumContent: {
+        flex: 1,
+    },
+    forumHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    forumAuthor: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: SoundMateLightColors.textPrimary,
+        marginRight: 8,
+    },
+    forumBadge: {
+        backgroundColor: '#55C5F1',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    forumBadgeText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
+    forumTitle: {
+        fontSize: 14,
+        color: SoundMateLightColors.textPrimary,
+        marginBottom: 8,
+        lineHeight: 20,
+    },
+    forumMeta: {
+        flexDirection: 'row',
+        gap: 16,
+    },
+    forumMetaItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    forumMetaText: {
+        fontSize: 12,
+        color: SoundMateLightColors.textSecondary,
+    },
+    forumAction: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+        backgroundColor: '#55C5F1',
+        justifyContent: 'center',
+        alignSelf: 'flex-start',
+    },
+    forumActionText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#FFFFFF',
     },
     // Podcast Card
     podcastCard: {
@@ -581,9 +1136,9 @@ const styles = StyleSheet.create({
         marginRight: 16,
         borderRadius: 16,
         overflow: 'hidden',
-        backgroundColor: SoundMateColors.surface,
+        backgroundColor: SoundMateLightColors.surface,
     },
-    podcastCover: {
+    podcastImage: {
         width: '100%',
         height: '100%',
     },
@@ -598,133 +1153,62 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         marginBottom: 4,
     },
-    podcastAuthor: {
+    podcastSubtitle: {
         fontSize: 12,
         color: 'rgba(255,255,255,0.7)',
-        marginBottom: 8,
     },
-    podcastMeta: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
+    // Subscription Section
+    subscriptionSection: {
+        marginHorizontal: 20,
+        marginBottom: 24,
     },
-    podcastDuration: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    podcastLikes: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    podcastMetaText: {
-        fontSize: 11,
-        color: '#FFFFFF',
-        marginLeft: 4,
-    },
-    playButton: {
-        position: 'absolute',
-        top: 12,
-        right: 12,
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: SoundMateColors.primary,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    // Mood Card
-    moodCard: {
-        alignItems: 'center',
-        marginRight: 20,
-    },
-    moodGradient: {
-        width: 64,
-        height: 64,
+    subscriptionGradient: {
+        padding: 24,
         borderRadius: 20,
-        justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 8,
     },
-    moodEmoji: {
-        fontSize: 28,
-    },
-    moodName: {
-        fontSize: 12,
-        color: SoundMateColors.textSecondary,
-        fontWeight: '600',
-    },
-    // Trending Card
-    trendingCard: {
-        width: 240,
-        height: 140,
-        marginRight: 16,
-        borderRadius: 16,
-        overflow: 'hidden',
-    },
-    trendingCover: {
-        width: '100%',
-        height: '100%',
-    },
-    trendingOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        justifyContent: 'flex-end',
-        padding: 16,
-    },
-    trendingType: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255,107,53,0.9)',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
+    subscriptionBadge: {
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
         borderRadius: 8,
-        alignSelf: 'flex-start',
-        marginBottom: 8,
+        marginBottom: 16,
     },
-    trendingTypeText: {
-        fontSize: 10,
-        fontWeight: '600',
-        color: '#FFFFFF',
-        marginLeft: 4,
-    },
-    trendingTitle: {
-        fontSize: 14,
+    subscriptionBadgeText: {
+        fontSize: 12,
         fontWeight: '700',
         color: '#FFFFFF',
-        marginBottom: 4,
     },
-    trendingPlays: {
-        fontSize: 12,
-        color: 'rgba(255,255,255,0.7)',
+    subscriptionTitle: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: '#FFFFFF',
+        textAlign: 'center',
+        marginBottom: 12,
     },
-    // Create CTA
-    createCTA: {
-        marginHorizontal: 20,
-        borderRadius: 20,
-        overflow: 'hidden',
-        marginTop: 8,
+    subscriptionDescription: {
+        fontSize: 14,
+        color: 'rgba(255,255,255,0.9)',
+        textAlign: 'center',
+        lineHeight: 20,
+        marginBottom: 20,
     },
-    createCTAGradient: {
+    subscriptionPrice: {
+        fontWeight: '700',
+        fontSize: 16,
+    },
+    subscriptionButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 20,
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 12,
+        gap: 8,
     },
-    createCTAContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-    },
-    createCTAText: {
-        marginLeft: 16,
-        flex: 1,
-    },
-    createCTATitle: {
+    subscriptionButtonText: {
         fontSize: 16,
         fontWeight: '700',
-        color: '#FFFFFF',
-        marginBottom: 4,
-    },
-    createCTASubtitle: {
-        fontSize: 12,
-        color: 'rgba(255,255,255,0.8)',
+        color: '#55C5F1',
     },
 });

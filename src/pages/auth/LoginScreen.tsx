@@ -3,6 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
     Animated,
+    Image,
     Keyboard,
     KeyboardAvoidingView,
     Platform,
@@ -17,16 +18,22 @@ import {
 import { showToast } from '../../../components/ui/Toast';
 import { SoundMateLightColors } from '../../../constants/theme';
 import { authService } from '../../api';
-import SoundMatesLogo from '../../components/SoundMatesLogo';
 
 interface LoginScreenProps {
     navigation?: any;
     onLoginSuccess?: (response?: any) => void;
     onNavigateToRegister?: () => void;
     onUnverifiedEmail?: (email: string, password: string) => void;
+    onNavigateToForgotPassword?: () => void;
 }
 
-export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRegister, onUnverifiedEmail }: LoginScreenProps) {
+export default function LoginScreen({
+    navigation,
+    onLoginSuccess,
+    onNavigateToRegister,
+    onUnverifiedEmail,
+    onNavigateToForgotPassword,
+}: LoginScreenProps) {
     const [emailOrUsername, setEmailOrUsername] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -82,19 +89,34 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
                 showToast.success('Đăng nhập thành công!', `Chào mừng bạn quay trở lại!`);
 
                 if (onLoginSuccess) {
+                    console.log('[LoginScreen] Calling onLoginSuccess with response.data:', response.data);
                     onLoginSuccess(response.data);
                 }
             } else {
-                // Check if email is not verified (error code 403)
+                // Check if email is not verified
+                // Only treat as unverified email if message contains specific verification keywords
+                // (not just generic words like "email" which appears in many error messages)
                 const errorMessage = response.message || '';
-                const isUnverifiedEmail = errorMessage.toLowerCase().includes('verify') ||
-                    errorMessage.includes('403') ||
-                    errorMessage.toLowerCase().includes('email');
+                const isUnverifiedEmail = 
+                    errorMessage.toLowerCase().includes('not verified') ||
+                    errorMessage.toLowerCase().includes('chưa xác thực') ||
+                    errorMessage.toLowerCase().includes('please verify') ||
+                    errorMessage.toLowerCase().includes('verification required') ||
+                    errorMessage.toLowerCase().includes('verify your email');
 
                 if (isUnverifiedEmail && onUnverifiedEmail) {
-                    // Call handler to redirect to OTP screen and resend verification
-                    onUnverifiedEmail(emailOrUsername.trim().toLowerCase(), password);
+                    // Show error toast first before redirecting
+                    showToast.warning(
+                        'Email chưa xác thực', 
+                        'Vui lòng xác thực email để tiếp tục. Chúng tôi sẽ gửi lại mã OTP cho bạn.'
+                    );
+                    
+                    // Wait a bit for user to see the toast, then redirect to OTP
+                    setTimeout(() => {
+                        onUnverifiedEmail(emailOrUsername.trim().toLowerCase(), password);
+                    }, 1500);
                 } else {
+                    // Show error for other login failures (e.g., invalid credentials)
                     showToast.error('Đăng nhập thất bại', response.message || 'Email hoặc mật khẩu không đúng');
                 }
             }
@@ -103,9 +125,21 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
 
             // Check for 403 error in axios response
             if (error?.response?.status === 403 && onUnverifiedEmail) {
-                onUnverifiedEmail(emailOrUsername.trim().toLowerCase(), password);
+                showToast.warning(
+                    'Email chưa xác thực', 
+                    'Vui lòng xác thực email để tiếp tục. Chúng tôi sẽ gửi lại mã OTP cho bạn.'
+                );
+                
+                // Wait a bit for user to see the toast, then redirect to OTP
+                setTimeout(() => {
+                    onUnverifiedEmail(emailOrUsername.trim().toLowerCase(), password);
+                }, 1500);
             } else {
-                showToast.error('Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.');
+                // Show error message from API or generic error
+                const errorMessage = error?.response?.data?.message || 
+                                   error?.message || 
+                                   'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.';
+                showToast.error('Lỗi đăng nhập', errorMessage);
             }
         } finally {
             setIsLoading(false);
@@ -113,8 +147,12 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
     }, [emailOrUsername, password, onLoginSuccess, onUnverifiedEmail]);
 
     const handleForgotPassword = useCallback(() => {
-        showToast.info('Quên mật khẩu', 'Tính năng đang được phát triển');
-    }, []);
+        if (onNavigateToForgotPassword) {
+            onNavigateToForgotPassword();
+        } else {
+            showToast.info('Quên mật khẩu', 'Tính năng đang được phát triển');
+        }
+    }, [onNavigateToForgotPassword]);
 
     const handleCreateAccount = useCallback(() => {
         if (onNavigateToRegister) {
@@ -148,7 +186,11 @@ export default function LoginScreen({ navigation, onLoginSuccess, onNavigateToRe
                 >
                     {/* Logo Section */}
                     <View style={styles.logoSection}>
-                        <SoundMatesLogo size={130} showText={true} />
+                        <Image
+                            source={require('../../../assets/light_logo.png')}
+                            style={{ width: 130, height: 130 }}
+                            resizeMode="contain"
+                        />
                     </View>
 
                     {/* Title */}
@@ -300,7 +342,7 @@ const styles = StyleSheet.create({
     },
     logoSection: {
         alignItems: 'center',
-        marginBottom: 30,
+        marginBottom: 10,
     },
     title: {
         fontSize: 26,
