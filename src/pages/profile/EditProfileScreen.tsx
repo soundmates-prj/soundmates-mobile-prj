@@ -10,6 +10,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface EditProfileScreenProps {
   onBack: () => void;
@@ -68,7 +69,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Success Toast */}
       {showSavedToast && (
         <View style={styles.toastContainer}>
@@ -536,7 +537,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
         {/* Bottom spacer */}
         <View style={styles.bottomSpacer} />
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 

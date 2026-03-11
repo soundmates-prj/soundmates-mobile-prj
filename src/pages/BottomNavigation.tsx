@@ -82,7 +82,7 @@ export default function BottomNavigation({ activeTab, onTabPress, onLogout }: Bo
                     source={{ uri: 'https://i.pravatar.cc/150?img=10' }}
                     style={styles.userAvatar}
                 />
-                <Text style={styles.navText}>Hồ sơ</Text>
+                <Text style={styles.navText}>Trang Cá Nhân</Text>
             </TouchableOpacity>
         </View>
     );
