@@ -28,14 +28,17 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-    accessToken: string;
-    refreshToken: string;
-    user: {
-        id: string;
-        email: string;
-        firstName: string;
-        lastName: string;
-    };
+    userId: string;
+    username: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    roleId?: string;
+    roleName?: string;
+    isActive: boolean;
+    accessToken?: string;
+    refreshToken?: string;
+    createdAt?: string;
 }
 
 export interface VerifyOtpRequest {
@@ -44,8 +47,17 @@ export interface VerifyOtpRequest {
 }
 
 export interface VerifyOtpResponse {
-    verified: boolean;
-    message?: string;
+    userId: string;
+    username: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    roleId?: string;
+    roleName?: string;
+    isActive: boolean;
+    accessToken?: string;
+    refreshToken?: string;
+    createdAt?: string;
 }
 
 export interface UpdateProfileOptionsRequest {
@@ -167,19 +179,19 @@ class AuthService {
     }
 
     /**
-     * Forgot password - request password reset
+     * Forgot password - request password reset OTP
      */
     async forgotPassword(email: string): Promise<ApiResponse<{ message: string }>> {
         try {
             const response = await authApiClient.post(
-                AUTH_ENDPOINTS.FORGOT_PASSWORD,
+                AUTH_ENDPOINTS.FORGET_PASSWORD,
                 { email }
             );
 
             return {
                 success: true,
                 data: response.data,
-                message: 'Đã gửi email đặt lại mật khẩu!',
+                message: 'Đã gửi mã OTP về email của bạn!',
             };
         } catch (error: any) {
             return {
@@ -190,16 +202,17 @@ class AuthService {
     }
 
     /**
-     * Reset password with token
+     * Reset password with OTP code
      */
     async resetPassword(
-        token: string,
+        email: string,
+        otpCode: string,
         newPassword: string
     ): Promise<ApiResponse<{ message: string }>> {
         try {
             const response = await authApiClient.post(
                 AUTH_ENDPOINTS.RESET_PASSWORD,
-                { token, newPassword }
+                { email, otpCode, newPassword }
             );
 
             return {

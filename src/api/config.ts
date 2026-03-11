@@ -32,7 +32,7 @@ export const AUTH_ENDPOINTS = {
     LOGIN: '/auth/login',
     VERIFY_OTP: '/auth/verify-email',
     RESEND_OTP: '/auth/resend-otp',
-    FORGOT_PASSWORD: '/auth/forgot-password',
+    FORGET_PASSWORD: '/auth/forget-password',
     RESET_PASSWORD: '/auth/reset-password',
     REFRESH_TOKEN: '/auth/refresh-token',
     LOGOUT: '/auth/logout',

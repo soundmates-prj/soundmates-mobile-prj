@@ -837,7 +837,7 @@ const styles = StyleSheet.create({
         fontSize: 52,
         fontWeight: '700',
         color: SoundMateLightColors.textPrimary,
-        fontFamily: 'System',
+        fontFamily: 'BeVietnamPro_100Thin',
     },
     gradientText: {
         borderRadius: 8,
@@ -847,7 +847,7 @@ const styles = StyleSheet.create({
         fontSize: 52,
         fontWeight: '700',
         color: '#FFFFFF',
-        fontFamily: 'System',
+        fontFamily: 'BeVietnamPro_100Thin',
     },
     heroSubtitle: {
         fontSize: 16,

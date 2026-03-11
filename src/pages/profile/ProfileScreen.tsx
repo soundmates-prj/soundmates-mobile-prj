@@ -1,19 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-    Dimensions,
-    Image,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  Dimensions,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
+import { showToast } from '../../../components/ui/Toast';
 import { SoundMateLightColors } from '../../../constants/theme';
+import { useUser } from '../../context/UserContext';
 import BottomNavigation, { TabName } from '../BottomNavigation';
+import AccountInfoScreen from './AccountInfoScreen';
+import ChangePasswordScreen from './ChangePasswordScreen';
 import EditProfileScreen from './EditProfileScreen';
 
 const { width } = Dimensions.get('window');
@@ -442,7 +447,21 @@ function PostCard({
 
 // ─── Settings Drawer ────────────────────────────────────
 
-function SettingsDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountInfo, onLogout }: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  onOpenChangePassword?: () => void;
+  onOpenAccountInfo?: () => void;
+  onLogout?: () => void;
+}) {
+  const handleMenuItemPress = (label: string) => {
+    if (label === 'Đổi mật khẩu' && onOpenChangePassword) {
+      onOpenChangePassword();
+    } else if (label === 'Thông tin tài khoản' && onOpenAccountInfo) {
+      onOpenAccountInfo();
+    }
+  };
+
   return (
     <Modal visible={isOpen} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.settingsBackdrop}>
@@ -467,7 +486,11 @@ function SettingsDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
               <View key={section.group} style={styles.settingsSection}>
                 <Text style={styles.settingsSectionTitle}>{section.group}</Text>
                 {section.items.map((item) => (
-                  <TouchableOpacity key={item.label} style={styles.settingsMenuItem}>
+                  <TouchableOpacity 
+                    key={item.label} 
+                    style={styles.settingsMenuItem}
+                    onPress={() => handleMenuItemPress(item.label)}
+                  >
                     <View style={[styles.settingsMenuIcon, { backgroundColor: item.color + '15' }]}>
                       <Ionicons name={item.icon as any} size={18} color={item.color} />
                     </View>
@@ -488,7 +511,32 @@ function SettingsDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
 
             {/* Logout */}
             <View style={styles.settingsLogoutContainer}>
-              <TouchableOpacity style={styles.settingsLogoutButton}>
+              <TouchableOpacity 
+                style={styles.settingsLogoutButton}
+                onPress={() => {
+                  Alert.alert(
+                    'Đăng xuất',
+                    'Bạn có chắc chắn muốn đăng xuất khỏi SoundMates?',
+                    [
+                      {
+                        text: 'Hủy',
+                        style: 'cancel',
+                      },
+                      {
+                        text: 'Đăng xuất',
+                        style: 'destructive',
+                        onPress: () => {
+                          onClose();
+                          showToast.success('Đã đăng xuất', 'Hẹn gặp lại bạn!');
+                          if (onLogout) {
+                            setTimeout(() => onLogout(), 300);
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }}
+              >
                 <Ionicons name="log-out-outline" size={18} color="#EF4444" />
                 <Text style={styles.settingsLogoutText}>Đăng xuất</Text>
               </TouchableOpacity>
@@ -507,14 +555,25 @@ function SettingsDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
 
 interface ProfileScreenProps {
   onBackToHome?: () => void;
+  onNavigateToForgotPassword?: () => void;
+  onLogout?: () => void;
 }
 
-export default function ProfileScreen({ onBackToHome }: ProfileScreenProps) {
+export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword, onLogout }: ProfileScreenProps) {
+  const { user } = useUser();
+  console.log('[ProfileScreen] Current user:', user);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showAccountInfo, setShowAccountInfo] = useState(false);
   const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
   const [activeTab, setActiveTab] = useState<'posts' | 'playlists'>('posts');
   const [activeBottomTab, setActiveBottomTab] = useState<TabName>('profile');
+
+  // Debug: Log user changes
+  useEffect(() => {
+    console.log('[ProfileScreen] User data changed:', user);
+  }, [user]);
 
   const handleTabPress = (tab: TabName) => {
     setActiveBottomTab(tab);
@@ -592,12 +651,16 @@ export default function ProfileScreen({ onBackToHome }: ProfileScreenProps) {
               </View>
               <View style={styles.profileDetails}>
                 <View style={styles.profileNameRow}>
-                  <Text style={styles.profileName}>Minh Anh</Text>
+                  <Text style={styles.profileName}>
+                    {user?.firstName && user?.lastName 
+                      ? `${user.firstName} ${user.lastName}` 
+                      : user?.username || 'User'}
+                  </Text>
                   <View style={styles.premiumBadge}>
                     <Text style={styles.premiumBadgeText}>Premium</Text>
                   </View>
                 </View>
-                <Text style={styles.profileUsername}>@minhanh_music</Text>
+                <Text style={styles.profileUsername}>@{user?.username || 'username'}</Text>
                 <Text style={styles.profileBio}>Yêu nhạc, yêu cuộc sống 🎵</Text>
               </View>
             </View>
@@ -744,7 +807,53 @@ export default function ProfileScreen({ onBackToHome }: ProfileScreenProps) {
       </Modal>
 
       {/* ── Settings Drawer ── */}
-      <SettingsDrawer isOpen={showSettings} onClose={() => setShowSettings(false)} />
+      <SettingsDrawer 
+        isOpen={showSettings} 
+        onClose={() => setShowSettings(false)} 
+        onOpenChangePassword={() => {
+          setShowSettings(false);
+          setShowChangePassword(true);
+        }}
+        onOpenAccountInfo={() => {
+          setShowSettings(false);
+          setShowAccountInfo(true);
+        }}
+        onLogout={onLogout}
+      />
+
+      {/* ── Change Password Modal ── */}
+      <Modal
+        visible={showChangePassword}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setShowChangePassword(false)}
+      >
+        <ChangePasswordScreen 
+          onBack={() => setShowChangePassword(false)} 
+          onNavigateToForgotPassword={() => {
+            setShowChangePassword(false);
+            if (onNavigateToForgotPassword) {
+              onNavigateToForgotPassword();
+            }
+          }}
+          onLogout={() => {
+            setShowChangePassword(false);
+            if (onLogout) {
+              onLogout();
+            }
+          }}
+        />
+      </Modal>
+
+      {/* ── Account Info Modal ── */}
+      <Modal
+        visible={showAccountInfo}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setShowAccountInfo(false)}
+      >
+        <AccountInfoScreen onBack={() => setShowAccountInfo(false)} />
+      </Modal>
     </View>
   );
 }
