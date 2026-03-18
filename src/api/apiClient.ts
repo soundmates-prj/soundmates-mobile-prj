@@ -3,6 +3,7 @@
  * Axios instance configuration with interceptors
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios, { AxiosError, AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { API_CONFIG } from './config';
 
@@ -15,12 +16,12 @@ export const authApiClient: AxiosInstance = axios.create({
 
 // Request interceptor
 authApiClient.interceptors.request.use(
-    (config: InternalAxiosRequestConfig) => {
+    async (config: InternalAxiosRequestConfig) => {
         // Add authorization token if available
-        // const token = await AsyncStorage.getItem('accessToken');
-        // if (token) {
-        //     config.headers.Authorization = `Bearer ${token}`;
-        // }
+        const token = await AsyncStorage.getItem('accessToken');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
 
         console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, config.data);
         return config;

@@ -4,7 +4,7 @@
  */
 
 import { ApiResponse, authApiClient, handleApiError } from './apiClient';
-import { AUTH_ENDPOINTS } from './config';
+import { AUTH_ENDPOINTS, USER_ENDPOINTS } from './config';
 
 // Types for Auth operations
 export interface RegisterRequest {
@@ -71,6 +71,19 @@ export interface UpdateProfileOptionsRequest {
     website?: string;
 }
 
+export interface UpdateProfileRequest {
+    firstName?: string;
+    lastName?: string;
+    bio?: string;
+    phone?: string;
+    gender?: string;
+    dateOfBirth?: string;
+    profileImageUrl?: string;
+    backgroundImageUrl?: string;
+    location?: string;
+    website?: string;
+}
+
 export interface UpdateProfileOptionsResponse {
     id: string;
     email: string;
@@ -82,6 +95,44 @@ export interface UpdateProfileOptionsResponse {
     dateOfBirth?: string;
     location?: string;
     website?: string;
+}
+
+export interface UpdateProfileResponse {
+    id?: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    bio?: string;
+    phone?: string;
+    gender?: string;
+    dateOfBirth?: string;
+    profileImageUrl?: string;
+    backgroundImageUrl?: string;
+    location?: string;
+    website?: string;
+    updatedAt?: string;
+}
+
+export interface UserProfileFullResponse {
+    id?: string;
+    userId?: string;
+    username?: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    bio?: string;
+    phone?: string;
+    gender?: string;
+    dateOfBirth?: string;
+    profileImageUrl?: string;
+    backgroundImageUrl?: string;
+    location?: string;
+    website?: string;
+    roleId?: string;
+    roleName?: string;
+    isActive?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
 }
 
 // Auth Service class
@@ -114,6 +165,7 @@ class AuthService {
      */
     async login(data: LoginRequest): Promise<ApiResponse<LoginResponse>> {
         try {
+            console.log('url:', authApiClient.defaults.baseURL + AUTH_ENDPOINTS.LOGIN);
             const response = await authApiClient.post<LoginResponse>(
                 AUTH_ENDPOINTS.LOGIN,
                 data
@@ -284,6 +336,56 @@ class AuthService {
                 success: true,
                 data: response.data,
                 message: 'Cập nhật thông tin thành công!',
+            };
+        } catch (error: any) {
+            return {
+                success: false,
+                message: handleApiError(error),
+            };
+        }
+    }
+
+    /**
+     * Update user profile
+     */
+    async updateProfile(data: UpdateProfileRequest): Promise<ApiResponse<UpdateProfileResponse>> {
+        try {
+            const response = await authApiClient.put<UpdateProfileResponse>(
+                AUTH_ENDPOINTS.PROFILE_UPDATE,
+                data
+            );
+
+            const rawData = response.data as any;
+            const payload = rawData?.data ?? rawData?.result ?? rawData?.profile ?? rawData;
+
+            return {
+                success: true,
+                data: payload,
+                message: rawData?.message || 'Cập nhật hồ sơ thành công!',
+            };
+        } catch (error: any) {
+            return {
+                success: false,
+                message: handleApiError(error),
+            };
+        }
+    }
+
+    /**
+     * Get current user full profile
+     */
+    async getMyProfileFull(): Promise<ApiResponse<UserProfileFullResponse>> {
+        try {
+            const response = await authApiClient.get<UserProfileFullResponse>(
+                USER_ENDPOINTS.PROFILE_FULL
+            );
+
+            const rawData = response.data as any;
+            const payload = rawData?.data ?? rawData?.result ?? rawData?.profile ?? rawData;
+
+            return {
+                success: true,
+                data: payload,
             };
         } catch (error: any) {
             return {

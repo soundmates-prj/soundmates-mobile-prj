@@ -646,7 +646,7 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
 
             <View style={styles.profileInfo}>
               <View style={styles.avatarContainer}>
-                <Image source={{ uri: 'https://i.pravatar.cc/150?img=10' }} style={styles.avatar} />
+                <Image source={{ uri: user?.profileImageUrl || 'https://i.pravatar.cc/150?img=10' }} style={styles.avatar} />
                 <View style={styles.onlineIndicator} />
               </View>
               <View style={styles.profileDetails}>
@@ -660,8 +660,8 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
                     <Text style={styles.premiumBadgeText}>Premium</Text>
                   </View>
                 </View>
-                <Text style={styles.profileUsername}>@{user?.username || 'username'}</Text>
-                <Text style={styles.profileBio}>Yêu nhạc, yêu cuộc sống 🎵</Text>
+                <Text style={styles.profileUsername}>{user?.username || 'username'}</Text>
+                <Text style={styles.profileBio}>{user?.bio || 'Chưa có mô tả'}</Text>
               </View>
             </View>
 

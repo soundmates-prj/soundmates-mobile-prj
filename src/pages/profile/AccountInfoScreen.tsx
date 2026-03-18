@@ -2,16 +2,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import {
-    Alert,
-    Clipboard,
-    Dimensions,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Alert,
+  Clipboard,
+  Dimensions,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showToast } from '../../../components/ui/Toast';
 import { useUser } from '../../context/UserContext';
 
@@ -154,9 +156,13 @@ function SectionHeader({ title }: { title: string }) {
 // ─── Main Component ─────────────────────────────────────
 
 export default function AccountInfoScreen({ onBack }: AccountInfoScreenProps) {
+  const insets = useSafeAreaInsets();
   const { user } = useUser();
   console.log('User data in AccountInfoScreen:', user);
   const [showAllSessions, setShowAllSessions] = useState(false);
+
+  const fallbackTopInset = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
+  const topInset = Math.max(insets.top, fallbackTopInset);
 
   // Format date for display
   const formatDate = (dateString?: string) => {
@@ -210,7 +216,7 @@ export default function AccountInfoScreen({ onBack }: AccountInfoScreenProps) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { paddingTop: topInset }]} edges={['left', 'right', 'bottom']}>
       {/* ── Header ── */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -221,7 +227,7 @@ export default function AccountInfoScreen({ onBack }: AccountInfoScreenProps) {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
       >
         {/* ── Profile Header Card ── */}
@@ -555,7 +561,6 @@ export default function AccountInfoScreen({ onBack }: AccountInfoScreenProps) {
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 10,
     flex: 1,
     backgroundColor: '#FAFAFA',
   },
