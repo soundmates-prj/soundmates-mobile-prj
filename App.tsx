@@ -7,8 +7,17 @@ import Toast from 'react-native-toast-message';
 import { showToast, toastConfig } from './components/ui/Toast';
 import { SoundMateLightColors } from './constants/theme';
 import { authService } from './src/api';
-import { UserData, UserProvider, useUser } from './src/context/UserContext';
-import { ForgotPasswordScreen, HomeScreen, LoginScreen, OTPScreen, ProfileScreen, ProfileSetupScreen, RegisterScreen } from './src/pages';
+import { UserProvider, useUser } from './src/context/UserContext';
+import {
+    ForgotPasswordScreen,
+    HomeScreen,
+    LivestreamScreen,
+    LoginScreen,
+    OTPScreen,
+    ProfileScreen,
+    ProfileSetupScreen,
+    RegisterScreen,
+} from './src/pages';
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -23,6 +32,7 @@ const STORAGE_KEYS = {
 enum Screen {
     LOGIN = 'login',
     HOME = 'home',
+    LIVE = 'live',
     REGISTER = 'register',
     OTP = 'otp',
     PROFILE_SETUP = 'profile_setup',
@@ -31,7 +41,7 @@ enum Screen {
 }
 
 function AppContent() {
-    const { saveUser, clearUser } = useUser();
+    const { clearUser, refreshUser } = useUser();
     const [currentScreen, setCurrentScreen] = useState<Screen>(Screen.LOGIN);
     const [userEmail, setUserEmail] = useState<string>('');
     const [pendingPassword, setPendingPassword] = useState<string>('');
@@ -53,20 +63,20 @@ function AppContent() {
         checkAuth();
     }, []);
 
-    // Save authentication tokens and user data
-    const saveAuthTokens = useCallback(async (accessToken: string, refreshToken: string, userData?: UserData) => {
+    // Save authentication tokens only
+    const saveAuthTokens = useCallback(async (accessToken?: string, refreshToken?: string) => {
         try {
-            console.log('[App.tsx] saveAuthTokens called with userData:', userData);
-            await AsyncStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
-            await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
-            if (userData) {
-                console.log('[App.tsx] Calling saveUser with:', userData);
-                await saveUser(userData);
+            console.log('[App.tsx] saveAuthTokens called');
+            if (accessToken) {
+                await AsyncStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
+            }
+            if (refreshToken) {
+                await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
             }
         } catch (error) {
             console.error('Error saving auth tokens:', error);
         }
-    }, [saveUser]);
+    }, []);
 
     // Clear authentication tokens and user data
     const clearAuthTokens = useCallback(async () => {
@@ -96,14 +106,13 @@ function AppContent() {
             console.log('[App.tsx] Unwrapped response.data:', userData);
         }
         
-        if (userData?.accessToken && userData?.refreshToken) {
-            // Extract user data (excluding tokens)
-            const { accessToken, refreshToken, ...userInfo } = userData;
-            console.log('[App.tsx] Extracted userInfo:', userInfo);
-            await saveAuthTokens(accessToken, refreshToken, userInfo as UserData);
+        if (userData?.accessToken) {
+            const { accessToken, refreshToken } = userData;
+            await saveAuthTokens(accessToken, refreshToken);
+            await refreshUser();
         }
         setCurrentScreen(Screen.HOME);
-    }, [saveAuthTokens]);
+    }, [refreshUser, saveAuthTokens]);
 
     // Handle login attempt with unverified email (error 403)
     const handleUnverifiedEmail = useCallback(async (email: string, password: string) => {
@@ -166,13 +175,12 @@ function AppContent() {
                 if (loginResponse.success && loginResponse.data) {
                     console.log('[App.tsx] OTP auto-login success, data:', loginResponse.data);
                     
-                    // Extract user data (excluding tokens)
-                    const { accessToken, refreshToken, ...userData } = loginResponse.data;
-                    console.log('[App.tsx] OTP extracted userData:', userData);
-                    
-                    // Save tokens and user data
-                    if (accessToken && refreshToken) {
-                        await saveAuthTokens(accessToken, refreshToken, userData as UserData);
+                    const { accessToken, refreshToken } = loginResponse.data;
+
+                    // Save tokens only, then refresh user profile via API
+                    if (accessToken) {
+                        await saveAuthTokens(accessToken, refreshToken);
+                        await refreshUser();
                     }
 
                     // Clear pending credentials
@@ -206,7 +214,7 @@ function AppContent() {
         // Reset pending data
         setPendingPassword('');
         setIsNewRegistration(false);
-    }, [userEmail, pendingPassword, isNewRegistration, saveAuthTokens]);
+    }, [userEmail, pendingPassword, isNewRegistration, refreshUser, saveAuthTokens]);
 
     // Handle profile setup complete
     const handleProfileSetupComplete = useCallback(() => {
@@ -249,6 +257,10 @@ function AppContent() {
         setCurrentScreen(Screen.HOME);
     }, []);
 
+    const handleNavigateToLive = useCallback(() => {
+        setCurrentScreen(Screen.LIVE);
+    }, []);
+
     const handleNavigateToForgotPassword = useCallback(() => {
         setCurrentScreen(Screen.FORGOT_PASSWORD);
     }, []);
@@ -269,7 +281,15 @@ function AppContent() {
                     />
                 );
             case Screen.HOME:
-                return <HomeScreen onLogout={handleLogout} onNavigateToProfile={handleNavigateToProfile} />;
+                return (
+                    <HomeScreen
+                        onLogout={handleLogout}
+                        onNavigateToProfile={handleNavigateToProfile}
+                        onNavigateToLive={handleNavigateToLive}
+                    />
+                );
+            case Screen.LIVE:
+                return <LivestreamScreen onBack={handleBackToHome} />;
             case Screen.PROFILE:
                 return (
                     <ProfileScreen 
