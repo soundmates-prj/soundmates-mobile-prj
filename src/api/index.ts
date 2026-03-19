@@ -19,4 +19,6 @@ export type {
     UpdateProfileResponse, UserProfileFullResponse, VerifyOtpRequest,
     VerifyOtpResponse
 } from './authService';
+export { livestreamService } from './livestreamService';
+export type { NowPlayingData, SongRequestItem, TrackInfo } from './livestreamService';
 
