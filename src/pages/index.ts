@@ -10,6 +10,10 @@ export { default as RegisterScreen } from './auth/RegisterScreen';
 export { default as HomeScreen } from './home/HomeScreen';
 export { default as LivestreamScreen } from './live/LivestreamScreen';
 
+// Blog screens
+export { default as BlogScreen } from './blog/BlogScreen';
+export { default as CreatePostScreen } from './blog/CreatePostScreen';
+
 // Profile screens
 export { default as AccountInfoScreen } from './profile/AccountInfoScreen';
 export { default as EditProfileScreen } from './profile/EditProfileScreen';

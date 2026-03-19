@@ -3,7 +3,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SoundMateLightColors } from '../../../constants/theme';
+import BlogScreen from '../blog/BlogScreen';
+import CreatePostScreen from '../blog/CreatePostScreen';
 import BottomNavigation, { TabName } from '../BottomNavigation';
+import PodcastScreen from '../podcast/PodcastScreen';
 
 type PlaylistItem = {
     id: string;
@@ -236,6 +239,7 @@ function ForumPost({ post }: { post: ForumPostItem }) {
 
 export default function HomeScreen({ onLogout, onNavigateToProfile, onNavigateToLive }: HomeScreenProps) {
     const [activeTab, setActiveTab] = useState<TabName>('home');
+    const [showCreatePost, setShowCreatePost] = useState(false);
     const pulseAnim = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
@@ -274,11 +278,6 @@ export default function HomeScreen({ onLogout, onNavigateToProfile, onNavigateTo
         }
     };
 
-    const handleProfilePress = () => {
-        setActiveTab('profile');
-        onNavigateToProfile?.();
-    };
-
     const handleLivePress = () => {
         setActiveTab('live');
         onNavigateToLive?.();
@@ -286,120 +285,135 @@ export default function HomeScreen({ onLogout, onNavigateToProfile, onNavigateTo
 
     return (
         <View style={styles.container}>
-            <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.scrollContent}
-            >
-                <LinearGradient
-                    colors={['#3C5F99', '#2D4A7A']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.header}
-                >
-                    <View style={styles.topBar}>
-                        <View style={styles.brandWrapper}>
-                            <Image
-                                source={require('../../../assets/logo_notext.png')}
-                                style={styles.brandLogoIcon}
-                            />
-                            <Image
-                                source={require('../../../assets/logo_text.png')}
-                                style={styles.brandLogoText}
-                            />
-                        </View>
+            {showCreatePost ? (
+                <CreatePostScreen 
+                    onBack={() => setShowCreatePost(false)} 
+                    onPostCreated={() => setShowCreatePost(false)} 
+                />
+            ) : (
+                <>
+                    {activeTab === 'blog' ? (
+                        <BlogScreen onNavigateToCreatePost={() => setShowCreatePost(true)} />
+                    ) : activeTab === 'podcast' ? (
+                        <PodcastScreen />
+                    ) : (
+                        <ScrollView
+                            showsVerticalScrollIndicator={false}
+                            contentContainerStyle={styles.scrollContent}
+                        >
+                            <LinearGradient
+                                colors={['#3C5F99', '#2D4A7A']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={styles.header}
+                            >
+                                <View style={styles.topBar}>
+                                    <View style={styles.brandWrapper}>
+                                        <Image
+                                            source={require('../../../assets/logo_notext.png')}
+                                            style={styles.brandLogoIcon}
+                                        />
+                                        <Image
+                                            source={require('../../../assets/logo_text.png')}
+                                            style={styles.brandLogoText}
+                                        />
+                                    </View>
 
-                        <View style={styles.headerIcons}>
-                            <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8}>
-                                <Ionicons name="search" size={18} color="#FFFFFF" />
+                                    <View style={styles.headerIcons}>
+                                        <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8}>
+                                            <Ionicons name="search" size={18} color="#FFFFFF" />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8}>
+                                            <Ionicons name="notifications-outline" size={18} color="#FFFFFF" />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            </LinearGradient>
+
+                            <TouchableOpacity
+                                activeOpacity={0.92}
+                                onPress={handleLivePress}
+                                style={styles.liveBannerContainer}
+                            >
+                                <LinearGradient
+                                    colors={['#667EEA', '#764BA2', '#F093FB']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
+                                    style={styles.liveBanner}
+                                >
+                                    <Animated.View style={[styles.livePill, { transform: [{ scale: pulseAnim }] }]}>
+                                        <View style={styles.livePillDot} />
+                                        <Text style={styles.livePillText}>ĐANG LIVE</Text>
+                                    </Animated.View>
+
+                                    <Text style={styles.liveBannerTitle}>Đêm nhạc bolero học</Text>
+                                    <Text style={styles.liveBannerHost}>Emily_vui</Text>
+
+                                    <View style={styles.liveBannerMeta}>
+                                        <Ionicons name="radio" size={14} color="rgba(255,255,255,0.92)" />
+                                        <Text style={styles.liveBannerMetaText}>256 người</Text>
+                                    </View>
+
+                                    <View style={styles.liveBannerOverlay} />
+                                </LinearGradient>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8}>
-                                <Ionicons name="notifications-outline" size={18} color="#FFFFFF" />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </LinearGradient>
 
-                <TouchableOpacity
-                    activeOpacity={0.92}
-                    onPress={handleLivePress}
-                    style={styles.liveBannerContainer}
-                >
-                    <LinearGradient
-                        colors={['#667EEA', '#764BA2', '#F093FB']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.liveBanner}
-                    >
-                        <Animated.View style={[styles.livePill, { transform: [{ scale: pulseAnim }] }]}>
-                            <View style={styles.livePillDot} />
-                            <Text style={styles.livePillText}>ĐANG LIVE</Text>
-                        </Animated.View>
+                            <View style={styles.sectionBlock}>
+                                <SectionHeader title="Top Hit Playlist Live" />
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.horizontalScrollContent}
+                                >
+                                    {TOP_HIT_PLAYLISTS.map((item) => (
+                                        <PlaylistCard key={item.id} item={item} />
+                                    ))}
+                                </ScrollView>
+                            </View>
 
-                        <Text style={styles.liveBannerTitle}>Đêm nhạc bolero học</Text>
-                        <Text style={styles.liveBannerHost}>Emily_vui</Text>
+                            <View style={styles.sectionBlock}>
+                                <SectionHeader title="Playlist của bạn" />
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.horizontalScrollContent}
+                                >
+                                    {PLAYLISTS.map((item) => (
+                                        <PlaylistCard key={item.id} item={item} />
+                                    ))}
+                                </ScrollView>
+                            </View>
 
-                        <View style={styles.liveBannerMeta}>
-                            <Ionicons name="radio" size={14} color="rgba(255,255,255,0.92)" />
-                            <Text style={styles.liveBannerMetaText}>256 người</Text>
-                        </View>
+                            <LinearGradient
+                                colors={['#E0F2FE', '#FAFAFA']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={styles.podcastSection}
+                            >
+                                <SectionHeader title="Podcast Hot" titleColor="#0E7490" />
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.horizontalScrollContent}
+                                >
+                                    {PODCASTS.map((item) => (
+                                        <PodcastCard key={item.id} item={item} />
+                                    ))}
+                                </ScrollView>
+                            </LinearGradient>
 
-                        <View style={styles.liveBannerOverlay} />
-                    </LinearGradient>
-                </TouchableOpacity>
+                            <View style={styles.communitySection}>
+                                <SectionHeader title="Cộng đồng" titleColor="#1D4ED8" />
+                                {FORUM_POSTS.map((post) => (
+                                    <ForumPost key={post.id} post={post} />
+                                ))}
+                            </View>
+                        </ScrollView>
+                    )}
 
-                <View style={styles.sectionBlock}>
-                    <SectionHeader title="Top Hit Playlist Live" />
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.horizontalScrollContent}
-                    >
-                        {TOP_HIT_PLAYLISTS.map((item) => (
-                            <PlaylistCard key={item.id} item={item} />
-                        ))}
-                    </ScrollView>
-                </View>
-
-                <View style={styles.sectionBlock}>
-                    <SectionHeader title="Playlist của bạn" />
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.horizontalScrollContent}
-                    >
-                        {PLAYLISTS.map((item) => (
-                            <PlaylistCard key={item.id} item={item} />
-                        ))}
-                    </ScrollView>
-                </View>
-
-                <LinearGradient
-                    colors={['#E0F2FE', '#FAFAFA']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.podcastSection}
-                >
-                    <SectionHeader title="Podcast Hot" titleColor="#0E7490" />
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.horizontalScrollContent}
-                    >
-                        {PODCASTS.map((item) => (
-                            <PodcastCard key={item.id} item={item} />
-                        ))}
-                    </ScrollView>
-                </LinearGradient>
-
-                <View style={styles.communitySection}>
-                    <SectionHeader title="Cộng đồng" titleColor="#1D4ED8" />
-                    {FORUM_POSTS.map((post) => (
-                        <ForumPost key={post.id} post={post} />
-                    ))}
-                </View>
-            </ScrollView>
-
-            <BottomNavigation activeTab={activeTab} onTabPress={handleTabPress} onLogout={onLogout} />
+                    <BottomNavigation activeTab={activeTab} onTabPress={handleTabPress} onLogout={onLogout} />
+                </>
+            )}
         </View>
     );
 }

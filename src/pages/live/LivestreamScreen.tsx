@@ -2,19 +2,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Animated,
-    Image,
-    Keyboard,
-    Modal,
-    PanResponder,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Animated,
+  Image,
+  Keyboard,
+  Modal,
+  PanResponder,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import { livestreamService, type NowPlayingData, type TrackInfo } from '../../api/livestreamService';
 
 interface ChatMessage {
   id: string;
@@ -49,6 +50,14 @@ interface Story {
   likes: number;
 }
 
+interface NowPlayingItem {
+  id: string;
+  title: string;
+  artist: string;
+  duration: string;
+  isPlaying: boolean;
+}
+
 const LIVE_SESSION: LiveSession = {
   id: '1',
   title: 'Đêm nhạc bolero học',
@@ -80,7 +89,7 @@ const INITIAL_MESSAGES: ChatMessage[] = [
   },
 ];
 
-const NOW_PLAYING = [
+const NOW_PLAYING: NowPlayingItem[] = [
   {
     id: '1',
     title: 'Lần Đầu',
@@ -151,6 +160,13 @@ const STORIES: Story[] = [
     likes: 92,
   },
 ];
+
+const formatDuration = (seconds?: number): string => {
+  if (seconds === undefined || seconds === null || seconds < 0) return '0:00';
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.floor(seconds % 60);
+  return `${minutes}:${remainder.toString().padStart(2, '0')}`;
+};
 
 function StoryCard({ story }: { story: Story }) {
   return (
@@ -274,7 +290,15 @@ function ChatPanel({ messages }: { messages: ChatMessage[] }) {
   );
 }
 
-function SidebarMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+function SidebarMenu({
+  isOpen,
+  onClose,
+  nowPlayingItems,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  nowPlayingItems: NowPlayingItem[];
+}) {
   const [activeTab, setActiveTab] = useState<'music' | 'podcast'>('music');
 
   return (
@@ -312,7 +336,7 @@ function SidebarMenu({ isOpen, onClose }: { isOpen: boolean; onClose: () => void
             {activeTab === 'music' ? (
               <View>
                 <Text style={styles.sidebarSectionTitle}>Đang phát</Text>
-                {NOW_PLAYING.map((song) => (
+                {nowPlayingItems.map((song) => (
                   <View
                     key={song.id}
                     style={[styles.sidebarSongRow, song.isPlaying && styles.sidebarSongRowActive]}
@@ -482,6 +506,7 @@ function ReactionPicker({ isOpen, onClose, onSelect }: { isOpen: boolean; onClos
 }
 
 export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
+  const [nowPlaying, setNowPlaying] = useState<NowPlayingData | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [inputMessage, setInputMessage] = useState('');
   const [showReactions, setShowReactions] = useState(false);
@@ -501,6 +526,61 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
     () => Animated.add(storyTranslateX, dragX),
     [dragX, storyTranslateX]
   );
+
+  const fetchNowPlaying = useCallback(async () => {
+    try {
+      const data = await livestreamService.getNowPlaying();
+      setNowPlaying(data);
+    } catch (error) {
+      console.log('Failed to fetch now playing', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchNowPlaying();
+    const interval = setInterval(fetchNowPlaying, 10000);
+    return () => clearInterval(interval);
+  }, [fetchNowPlaying]);
+
+  const liveTitle = nowPlaying?.stationName || LIVE_SESSION.title;
+  const liveHost = nowPlaying?.streamerName || LIVE_SESSION.host;
+  const liveCategory = nowPlaying?.currentTrack?.genre || LIVE_SESSION.category;
+  const liveListeners = nowPlaying?.totalListeners ?? LIVE_SESSION.listeners;
+  const isLiveSession = nowPlaying
+    ? nowPlaying.isLive || nowPlaying.isOnline
+    : LIVE_SESSION.isLive;
+
+  const nowPlayingItems = useMemo(() => {
+    if (!nowPlaying) return NOW_PLAYING;
+    const items: NowPlayingItem[] = [];
+
+    const pushTrack = (track: TrackInfo, isPlaying: boolean, prefix: string) => {
+      items.push({
+        id: `${prefix}-${track.shId}`,
+        title: track.title || 'Unknown',
+        artist: track.artist || 'Unknown',
+        duration: formatDuration(track.duration),
+        isPlaying,
+      });
+    };
+
+    if (nowPlaying.currentTrack) {
+      pushTrack(nowPlaying.currentTrack, true, 'current');
+    }
+
+    if (nowPlaying.playingNext) {
+      pushTrack(nowPlaying.playingNext, false, 'next');
+    }
+
+    if (nowPlaying.songHistory?.length) {
+      const remainingSlots = Math.max(0, 3 - items.length);
+      nowPlaying.songHistory.slice(0, remainingSlots).forEach((track, index) => {
+        pushTrack(track, false, `history-${index}`);
+      });
+    }
+
+    return items.length ? items : NOW_PLAYING;
+  }, [nowPlaying]);
 
   const currentStory = STORIES[currentStoryIndex];
   const storyDuration = useMemo(() => {
@@ -641,13 +721,15 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
             </TouchableOpacity>
 
             <View style={styles.headerStatusRow}>
-              <View style={styles.liveBadge}>
-                <View style={styles.liveDot} />
-                <Text style={styles.liveBadgeText}>LIVE</Text>
-              </View>
+              {isLiveSession && (
+                <View style={styles.liveBadge}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.liveBadgeText}>LIVE</Text>
+                </View>
+              )}
               <View style={styles.listenerBadge}>
                 <Ionicons name="people" size={14} color="#FFFFFF" />
-                <Text style={styles.listenerText}>{LIVE_SESSION.listeners}</Text>
+                <Text style={styles.listenerText}>{liveListeners}</Text>
               </View>
             </View>
 
@@ -664,12 +746,12 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.titleSection}>
-          <Text style={styles.liveTitle}>{LIVE_SESSION.title}</Text>
+          <Text style={styles.liveTitle}>{liveTitle}</Text>
           <View style={styles.hostRow}>
             <Image source={{ uri: LIVE_SESSION.hostAvatar }} style={styles.hostAvatar} />
-            <Text style={styles.hostName}>{LIVE_SESSION.host}</Text>
+            <Text style={styles.hostName}>{liveHost}</Text>
             <View style={styles.categoryBadge}>
-              <Text style={styles.categoryText}>{LIVE_SESSION.category}</Text>
+              <Text style={styles.categoryText}>{liveCategory}</Text>
             </View>
           </View>
         </View>
@@ -778,7 +860,11 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
         </LinearGradient>
       </View>
 
-      <SidebarMenu isOpen={showSidebar} onClose={() => setShowSidebar(false)} />
+      <SidebarMenu
+        isOpen={showSidebar}
+        onClose={() => setShowSidebar(false)}
+        nowPlayingItems={nowPlayingItems}
+      />
       <ReactionPicker isOpen={showReactions} onClose={() => setShowReactions(false)} onSelect={handleReaction} />
       <RequestSongModal isOpen={showRequestModal} onClose={() => setShowRequestModal(false)} />
       <SendPodcastModal isOpen={showPodcastModal} onClose={() => setShowPodcastModal(false)} />
