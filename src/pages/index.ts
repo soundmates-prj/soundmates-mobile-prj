@@ -13,6 +13,7 @@ export { default as LivestreamScreen } from './live/LivestreamScreen';
 // Blog screens
 export { default as BlogScreen } from './blog/BlogScreen';
 export { default as CreatePostScreen } from './blog/CreatePostScreen';
+export { default as PostDetailScreen } from './blog/PostDetailScreen';
 
 // Profile screens
 export { default as AccountInfoScreen } from './profile/AccountInfoScreen';

@@ -7,6 +7,104 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios, { AxiosError, AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { API_CONFIG } from './config';
 
+export interface UnauthorizedErrorInfo {
+    status: number;
+    errorCode?: number;
+    message?: string;
+    data?: unknown;
+    url?: string;
+    method?: string;
+}
+
+export type UnauthorizedHandler = (error: UnauthorizedErrorInfo) => void | Promise<void>;
+
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+let isHandlingUnauthorized = false;
+let lastUnauthorizedHandledAt = 0;
+
+export const registerUnauthorizedHandler = (handler: UnauthorizedHandler) => {
+    unauthorizedHandler = handler;
+
+    return () => {
+        if (unauthorizedHandler === handler) {
+            unauthorizedHandler = null;
+        }
+    };
+};
+
+const parseErrorCode = (value: unknown): number | undefined => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+    }
+
+    if (typeof value === 'string') {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) {
+            return parsed;
+        }
+    }
+
+    return undefined;
+};
+
+const normalizeUnauthorizedError = (error: AxiosError): UnauthorizedErrorInfo => {
+    const data = error.response?.data as Record<string, unknown> | undefined;
+    const messageValue = data?.Message ?? data?.message;
+    const message = typeof messageValue === 'string' ? messageValue : undefined;
+    const errorCode = parseErrorCode(data?.ErrorCode ?? data?.errorCode);
+
+    return {
+        status: error.response?.status ?? 0,
+        errorCode,
+        message,
+        data: error.response?.data,
+        url: error.config?.url,
+        method: error.config?.method,
+    };
+};
+
+const isTokenMissingOrInvalid = (errorInfo: UnauthorizedErrorInfo): boolean => {
+    if (errorInfo.status !== 401) {
+        return false;
+    }
+
+    if (errorInfo.errorCode === 40101) {
+        return true;
+    }
+
+    const normalizedMessage = (errorInfo.message || '').toLowerCase();
+    if (!normalizedMessage) {
+        return false;
+    }
+
+    return normalizedMessage.includes('token missing/invalid')
+        || normalizedMessage.includes('token missing')
+        || normalizedMessage.includes('token invalid')
+        || normalizedMessage.includes('invalid token');
+};
+
+const notifyUnauthorized = async (errorInfo: UnauthorizedErrorInfo): Promise<void> => {
+    if (!unauthorizedHandler) {
+        return;
+    }
+
+    const now = Date.now();
+    if (isHandlingUnauthorized || now - lastUnauthorizedHandledAt < 2000) {
+        return;
+    }
+
+    isHandlingUnauthorized = true;
+    lastUnauthorizedHandledAt = now;
+
+    try {
+        await unauthorizedHandler(errorInfo);
+    } catch (handlerError) {
+        console.error('[Unauthorized Handler Error]', handlerError);
+    } finally {
+        isHandlingUnauthorized = false;
+    }
+};
+
 // Create axios instance for Auth Service
 export const authApiClient: AxiosInstance = axios.create({
     baseURL: API_CONFIG.AUTH_BASE_URL,
@@ -38,14 +136,20 @@ authApiClient.interceptors.response.use(
         console.log(`[API Response] ${response.status}`, response.data);
         return response;
     },
-    (error: AxiosError) => {
+    async (error: AxiosError) => {
         console.error('[API Response Error]', error.response?.status, error.response?.data);
 
         // Handle common error cases
         if (error.response) {
             switch (error.response.status) {
                 case 401:
-                    // Handle unauthorized - redirect to login
+                    {
+                        const unauthorizedInfo = normalizeUnauthorizedError(error);
+                        if (isTokenMissingOrInvalid(unauthorizedInfo)) {
+                            await notifyUnauthorized(unauthorizedInfo);
+                        }
+                    }
+
                     console.log('Unauthorized - Token might be expired');
                     break;
                 case 403:

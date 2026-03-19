@@ -5,6 +5,7 @@ import { Animated, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View }
 import { SoundMateLightColors } from '../../../constants/theme';
 import BlogScreen from '../blog/BlogScreen';
 import CreatePostScreen from '../blog/CreatePostScreen';
+import PostDetailScreen from '../blog/PostDetailScreen';
 import BottomNavigation, { TabName } from '../BottomNavigation';
 import PodcastScreen from '../podcast/PodcastScreen';
 
@@ -240,6 +241,7 @@ function ForumPost({ post }: { post: ForumPostItem }) {
 export default function HomeScreen({ onLogout, onNavigateToProfile, onNavigateToLive }: HomeScreenProps) {
     const [activeTab, setActiveTab] = useState<TabName>('home');
     const [showCreatePost, setShowCreatePost] = useState(false);
+    const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
     const pulseAnim = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
@@ -285,7 +287,12 @@ export default function HomeScreen({ onLogout, onNavigateToProfile, onNavigateTo
 
     return (
         <View style={styles.container}>
-            {showCreatePost ? (
+            {selectedPostId ? (
+                <PostDetailScreen 
+                    postId={selectedPostId} 
+                    onBack={() => setSelectedPostId(null)} 
+                />
+            ) : showCreatePost ? (
                 <CreatePostScreen 
                     onBack={() => setShowCreatePost(false)} 
                     onPostCreated={() => setShowCreatePost(false)} 
@@ -293,7 +300,10 @@ export default function HomeScreen({ onLogout, onNavigateToProfile, onNavigateTo
             ) : (
                 <>
                     {activeTab === 'blog' ? (
-                        <BlogScreen onNavigateToCreatePost={() => setShowCreatePost(true)} />
+                        <BlogScreen 
+                            onNavigateToCreatePost={() => setShowCreatePost(true)} 
+                            onNavigateToPostDetail={(id) => setSelectedPostId(id)}
+                        />
                     ) : activeTab === 'podcast' ? (
                         <PodcastScreen />
                     ) : (

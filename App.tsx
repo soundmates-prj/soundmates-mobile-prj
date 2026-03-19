@@ -6,7 +6,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { showToast, toastConfig } from './components/ui/Toast';
 import { SoundMateLightColors } from './constants/theme';
-import { authService } from './src/api';
+import { authService, registerUnauthorizedHandler } from './src/api';
 import { UserProvider, useUser } from './src/context/UserContext';
 import {
     ForgotPasswordScreen,
@@ -268,6 +268,25 @@ function AppContent() {
     const handleForgotPasswordBack = useCallback(() => {
         setCurrentScreen(Screen.LOGIN);
     }, []);
+
+    useEffect(() => {
+        const unregisterUnauthorizedHandler = registerUnauthorizedHandler(async () => {
+            const accessToken = await AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+            if (!accessToken) {
+                return;
+            }
+
+            await clearAuthTokens();
+            setPendingPassword('');
+            setIsNewRegistration(false);
+            setCurrentScreen(Screen.LOGIN);
+            showToast.warning('Phiên đăng nhập hết hạn', 'Vui lòng đăng nhập lại để tiếp tục');
+        });
+
+        return () => {
+            unregisterUnauthorizedHandler();
+        };
+    }, [clearAuthTokens]);
 
     const renderScreen = () => {
         switch (currentScreen) {

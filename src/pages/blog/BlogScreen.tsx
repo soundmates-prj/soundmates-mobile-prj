@@ -93,9 +93,10 @@ function formatNumber(n: number): string {
 interface BlogPostCardProps {
     post: DisplayPost;
     onLike: () => void;
+    onNavigateToDetail?: (postId: string) => void;
 }
 
-function BlogPostCard({ post, onLike }: BlogPostCardProps) {
+function BlogPostCard({ post, onLike, onNavigateToDetail }: BlogPostCardProps) {
     return (
         <View style={styles.postCard}>
             {post.imageUrl ? (
@@ -138,13 +139,15 @@ function BlogPostCard({ post, onLike }: BlogPostCardProps) {
                     </View>
                 </View>
 
-                <Text style={styles.postTitle} numberOfLines={2}>
-                    {post.title}
-                </Text>
+                <TouchableOpacity activeOpacity={0.8} onPress={() => onNavigateToDetail?.(post.id)}>
+                    <Text style={styles.postTitle} numberOfLines={2}>
+                        {post.title}
+                    </Text>
 
-                <Text style={styles.postExcerpt} numberOfLines={2}>
-                    {post.contentText}
-                </Text>
+                    <Text style={styles.postExcerpt} numberOfLines={2}>
+                        {post.contentText}
+                    </Text>
+                </TouchableOpacity>
 
                 {post.moodTag && !post.imageUrl && (
                     <View style={styles.postCategoryWrap}>
@@ -165,10 +168,10 @@ function BlogPostCard({ post, onLike }: BlogPostCardProps) {
                             </Text>
                         </TouchableOpacity>
 
-                        <View style={styles.statInline}>
+                        <TouchableOpacity activeOpacity={0.8} onPress={() => onNavigateToDetail?.(post.id)} style={styles.statInline}>
                             <Ionicons name="chatbubble-ellipses-outline" size={16} color="#9CA3AF" />
                             <Text style={styles.statCountText}>{formatNumber(post.commentCount)}</Text>
-                        </View>
+                        </TouchableOpacity>
 
                         <View style={styles.statInline}>
                             <Ionicons name="eye-outline" size={16} color="#9CA3AF" />
@@ -191,13 +194,14 @@ function BlogPostCard({ post, onLike }: BlogPostCardProps) {
 
 interface BlogScreenProps {
     onNavigateToCreatePost?: () => void;
+    onNavigateToPostDetail?: (postId: string) => void;
 }
 
 // ─────────────────────────────────────────────────────
 // MAIN SCREEN
 // ─────────────────────────────────────────────────────
 
-export default function BlogScreen({ onNavigateToCreatePost }: BlogScreenProps) {
+export default function BlogScreen({ onNavigateToCreatePost, onNavigateToPostDetail }: BlogScreenProps) {
     const { user } = useUser();
     const [activeTab, setActiveTab] = useState<BlogTab>('all');
     const [posts, setPosts] = useState<DisplayPost[]>([]);
@@ -486,10 +490,14 @@ export default function BlogScreen({ onNavigateToCreatePost }: BlogScreenProps) 
                     </View>
                 )}
 
-                {/* Posts */}
                 {!isLoading &&
                     posts.map((post) => (
-                        <BlogPostCard key={post.id} post={post} onLike={() => handleLike(post.id)} />
+                        <BlogPostCard 
+                            key={post.id} 
+                            post={post} 
+                            onLike={() => handleLike(post.id)} 
+                            onNavigateToDetail={onNavigateToPostDetail}
+                        />
                     ))}
 
                 {/* Load more */}

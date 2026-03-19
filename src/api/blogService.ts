@@ -3,7 +3,7 @@
  * API calls for blog posts, comments, and reactions
  */
 
-import { authApiClient, ApiResponse } from './apiClient';
+import { ApiResponse, authApiClient } from './apiClient';
 import { BLOG_ENDPOINTS } from './config';
 
 // =====================================================
@@ -506,6 +506,33 @@ export const blogService = {
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể phản hồi bình luận',
+            };
+        }
+    },
+
+    /**
+     * Update a comment
+     */
+    async updateComment(commentId: string, content: string): Promise<{
+        success: boolean;
+        data?: CommentResponse;
+        message?: string;
+    }> {
+        try {
+            const response = await authApiClient.put<ApiResponse<CommentResponse>>(
+                `${BLOG_ENDPOINTS.COMMENTS}/${commentId}`,
+                { content }
+            );
+            return {
+                success: response.data.success,
+                data: response.data.data,
+                message: response.data.message,
+            };
+        } catch (error: any) {
+            console.error('[BlogService] updateComment error:', error);
+            return {
+                success: false,
+                message: error.response?.data?.message || 'Không thể cập nhật bình luận',
             };
         }
     },
