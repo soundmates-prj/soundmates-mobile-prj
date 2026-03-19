@@ -56,4 +56,22 @@ export const USER_ENDPOINTS = {
     PROFILE_FULL: '/users/me/profile/full',
 };
 
+// Blog / Content Endpoints
+export const BLOG_ENDPOINTS = {
+    // Posts
+    POSTS: '/posts',
+    POSTS_PUBLISHED: '/posts/published',
+    POSTS_TRENDING: '/posts/trending',
+    POSTS_POPULAR: '/posts/popular',
+    POSTS_STATS: '/posts/stats',
+    // Comments
+    COMMENTS: '/comments',
+    // Reactions
+    REACTIONS: '/reactions',
+    // Me (current user)
+    MY_POSTS: '/me/posts',
+    MY_COMMENTS: '/me/comments',
+    MY_REACTIONS: '/me/reactions',
+};
+
 export default API_CONFIG;

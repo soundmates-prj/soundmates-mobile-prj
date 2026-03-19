@@ -4,7 +4,7 @@
  */
 
 // Config
-export { API_CONFIG, AUTH_ENDPOINTS, USER_ENDPOINTS } from './config';
+export { API_CONFIG, AUTH_ENDPOINTS, BLOG_ENDPOINTS, USER_ENDPOINTS } from './config';
 
 // API Client
 export { authApiClient, handleApiError } from './apiClient';
@@ -21,4 +21,16 @@ export type {
 } from './authService';
 export { livestreamService } from './livestreamService';
 export type { NowPlayingData, SongRequestItem, TrackInfo } from './livestreamService';
-
+export { blogService } from './blogService';
+export type {
+    BlogPostResponse,
+    TrendingPostResponse,
+    PopularPostResponse,
+    PostStatsResponse,
+    CommentResponse,
+    ReactionResponse,
+    PaginationResponse,
+    CreatePostRequest,
+    UpdatePostRequest,
+    PaginationParams,
+} from './blogService';
