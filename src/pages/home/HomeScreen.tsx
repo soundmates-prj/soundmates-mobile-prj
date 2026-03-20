@@ -1,676 +1,483 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useRef, useState } from 'react';
-import {
-    Animated,
-    Dimensions,
-    Easing,
-    FlatList,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
-} from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SoundMateLightColors } from '../../../constants/theme';
+import { blogService, PopularPostResponse } from '../../api';
+import BlogScreen from '../blog/BlogScreen';
+import CreatePostScreen from '../blog/CreatePostScreen';
+import PostDetailScreen from '../blog/PostDetailScreen';
 import BottomNavigation, { TabName } from '../BottomNavigation';
+import PodcastScreen from '../podcast/PodcastScreen';
 
-const { width } = Dimensions.get('window');
+type PlaylistItem = {
+    id: string;
+    title: string;
+    subtitle: string;
+    image: string;
+    plays?: number;
+};
 
-// Mock data based on web version
-const PLAYLISTS = [
+type PodcastItem = {
+    id: string;
+    title: string;
+    host: string;
+    image: string;
+};
+
+type ForumPostItem = {
+    id: string;
+    userId: string;
+    moodTag?: string | null;
+    title: string;
+    likes: number;
+    comments: number;
+    time: string;
+};
+
+const PLAYLISTS: PlaylistItem[] = [
     {
         id: '1',
         title: 'Aethereal Flow',
         subtitle: 'Celestial Waves',
-        image: 'https://picsum.photos/200/200?random=1',
+        image: 'https://images.unsplash.com/photo-1646542923878-8f478d501a16?w=400',
     },
     {
         id: '2',
         title: 'Skyward Serenade',
         subtitle: 'Celeste',
-        image: 'https://picsum.photos/200/200?random=2',
+        image: 'https://images.unsplash.com/photo-1769478734130-047e0823f96c?w=400',
     },
     {
         id: '3',
         title: 'Purr-fect Beats',
         subtitle: 'Luna Paws',
-        image: 'https://picsum.photos/200/200?random=3',
+        image: 'https://images.unsplash.com/photo-1593828772876-58fc75d8ad98?w=400',
     },
     {
         id: '4',
         title: 'Radio Waves',
         subtitle: 'The Vintage Sound',
-        image: 'https://picsum.photos/200/200?random=4',
+        image: 'https://images.unsplash.com/photo-1772812474654-a94307e5df20?w=400',
     },
     {
         id: '5',
         title: 'Rainy Day Coffee',
         subtitle: 'Warmth & Wood',
-        image: 'https://picsum.photos/200/200?random=5',
-    },
-    {
-        id: '6',
-        title: 'Lofi Chill',
-        subtitle: 'Relaxing Vibes',
-        image: 'https://picsum.photos/200/200?random=6',
-    },
-    {
-        id: '7',
-        title: 'Jazz Night',
-        subtitle: 'Smooth Sessions',
-        image: 'https://picsum.photos/200/200?random=7',
+        image: 'https://images.unsplash.com/photo-1676483489320-534657bdb0f6?w=400',
     },
 ];
 
-const PLAYLIST_TABS = ['Mới', 'Thịnh Hành', 'EDM', 'Acoustic', 'Nhạc', 'Bolê', 'Phim'];
-
-const SCHEDULE_ITEMS = [
+const TOP_HIT_PLAYLISTS: PlaylistItem[] = [
     {
         id: '1',
-        time: '23:00',
-        period: 'Đang phát',
-        title: 'Đêm nhạc bolero học',
-        host: '❤ Emily_vui',
-        isLive: true,
+        title: 'V-Pop Hits 2024',
+        subtitle: '2.4M lượt nghe',
+        image: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=400',
+        plays: 2400000,
     },
     {
         id: '2',
-        time: '23:00',
-        period: 'Sắp tới',
-        title: 'KPOP Party Mix',
-        host: '🎧 Minh',
-        isLive: false,
+        title: 'Bolero Vàng',
+        subtitle: '1.8M lượt nghe',
+        image: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=400',
+        plays: 1800000,
     },
     {
         id: '3',
-        time: '00:00',
-        period: 'Sắp tới',
-        title: 'Bùa biêng và em hát',
-        host: '🎵 Luna_DJ',
-        isLive: false,
-    },
-    {
-        id: '4',
-        time: '3:00',
-        period: 'Sắp tới',
-        title: 'Dawn Coffee',
-        host: '☕ Lan_vy_ơi',
-        isLive: false,
-    },
-    {
-        id: '5',
-        time: '21:00',
-        period: 'Sắp tới',
-        title: 'Late night Afterunon',
-        host: '💫 Jacky_oi',
-        isLive: false,
+        title: 'Chill Việt Mix',
+        subtitle: '1.5M lượt nghe',
+        image: 'https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=400',
+        plays: 1500000,
     },
 ];
 
-const FORUM_POSTS = [
-    {
-        id: '1',
-        author: 'Phan Minh',
-        badge: 'Premium',
-        avatar: 'https://i.pravatar.cc/100?img=1',
-        title: 'Playlist tổng hợp các bài nhạc chill cùng team music',
-        likes: 32,
-        comments: 24,
-        time: '10 phút',
-    },
-    {
-        id: '2',
-        author: 'Anh Tuấn Music',
-        badge: 'Artist',
-        avatar: 'https://i.pravatar.cc/100?img=2',
-        title: 'Các anh chị ơi mình cần chọn loại Tai nghe gì?',
-        likes: 56,
-        comments: 200,
-        time: '24 giờ',
-    },
-    {
-        id: '3',
-        author: 'Nhạc Việt DJ',
-        badge: 'VIP',
-        avatar: 'https://i.pravatar.cc/100?img=3',
-        title: 'lài số lùi của bản bọ không hiện lên loai ho, mọi người...',
-        likes: 128,
-        comments: 89,
-        time: '2 ngày',
-    },
-];
-
-const PODCASTS = [
-    {
-        id: '1',
-        title: 'Podcast 1',
-        subtitle: 'mật thư',
-        image: 'https://picsum.photos/200/200?random=8',
-    },
-    {
-        id: '2',
-        title: 'Podcast 2',
-        subtitle: 'câu chuyện chúng ta',
-        image: 'https://picsum.photos/200/200?random=9',
-    },
-    {
-        id: '3',
-        title: 'Podcast 3',
-        subtitle: 'tâm trạng',
-        image: 'https://picsum.photos/200/200?random=10',
-    },
-    {
-        id: '4',
-        title: 'Podcast 4',
-        subtitle: 'tự sự',
-        image: 'https://picsum.photos/200/200?random=11',
-    },
-    {
-        id: '5',
-        title: 'Podcast 5',
-        subtitle: 'yêu lành',
-        image: 'https://picsum.photos/200/200?random=12',
-    },
-    {
-        id: '6',
-        title: 'Podcast 6',
-        subtitle: 'kể chuyện',
-        image: 'https://picsum.photos/200/200?random=13',
-    },
+const PODCASTS: PodcastItem[] = [
+    { id: '1', title: 'Chuyện Tình Yêu', host: 'Minh Anh', image: 'https://i.pravatar.cc/200?img=1' },
+    { id: '2', title: 'Kỷ Niệm Tuổi Học Trò', host: 'Lan Anh', image: 'https://i.pravatar.cc/200?img=5' },
+    { id: '3', title: 'Đời Sống Hằng Ngày', host: 'Hoàng Vy', image: 'https://i.pravatar.cc/200?img=8' },
+    { id: '4', title: 'Tâm Sự Đêm Khuya', host: 'Thu Hà', image: 'https://i.pravatar.cc/200?img=9' },
 ];
 
 interface HomeScreenProps {
-    navigation?: any;
+    initialTab?: TabName;
     onLogout?: () => void;
     onNavigateToProfile?: () => void;
+    onNavigateToLive?: () => void;
 }
 
-// Animated Subscription Button Component
-const AnimatedSubscriptionButton = () => {
-    const bounceAnim = useRef(new Animated.Value(1)).current;
+interface SectionHeaderProps {
+    title: string;
+    titleColor?: string;
+    onPressSeeAll?: () => void;
+}
 
-    useEffect(() => {
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(bounceAnim, {
-                    toValue: 1.05,
-                    duration: 1500,
-                    easing: Easing.inOut(Easing.ease),
-                    useNativeDriver: true,
-                }),
-                Animated.timing(bounceAnim, {
-                    toValue: 1,
-                    duration: 1500,
-                    easing: Easing.inOut(Easing.ease),
-                    useNativeDriver: true,
-                }),
-            ])
-        ).start();
-    }, []);
+function SectionHeader({ title, titleColor = '#0059C5', onPressSeeAll }: SectionHeaderProps) {
+    return (
+        <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: titleColor }]}>{title}</Text>
+            <TouchableOpacity activeOpacity={0.7} onPress={onPressSeeAll}>
+                <Text style={styles.seeAllText}>Xem tất cả</Text>
+            </TouchableOpacity>
+        </View>
+    );
+}
 
-    const handlePressIn = () => {
-        Animated.spring(bounceAnim, {
-            toValue: 0.95,
-            useNativeDriver: true,
-        }).start();
-    };
+function formatTimeAgo(dateStr: string): string {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
 
-    const handlePressOut = () => {
-        Animated.spring(bounceAnim, {
-            toValue: 1,
-            friction: 3,
-            tension: 40,
-            useNativeDriver: true,
-        }).start();
-    };
+    if (diffMin < 1) return 'Vừa xong';
+    if (diffMin < 60) return `${diffMin} phút`;
+
+    const diffHrs = Math.floor(diffMin / 60);
+    if (diffHrs < 24) return `${diffHrs} giờ`;
+
+    const diffDays = Math.floor(diffHrs / 24);
+    if (diffDays < 7) return `${diffDays} ngày`;
+
+    const diffWeeks = Math.floor(diffDays / 7);
+    if (diffWeeks < 5) return `${diffWeeks} tuần`;
+
+    const diffMonths = Math.floor(diffDays / 30);
+    return `${diffMonths} tháng`;
+}
+
+function PlaylistCard({ item }: { item: PlaylistItem }) {
+    return (
+        <TouchableOpacity style={styles.playlistCard} activeOpacity={0.9}>
+            <View style={styles.playlistImageWrapper}>
+                <Image source={{ uri: item.image }} style={styles.playlistImage} />
+                <LinearGradient
+                    colors={['rgba(0,0,0,0.72)', 'rgba(0,0,0,0.12)']}
+                    start={{ x: 0, y: 1 }}
+                    end={{ x: 0, y: 0 }}
+                    style={styles.playlistOverlay}
+                />
+                <TouchableOpacity style={styles.playIconButton} activeOpacity={0.85}>
+                    <Ionicons name="play" size={16} color="#FFFFFF" style={styles.playIcon} />
+                </TouchableOpacity>
+                <View style={styles.playlistTitleContainer}>
+                    <Text style={styles.playlistTitle} numberOfLines={1}>
+                        {item.title}
+                    </Text>
+                </View>
+            </View>
+            <Text style={styles.playlistSubtitle} numberOfLines={1}>
+                {item.subtitle}
+            </Text>
+        </TouchableOpacity>
+    );
+}
+
+function PodcastCard({ item }: { item: PodcastItem }) {
+    return (
+        <TouchableOpacity style={styles.podcastCard} activeOpacity={0.9}>
+            <View style={styles.podcastImageFrame}>
+                <Image source={{ uri: item.image }} style={styles.podcastImage} />
+            </View>
+            <Text style={styles.podcastTitle} numberOfLines={1}>
+                {item.title}
+            </Text>
+            <Text style={styles.podcastHost} numberOfLines={1}>
+                {item.host}
+            </Text>
+        </TouchableOpacity>
+    );
+}
+
+function ForumPost({ post, onPress }: { post: ForumPostItem; onPress?: () => void }) {
+    const badgeText = post.moodTag ? `#${post.moodTag}` : 'Popular';
 
     return (
-        <Animated.View style={{ transform: [{ scale: bounceAnim }] }}>
-            <TouchableOpacity 
-                style={styles.subscriptionButton}
-                activeOpacity={1}
-                onPressIn={handlePressIn}
-                onPressOut={handlePressOut}
-            >
-                <Text style={styles.subscriptionButtonText}>Đăng Ký Ngay</Text>
-                <Ionicons name="arrow-forward" size={18} color="#55C5F1" />
-            </TouchableOpacity>
-        </Animated.View>
+        <TouchableOpacity style={styles.forumCard} activeOpacity={0.9} onPress={onPress}>
+            <View style={styles.forumAuthorRow}>
+                <Image
+                    source={{ uri: `https://api.dicebear.com/7.x/initials/png?seed=${post.userId}&backgroundColor=55C5F1` }}
+                    style={styles.forumAvatar}
+                />
+                <View style={styles.forumAuthorInfo}>
+                    <View style={styles.forumAuthorNameRow}>
+                        <Text style={styles.forumAuthorName} numberOfLines={1}>
+                            {post.userId.substring(0, 8)}...
+                        </Text>
+                        <LinearGradient
+                            colors={[SoundMateLightColors.primary, SoundMateLightColors.primaryDark]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.forumBadge}
+                        >
+                            <Text style={styles.forumBadgeText}>{badgeText}</Text>
+                        </LinearGradient>
+                    </View>
+                    <Text style={styles.forumTime}>{post.time} trước</Text>
+                </View>
+            </View>
+
+            <Text style={styles.forumPostTitle} numberOfLines={2}>
+                {post.title}
+            </Text>
+
+            <View style={styles.forumActionRow}>
+                <TouchableOpacity style={styles.forumActionButton} activeOpacity={0.8}>
+                    <Ionicons name="thumbs-up-outline" size={14} color={SoundMateLightColors.textSecondary} />
+                    <Text style={styles.forumActionText}>{post.likes}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.forumActionButton} activeOpacity={0.8}>
+                    <Ionicons name="chatbubble-ellipses-outline" size={14} color={SoundMateLightColors.textSecondary} />
+                    <Text style={styles.forumActionText}>{post.comments}</Text>
+                </TouchableOpacity>
+            </View>
+        </TouchableOpacity>
     );
-};
+}
 
-export default function HomeScreen({ navigation, onLogout, onNavigateToProfile }: HomeScreenProps) {
-    const [searchQuery, setSearchQuery] = useState('');
-    const [activeTab, setActiveTab] = useState<TabName>('home');
-    const [activePlaylistTab, setActivePlaylistTab] = useState('Mới');
-    const scrollY = useRef(new Animated.Value(0)).current;
-
-    // Animation values
-    const heroFadeAnim = useRef(new Animated.Value(0)).current;
-    const heroSlideAnim = useRef(new Animated.Value(50)).current;
+export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateToProfile, onNavigateToLive }: HomeScreenProps) {
+    const [activeTab, setActiveTab] = useState<TabName>(initialTab);
+    const [showCreatePost, setShowCreatePost] = useState(false);
+    const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+    const [communityPosts, setCommunityPosts] = useState<ForumPostItem[]>([]);
+    const [isCommunityLoading, setIsCommunityLoading] = useState(false);
     const pulseAnim = useRef(new Animated.Value(1)).current;
-    const waveAnims = useRef([
-        new Animated.Value(0),
-        new Animated.Value(0),
-        new Animated.Value(0),
-        new Animated.Value(0),
-        new Animated.Value(0),
-    ]).current;
 
-    // Initialize animations on mount
     useEffect(() => {
-        // Hero section fade in and slide up
-        Animated.parallel([
-            Animated.timing(heroFadeAnim, {
-                toValue: 1,
-                duration: 800,
-                easing: Easing.out(Easing.cubic),
-                useNativeDriver: true,
-            }),
-            Animated.timing(heroSlideAnim, {
-                toValue: 0,
-                duration: 800,
-                easing: Easing.out(Easing.cubic),
-                useNativeDriver: true,
-            }),
-        ]).start();
-
-        // Pulse animation for live badge
-        Animated.loop(
+        const loop = Animated.loop(
             Animated.sequence([
                 Animated.timing(pulseAnim, {
-                    toValue: 1.2,
-                    duration: 1000,
-                    easing: Easing.inOut(Easing.ease),
+                    toValue: 1.08,
+                    duration: 850,
                     useNativeDriver: true,
                 }),
                 Animated.timing(pulseAnim, {
                     toValue: 1,
-                    duration: 1000,
-                    easing: Easing.inOut(Easing.ease),
+                    duration: 850,
                     useNativeDriver: true,
                 }),
             ])
-        ).start();
-
-        // Wave animation for music bars
-        const waveAnimations = waveAnims.map((anim, index) =>
-            Animated.loop(
-                Animated.sequence([
-                    Animated.timing(anim, {
-                        toValue: 1,
-                        duration: 300 + index * 100,
-                        easing: Easing.inOut(Easing.ease),
-                        useNativeDriver: false,
-                    }),
-                    Animated.timing(anim, {
-                        toValue: 0,
-                        duration: 300 + index * 100,
-                        easing: Easing.inOut(Easing.ease),
-                        useNativeDriver: false,
-                    }),
-                ])
-            )
         );
 
-        Animated.stagger(100, waveAnimations).start();
-    }, []);
+        loop.start();
+
+        return () => {
+            loop.stop();
+        };
+    }, [pulseAnim]);
+
+    useEffect(() => {
+        if (initialTab === 'home' || initialTab === 'blog' || initialTab === 'podcast') {
+            setActiveTab(initialTab);
+        }
+    }, [initialTab]);
 
     const handleTabPress = (tab: TabName) => {
         setActiveTab(tab);
-        console.log('Tab pressed:', tab);
-        
-        // Navigate to profile screen when profile tab is pressed
-        if (tab === 'profile' && onNavigateToProfile) {
-            onNavigateToProfile();
+
+        if (tab === 'profile') {
+            onNavigateToProfile?.();
+            return;
+        }
+
+        if (tab === 'live') {
+            onNavigateToLive?.();
         }
     };
 
-    // Animated Playlist Card with scale effect
-    const renderPlaylistCard = ({ item, index }: { item: typeof PLAYLISTS[0], index: number }) => (
-        <TouchableOpacity style={styles.playlistCard} activeOpacity={0.7}>
-            <Image source={{ uri: item.image }} style={styles.playlistImage} />
-            <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.8)']}
-                style={styles.playlistOverlay}
-            >
-                <Text style={styles.playlistTitle} numberOfLines={1}>{item.title}</Text>
-                <Text style={styles.playlistSubtitle} numberOfLines={1}>{item.subtitle}</Text>
-            </LinearGradient>
-            <TouchableOpacity style={styles.playButton}>
-                <Ionicons name="play" size={20} color="#FFFFFF" />
-            </TouchableOpacity>
-        </TouchableOpacity>
-    );
+    const handleLivePress = () => {
+        setActiveTab('live');
+        onNavigateToLive?.();
+    };
 
-    // Render Schedule Item with animated wave
-    const renderScheduleItem = ({ item, index }: { item: typeof SCHEDULE_ITEMS[0], index: number }) => (
-        <TouchableOpacity style={styles.scheduleItem} activeOpacity={0.8}>
-            <View style={styles.scheduleTime}>
-                <Text style={styles.scheduleTimeValue}>{item.time}</Text>
-                <Text style={styles.scheduleTimePeriod}>{item.period}</Text>
-            </View>
-            <View style={styles.musicWave}>
-                {waveAnims.map((anim, i) => {
-                    const baseHeight = [12, 8, 16, 10, 14][i];
-                    const animatedHeight = anim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [baseHeight * 0.5, baseHeight],
-                    });
+    const fetchCommunityPosts = useCallback(async () => {
+        setIsCommunityLoading(true);
+        try {
+            const result = await blogService.getPopularPosts({ page: 1, pageSize: 10 });
+            if (result.success && result.data?.items) {
+                const mappedPosts = result.data.items.map((post: PopularPostResponse) => ({
+                    id: post.id,
+                    userId: post.userId,
+                    moodTag: post.moodTag,
+                    title: post.title,
+                    likes: post.reactionCount,
+                    comments: post.commentCount,
+                    time: formatTimeAgo(post.publishedAt || post.createdAt),
+                }));
+                setCommunityPosts(mappedPosts);
+            } else {
+                setCommunityPosts([]);
+            }
+        } catch (error) {
+            console.error('[HomeScreen] fetchCommunityPosts error:', error);
+            setCommunityPosts([]);
+        } finally {
+            setIsCommunityLoading(false);
+        }
+    }, []);
 
-                    return (
-                        <Animated.View 
-                            key={i}
-                            style={[
-                                styles.musicBar, 
-                                { height: item.isLive ? animatedHeight : baseHeight }
-                            ]} 
-                        />
-                    );
-                })}
-            </View>
-            <View style={styles.scheduleContent}>
-                <Text style={styles.scheduleTitle} numberOfLines={1}>{item.title}</Text>
-                <Text style={styles.scheduleHost} numberOfLines={1}>{item.host}</Text>
-            </View>
-            <View style={[styles.scheduleAction, item.isLive && styles.scheduleActionLive]}>
-                <Text style={styles.scheduleActionText}>
-                    {item.isLive ? 'Đang Phát' : 'Thông báo'}
-                </Text>
-            </View>
-        </TouchableOpacity>
-    );
-
-    // Render Forum Post
-    const renderForumPost = ({ item, index }: { item: typeof FORUM_POSTS[0], index: number }) => (
-        <TouchableOpacity style={styles.forumItem} activeOpacity={0.8}>
-            <Image source={{ uri: item.avatar }} style={styles.forumAvatar} />
-            <View style={styles.forumContent}>
-                <View style={styles.forumHeader}>
-                    <Text style={styles.forumAuthor}>{item.author}</Text>
-                    <View style={styles.forumBadge}>
-                        <Text style={styles.forumBadgeText}>{item.badge}</Text>
-                    </View>
-                </View>
-                <Text style={styles.forumTitle} numberOfLines={2}>{item.title}</Text>
-                <View style={styles.forumMeta}>
-                    <View style={styles.forumMetaItem}>
-                        <Ionicons name="heart" size={14} color={SoundMateLightColors.textSecondary} />
-                        <Text style={styles.forumMetaText}>{item.likes}</Text>
-                    </View>
-                    <View style={styles.forumMetaItem}>
-                        <Ionicons name="chatbubble" size={14} color={SoundMateLightColors.textSecondary} />
-                        <Text style={styles.forumMetaText}>{item.comments}</Text>
-                    </View>
-                    <View style={styles.forumMetaItem}>
-                        <Ionicons name="time" size={14} color={SoundMateLightColors.textSecondary} />
-                        <Text style={styles.forumMetaText}>{item.time}</Text>
-                    </View>
-                </View>
-            </View>
-            <TouchableOpacity style={styles.forumAction}>
-                <Text style={styles.forumActionText}>Xem</Text>
-            </TouchableOpacity>
-        </TouchableOpacity>
-    );
-
-    // Render Podcast Card
-    const renderPodcastCard = ({ item, index }: { item: typeof PODCASTS[0], index: number }) => (
-        <TouchableOpacity style={styles.podcastCard} activeOpacity={0.7}>
-            <Image source={{ uri: item.image }} style={styles.podcastImage} />
-            <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.8)']}
-                style={styles.podcastOverlay}
-            >
-                <Text style={styles.podcastTitle} numberOfLines={1}>{item.title}</Text>
-                <Text style={styles.podcastSubtitle} numberOfLines={1}>{item.subtitle}</Text>
-            </LinearGradient>
-            <TouchableOpacity style={styles.playButton}>
-                <Ionicons name="play" size={20} color="#FFFFFF" />
-            </TouchableOpacity>
-        </TouchableOpacity>
-    );
+    useEffect(() => {
+        if (activeTab === 'home') {
+            fetchCommunityPosts();
+        }
+    }, [activeTab, fetchCommunityPosts]);
 
     return (
         <View style={styles.container}>
-
-            <Animated.ScrollView
-                showsVerticalScrollIndicator={false}
-                onScroll={Animated.event(
-                    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-                    { useNativeDriver: false }
-                )}
-                scrollEventThrottle={16}
-            >
-                {/* Header */}
-                <View style={styles.header}>
-                    <View style={styles.headerLeft}>
-                        <Image
-                            source={require('../../../assets/logo_notext.png')}
-                            style={{ width: 70, height: 70 }}
-                            resizeMode="contain"
+            {selectedPostId ? (
+                <PostDetailScreen 
+                    postId={selectedPostId} 
+                    onBack={() => setSelectedPostId(null)} 
+                />
+            ) : showCreatePost ? (
+                <CreatePostScreen 
+                    onBack={() => setShowCreatePost(false)} 
+                    onPostCreated={() => setShowCreatePost(false)} 
+                />
+            ) : (
+                <>
+                    {activeTab === 'blog' ? (
+                        <BlogScreen 
+                            onNavigateToCreatePost={() => setShowCreatePost(true)} 
+                            onNavigateToPostDetail={(id) => setSelectedPostId(id)}
                         />
-                        <Image
-                            source={require('../../../assets/logo_text.png')}
-                            style={{ width: 100, height: 100, position: 'relative', bottom: 5, right: 20 }}
-                            resizeMode="contain"
-                        />
-                    </View>
-                    <View style={styles.headerRight}>
-                        <TouchableOpacity style={styles.headerButton}>
-                            <Ionicons name="search" size={24} color={SoundMateLightColors.textPrimary} />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.headerButton}>
-                            <Ionicons name="notifications-outline" size={24} color={SoundMateLightColors.textPrimary} />
-                            <View style={styles.notificationBadge}>
-                                <Text style={styles.notificationCount}>3</Text>
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                {/* Hero Section */}
-                <Animated.View
-                    style={{
-                        opacity: heroFadeAnim,
-                        transform: [{ translateY: heroSlideAnim }]
-                    }}
-                >
-                    <LinearGradient
-                        colors={['rgba(85, 197, 241, 0.15)', 'transparent']}
-                        style={styles.heroSection}
-                    >
-                        <Text style={styles.heroTitle}>Listen</Text>
-                        <LinearGradient
-                            colors={['#55C5F1', '#A78BFA']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={styles.gradientText}
+                    ) : activeTab === 'podcast' ? (
+                        <PodcastScreen />
+                    ) : (
+                        <ScrollView
+                            showsVerticalScrollIndicator={false}
+                            contentContainerStyle={styles.scrollContent}
                         >
-                            <Text style={styles.heroTitleGradient}>Together</Text>
-                        </LinearGradient>
-                        <Text style={styles.heroSubtitle}>Chia sẻ âm nhạc của bạn</Text>
-                        <TouchableOpacity style={styles.heroCTA}>
                             <LinearGradient
-                                colors={['#55C5F1', '#3AA8D4']}
+                                colors={['#3C5F99', '#2D4A7A']}
                                 start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 0 }}
-                                style={styles.heroCTAGradient}
+                                end={{ x: 1, y: 1 }}
+                                style={styles.header}
                             >
-                                <Ionicons name="play" size={18} color="#FFFFFF" />
-                                <Text style={styles.heroCTAText}>Bắt Đầu</Text>
-                            </LinearGradient>
-                        </TouchableOpacity>
-                    </LinearGradient>
-                </Animated.View>
-
-                {/* Playlist Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Playlist đề cử</Text>
-                    </View>
-                    
-                    {/* Playlist Tabs */}
-                    <ScrollView 
-                        horizontal 
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.tabsContainer}
-                    >
-                        {PLAYLIST_TABS.map((tab) => (
-                            <TouchableOpacity
-                                key={tab}
-                                style={[
-                                    styles.tab,
-                                    activePlaylistTab === tab && styles.tabActive
-                                ]}
-                                onPress={() => setActivePlaylistTab(tab)}
-                            >
-                                <Text style={[
-                                    styles.tabText,
-                                    activePlaylistTab === tab && styles.tabTextActive
-                                ]}>
-                                    {tab}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
-
-                    <FlatList
-                        data={PLAYLISTS}
-                        renderItem={renderPlaylistCard}
-                        keyExtractor={(item) => item.id}
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.horizontalList}
-                    />
-                </View>
-
-                {/* Live Room Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Phòng Đang Phát</Text>
-                        {/* <TouchableOpacity>
-                            <Text style={styles.seeAll}>Xem thêm</Text>
-                        </TouchableOpacity> */}
-                    </View>
-                    
-                    <TouchableOpacity style={styles.liveRoomCard} activeOpacity={0.8}>
-                        <LinearGradient
-                            colors={['#D6F2FC', '#fce7f3']}
-                            style={styles.liveRoomGradient}
-                        >
-                            <Animated.View 
-                                style={[
-                                    styles.liveBadge,
-                                    { transform: [{ scale: pulseAnim }] }
-                                ]}
-                            >
-                                <Animated.View style={[
-                                    styles.liveDot,
-                                    { opacity: pulseAnim }
-                                ]} />
-                                <Text style={styles.liveText}>LIVE</Text>
-                            </Animated.View>
-                            <View style={styles.liveRoomContent}>
-                                <Text style={styles.liveRoomTitle}>Đêm nhạc cổ điển êm dịu</Text>
-                                <View style={styles.liveRoomMeta}>
-                                    <View style={styles.liveRoomMetaItem}>
-                                        <Ionicons name="people" size={16} color="#55C5F1" />
-                                        <Text style={styles.liveRoomMetaText}>33 Kết nối</Text>
+                                <View style={styles.topBar}>
+                                    <View style={styles.brandWrapper}>
+                                        <Image
+                                            source={require('../../../assets/logo_notext.png')}
+                                            style={styles.brandLogoIcon}
+                                        />
+                                        <Image
+                                            source={require('../../../assets/logo_text.png')}
+                                            style={styles.brandLogoText}
+                                        />
                                     </View>
-                                    <View style={styles.liveRoomMetaItem}>
-                                        <Ionicons name="heart" size={16} color="#55C5F1" />
-                                        <Text style={styles.liveRoomMetaText}>156 lượt thích</Text>
+
+                                    <View style={styles.headerIcons}>
+                                        <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8}>
+                                            <Ionicons name="search" size={18} color="#FFFFFF" />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8}>
+                                            <Ionicons name="notifications-outline" size={18} color="#FFFFFF" />
+                                        </TouchableOpacity>
                                     </View>
                                 </View>
-                            </View>
-                            <TouchableOpacity style={styles.liveRoomJoinButton}>
-                                <Ionicons name="headset" size={18} color="#FFFFFF" />
-                                <Text style={styles.liveRoomJoinText}>Tham Gia</Text>
+                            </LinearGradient>
+
+                            <TouchableOpacity
+                                activeOpacity={0.92}
+                                onPress={handleLivePress}
+                                style={styles.liveBannerContainer}
+                            >
+                                <LinearGradient
+                                    colors={['#667EEA', '#764BA2', '#F093FB']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
+                                    style={styles.liveBanner}
+                                >
+                                    <Animated.View style={[styles.livePill, { transform: [{ scale: pulseAnim }] }]}>
+                                        <View style={styles.livePillDot} />
+                                        <Text style={styles.livePillText}>ĐANG LIVE</Text>
+                                    </Animated.View>
+
+                                    <Text style={styles.liveBannerTitle}>Đêm nhạc bolero học</Text>
+                                    <Text style={styles.liveBannerHost}>Emily_vui</Text>
+
+                                    <View style={styles.liveBannerMeta}>
+                                        <Ionicons name="radio" size={14} color="rgba(255,255,255,0.92)" />
+                                        <Text style={styles.liveBannerMetaText}>256 người</Text>
+                                    </View>
+
+                                    <View style={styles.liveBannerOverlay} />
+                                </LinearGradient>
                             </TouchableOpacity>
-                        </LinearGradient>
-                    </TouchableOpacity>
-                </View>
 
-                {/* Schedule Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Lịch phát sóng</Text>
-                        <TouchableOpacity>
-                            <Text style={styles.seeAll}>Xem tất cả</Text>
-                        </TouchableOpacity>
-                    </View>
-                    <FlatList
-                        data={SCHEDULE_ITEMS}
-                        renderItem={renderScheduleItem}
-                        keyExtractor={(item) => item.id}
-                        scrollEnabled={false}
-                        contentContainerStyle={styles.scheduleList}
-                    />
-                </View>
+                            <View style={styles.sectionBlock}>
+                                <SectionHeader title="Top Hit Playlist Live" />
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.horizontalScrollContent}
+                                >
+                                    {TOP_HIT_PLAYLISTS.map((item) => (
+                                        <PlaylistCard key={item.id} item={item} />
+                                    ))}
+                                </ScrollView>
+                            </View>
 
-                {/* Forum Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Diễn đàn SoundMates</Text>
-                        <TouchableOpacity>
-                            <Text style={styles.seeAll}>Xem tất cả</Text>
-                        </TouchableOpacity>
-                    </View>
-                    <FlatList
-                        data={FORUM_POSTS}
-                        renderItem={renderForumPost}
-                        keyExtractor={(item) => item.id}
-                        scrollEnabled={false}
-                        contentContainerStyle={styles.forumList}
-                    />
-                </View>
+                            <View style={styles.sectionBlock}>
+                                <SectionHeader title="Playlist của bạn" />
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.horizontalScrollContent}
+                                >
+                                    {PLAYLISTS.map((item) => (
+                                        <PlaylistCard key={item.id} item={item} />
+                                    ))}
+                                </ScrollView>
+                            </View>
 
-                {/* Podcast Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Các thư Podcast yêu thích</Text>
-                        <TouchableOpacity>
-                            <Text style={styles.seeAll}>Xem tất cả</Text>
-                        </TouchableOpacity>
-                    </View>
-                    <FlatList
-                        data={PODCASTS}
-                        renderItem={renderPodcastCard}
-                        keyExtractor={(item) => item.id}
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.horizontalList}
-                    />
-                </View>
+                            <LinearGradient
+                                colors={['#E0F2FE', '#FAFAFA']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={styles.podcastSection}
+                            >
+                                <SectionHeader title="Podcast Hot" titleColor="#0E7490" />
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.horizontalScrollContent}
+                                >
+                                    {PODCASTS.map((item) => (
+                                        <PodcastCard key={item.id} item={item} />
+                                    ))}
+                                </ScrollView>
+                            </LinearGradient>
 
-                {/* Subscription CTA */}
-                <View style={styles.subscriptionSection}>
-                    <LinearGradient
-                        colors={['#55C5F1', '#A78BFA']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.subscriptionGradient}
-                    >
-                        <View style={styles.subscriptionBadge}>
-                            <Text style={styles.subscriptionBadgeText}>Subscription</Text>
-                        </View>
-                        <Text style={styles.subscriptionTitle}>Trở thành Hội Viên SoundMates</Text>
-                        <Text style={styles.subscriptionDescription}>
-                            Chỉ với <Text style={styles.subscriptionPrice}>159.000đ / tháng</Text>, bạn mở khóa toàn bộ đặc quyền dành riêng cho những người thật sự sống cuồng nhiệt cùng âm nhạc.
-                        </Text>
-                        <AnimatedSubscriptionButton />
-                    </LinearGradient>
-                </View>
+                            <View style={styles.communitySection}>
+                                <SectionHeader
+                                    title="Cộng đồng"
+                                    titleColor="#1D4ED8"
+                                    onPressSeeAll={() => setActiveTab('blog')}
+                                />
 
-                {/* Spacer for bottom nav */}
-                <View style={{ height: 100 }} />
-            </Animated.ScrollView>
+                                {isCommunityLoading ? (
+                                    <View style={styles.communityLoadingWrap}>
+                                        <ActivityIndicator size="small" color={SoundMateLightColors.primary} />
+                                        <Text style={styles.communityLoadingText}>Đang tải bài viết cộng đồng...</Text>
+                                    </View>
+                                ) : communityPosts.length === 0 ? (
+                                    <Text style={styles.communityEmptyText}>Chưa có bài viết cộng đồng</Text>
+                                ) : (
+                                    communityPosts.map((post) => (
+                                        <ForumPost
+                                            key={post.id}
+                                            post={post}
+                                            onPress={() => setSelectedPostId(post.id)}
+                                        />
+                                    ))
+                                )}
+                            </View>
+                        </ScrollView>
+                    )}
 
-            {/* Bottom Navigation */}
-            <BottomNavigation activeTab={activeTab} onTabPress={handleTabPress} onLogout={onLogout} />
+                    <BottomNavigation activeTab={activeTab} onTabPress={handleTabPress} onLogout={onLogout} />
+                </>
+            )}
         </View>
     );
 }
@@ -680,231 +487,151 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: SoundMateLightColors.background,
     },
-    backgroundGradient: {
-        ...StyleSheet.absoluteFillObject,
+    scrollContent: {
+        paddingBottom: 114,
     },
     header: {
+        paddingHorizontal: 16,
+    },
+    topBar: {
         flexDirection: 'row',
+        alignItems: 'center',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        maxHeight: 50,
-        // paddingTop: 10,
-        // paddingBottom: 16,
     },
-    headerLeft: {
+    brandWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-    },
-    avatarContainer: {
         position: 'relative',
-    },
-    userAvatar: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        borderWidth: 2,
-        borderColor: SoundMateLightColors.primary,
-    },
-    onlineIndicator: {
-        position: 'absolute',
-        bottom: 2,
-        right: 2,
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        backgroundColor: '#10B981',
-        borderWidth: 2,
-        borderColor: SoundMateLightColors.background,
-    },
-    greeting: {
-        marginLeft: 12,
-    },
-    greetingText: {
-        fontSize: 14,
-        color: SoundMateLightColors.textSecondary,
-    },
-    userName: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: SoundMateLightColors.textPrimary,
-    },
-    headerRight: {
-        flexDirection: 'row',
-    },
-    headerButton: {
-        position: 'relative',
-        padding: 8,
-    },
-    notificationBadge: {
-        position: 'absolute',
         top: 4,
-        right: 4,
-        backgroundColor: SoundMateLightColors.primary,
-        borderRadius: 10,
-        minWidth: 18,
-        height: 18,
-        justifyContent: 'center',
+    },
+    brandLogoIcon: {
+        width: 60,
+        height: 60,
+    },
+    brandLogoText: {
+        position: 'relative',
+        bottom: 4,
+        right: 10,
+        width: 104,
+        height: 34,
+    },
+    headerIcons: {
+        flexDirection: 'row',
         alignItems: 'center',
     },
-    notificationCount: {
-        fontSize: 10,
-        fontWeight: '700',
+    headerIconButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(255,255,255,0.12)',
+        marginLeft: 8,
+    },
+    liveBannerContainer: {
+        marginTop: 16,
+        marginBottom: 14,
+        marginHorizontal: 16,
+        borderRadius: 18,
+        overflow: 'hidden',
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.16,
+        shadowRadius: 14,
+        elevation: 8,
+    },
+    liveBanner: {
+        height: 182,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 16,
+        position: 'relative',
+    },
+    livePill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#EF4444',
+        paddingHorizontal: 14,
+        paddingVertical: 7,
+        borderRadius: 999,
+        marginBottom: 12,
+        zIndex: 2,
+    },
+    livePillDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#FFFFFF',
+        marginRight: 7,
+    },
+    livePillText: {
+        fontSize: 12,
+        fontWeight: '800',
         color: '#FFFFFF',
     },
-    searchContainer: {
+    liveBannerTitle: {
+        zIndex: 2,
+        fontSize: 21,
+        fontWeight: '800',
+        color: '#FFFFFF',
+        textAlign: 'center',
+        marginBottom: 4,
+    },
+    liveBannerHost: {
+        zIndex: 2,
+        fontSize: 13,
+        color: 'rgba(255,255,255,0.95)',
+        marginBottom: 10,
+    },
+    liveBannerMeta: {
+        zIndex: 2,
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: SoundMateLightColors.surface,
-        marginHorizontal: 20,
-        marginBottom: 20,
-        borderRadius: 16,
-        paddingHorizontal: 16,
-        height: 50,
-        borderWidth: 1,
-        borderColor: SoundMateLightColors.border,
     },
-    searchInput: {
-        flex: 1,
-        marginLeft: 12,
-        fontSize: 15,
-        color: SoundMateLightColors.textPrimary,
+    liveBannerMetaText: {
+        marginLeft: 4,
+        color: 'rgba(255,255,255,0.92)',
+        fontSize: 11,
+        fontWeight: '500',
     },
-    section: {
-        marginBottom: 24,
+    liveBannerOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.18)',
+    },
+    sectionBlock: {
+        paddingTop: 10,
+        paddingBottom: 8,
     },
     sectionHeader: {
         flexDirection: 'row',
+        alignItems: 'center',
         justifyContent: 'space-between',
-        alignItems: 'center',
         paddingHorizontal: 20,
-        marginBottom: 16,
-    },
-    sectionTitleContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
+        marginBottom: 12,
     },
     sectionTitle: {
         fontSize: 20,
+        fontWeight: '800',
+    },
+    seeAllText: {
+        fontSize: 12,
         fontWeight: '700',
-        color: SoundMateLightColors.textPrimary,
-    },
-    liveDotLarge: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-        backgroundColor: '#EF4444',
-        marginRight: 8,
-    },
-    seeAll: {
-        fontSize: 14,
         color: SoundMateLightColors.primary,
-        fontWeight: '600',
     },
-    horizontalList: {
+    horizontalScrollContent: {
         paddingHorizontal: 20,
     },
-    // Live Badge
-    liveBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(239, 68, 68, 0.9)',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
-        alignSelf: 'flex-start',
-    },
-    liveDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: '#FFFFFF',
-        marginRight: 4,
-    },
-    liveText: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: '#FFFFFF',
-    },
-    // Hero Section
-    heroSection: {
-        paddingHorizontal: 20,
-        paddingVertical: 40,
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    heroTitle: {
-        fontSize: 52,
-        fontWeight: '700',
-        color: SoundMateLightColors.textPrimary,
-        fontFamily: 'BeVietnamPro_100Thin',
-    },
-    gradientText: {
-        borderRadius: 8,
-        paddingHorizontal: 8,
-    },
-    heroTitleGradient: {
-        fontSize: 52,
-        fontWeight: '700',
-        color: '#FFFFFF',
-        fontFamily: 'BeVietnamPro_100Thin',
-    },
-    heroSubtitle: {
-        fontSize: 16,
-        color: SoundMateLightColors.textSecondary,
-        marginTop: 8,
-        marginBottom: 24,
-    },
-    heroCTA: {
-        borderRadius: 12,
-        overflow: 'hidden',
-    },
-    heroCTAGradient: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        gap: 8,
-    },
-    heroCTAText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#FFFFFF',
-    },
-    // Tabs
-    tabsContainer: {
-        paddingHorizontal: 20,
-        marginBottom: 16,
-    },
-    tab: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        marginRight: 12,
-        borderRadius: 20,
-        backgroundColor: SoundMateLightColors.surface,
-        borderWidth: 1,
-        borderColor: SoundMateLightColors.border,
-    },
-    tabActive: {
-        backgroundColor: '#55C5F1',
-        borderColor: '#55C5F1',
-    },
-    tabText: {
-        fontSize: 14,
-        color: SoundMateLightColors.textSecondary,
-        fontWeight: '600',
-    },
-    tabTextActive: {
-        color: '#FFFFFF',
-    },
-    // Playlist Card
     playlistCard: {
-        width: 160,
-        height: 200,
-        marginRight: 16,
+        width: 140,
+        marginRight: 12,
+    },
+    playlistImageWrapper: {
+        width: 140,
+        height: 140,
         borderRadius: 16,
         overflow: 'hidden',
-        backgroundColor: SoundMateLightColors.surface,
+        backgroundColor: '#D1D5DB',
+        marginBottom: 8,
     },
     playlistImage: {
         width: '100%',
@@ -912,303 +639,178 @@ const styles = StyleSheet.create({
     },
     playlistOverlay: {
         ...StyleSheet.absoluteFillObject,
-        justifyContent: 'flex-end',
-        padding: 12,
+    },
+    playIconButton: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: SoundMateLightColors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: SoundMateLightColors.primary,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.32,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    playIcon: {
+        marginLeft: 1,
+    },
+    playlistTitleContainer: {
+        position: 'absolute',
+        left: 8,
+        right: 8,
+        bottom: 8,
     },
     playlistTitle: {
-        fontSize: 16,
-        fontWeight: '700',
         color: '#FFFFFF',
-        marginBottom: 4,
+        fontSize: 13,
+        fontWeight: '800',
     },
     playlistSubtitle: {
-        fontSize: 12,
-        color: 'rgba(255,255,255,0.7)',
-    },
-    playButton: {
-        position: 'absolute',
-        top: 12,
-        right: 12,
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#55C5F1',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    // Live Room Card
-    liveRoomCard: {
-        marginHorizontal: 20,
-        borderRadius: 20,
-        overflow: 'hidden',
-    },
-    liveRoomGradient: {
-        padding: 20,
-    },
-    liveRoomContent: {
-        marginTop: 12,
-        marginBottom: 16,
-    },
-    liveRoomTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: '#000000',
-        marginBottom: 12,
-    },
-    liveRoomMeta: {
-        flexDirection: 'row',
-        gap: 20,
-    },
-    liveRoomMetaItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    liveRoomMetaText: {
-        fontSize: 14,
-        color: '#000000',
-    },
-    liveRoomJoinButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#55C5F1',
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        borderRadius: 12,
-        alignSelf: 'flex-start',
-        gap: 8,
-    },
-    liveRoomJoinText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#FFFFFF',
-    },
-    // Schedule Item
-    scheduleList: {
-        paddingHorizontal: 20,
-    },
-    scheduleItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: SoundMateLightColors.surface,
-        padding: 16,
-        borderRadius: 16,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: SoundMateLightColors.border,
-    },
-    scheduleTime: {
-        marginRight: 10,
-        alignItems: 'center',
-        width: 52,
-    },
-    scheduleTimeValue: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#55C5F1',
-    },
-    scheduleTimePeriod: {
-        fontSize: 10,
+        fontSize: 11,
         color: SoundMateLightColors.textSecondary,
-        marginTop: 2,
+        textAlign: 'center',
     },
-    musicWave: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 2,
-        marginRight: 12,
+    podcastSection: {
+        marginTop: 10,
+        paddingTop: 8,
+        paddingBottom: 12,
     },
-    musicBar: {
-        width: 3,
-        backgroundColor: '#55C5F1',
-        borderRadius: 2,
-    },
-    scheduleContent: {
-        flex: 1,
-    },
-    scheduleTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: SoundMateLightColors.textPrimary,
-        marginBottom: 4,
-    },
-    scheduleHost: {
-        fontSize: 12,
-        color: SoundMateLightColors.textSecondary,
-    },
-    scheduleAction: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 8,
-        backgroundColor: SoundMateLightColors.surfaceLight,
-        borderWidth: 1,
-        borderColor: SoundMateLightColors.border,
-    },
-    scheduleActionLive: {
-        backgroundColor: '#EF4444',
-        borderColor: '#EF4444',
-    },
-    scheduleActionText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: SoundMateLightColors.textPrimary,
-    },
-    // Forum Item
-    forumList: {
-        paddingHorizontal: 20,
-    },
-    forumItem: {
-        flexDirection: 'row',
-        backgroundColor: SoundMateLightColors.surface,
-        padding: 16,
-        borderRadius: 16,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: SoundMateLightColors.border,
-    },
-    forumAvatar: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        marginRight: 12,
-    },
-    forumContent: {
-        flex: 1,
-    },
-    forumHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    forumAuthor: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: SoundMateLightColors.textPrimary,
-        marginRight: 8,
-    },
-    forumBadge: {
-        backgroundColor: '#55C5F1',
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 4,
-    },
-    forumBadgeText: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: '#FFFFFF',
-    },
-    forumTitle: {
-        fontSize: 14,
-        color: SoundMateLightColors.textPrimary,
-        marginBottom: 8,
-        lineHeight: 20,
-    },
-    forumMeta: {
-        flexDirection: 'row',
-        gap: 16,
-    },
-    forumMetaItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    forumMetaText: {
-        fontSize: 12,
-        color: SoundMateLightColors.textSecondary,
-    },
-    forumAction: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 8,
-        backgroundColor: '#55C5F1',
-        justifyContent: 'center',
-        alignSelf: 'flex-start',
-    },
-    forumActionText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#FFFFFF',
-    },
-    // Podcast Card
     podcastCard: {
-        width: 160,
-        height: 200,
-        marginRight: 16,
-        borderRadius: 16,
+        width: 140,
+        marginRight: 12,
+        alignItems: 'center',
+    },
+    podcastImageFrame: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        borderWidth: 4,
+        borderColor: '#FFFFFF',
+        backgroundColor: '#D1D5DB',
         overflow: 'hidden',
-        backgroundColor: SoundMateLightColors.surface,
+        marginBottom: 10,
+        shadowColor: '#0EA5E9',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 10,
+        elevation: 4,
     },
     podcastImage: {
         width: '100%',
         height: '100%',
     },
-    podcastOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        justifyContent: 'flex-end',
-        padding: 12,
-    },
     podcastTitle: {
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '700',
-        color: '#FFFFFF',
-        marginBottom: 4,
-    },
-    podcastSubtitle: {
-        fontSize: 12,
-        color: 'rgba(255,255,255,0.7)',
-    },
-    // Subscription Section
-    subscriptionSection: {
-        marginHorizontal: 20,
-        marginBottom: 24,
-    },
-    subscriptionGradient: {
-        padding: 24,
-        borderRadius: 20,
-        alignItems: 'center',
-    },
-    subscriptionBadge: {
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 8,
-        marginBottom: 16,
-    },
-    subscriptionBadgeText: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: '#FFFFFF',
-    },
-    subscriptionTitle: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: '#FFFFFF',
+        color: SoundMateLightColors.textPrimary,
         textAlign: 'center',
+        paddingHorizontal: 4,
+    },
+    podcastHost: {
+        marginTop: 2,
+        fontSize: 11,
+        color: SoundMateLightColors.textSecondary,
+        textAlign: 'center',
+        paddingHorizontal: 4,
+    },
+    communitySection: {
+        paddingHorizontal: 16,
+        paddingTop: 12,
+    },
+    communityLoadingWrap: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 18,
+    },
+    communityLoadingText: {
+        marginTop: 8,
+        fontSize: 12,
+        color: SoundMateLightColors.textSecondary,
+    },
+    communityEmptyText: {
+        fontSize: 13,
+        color: SoundMateLightColors.textMuted,
+        textAlign: 'center',
+        paddingVertical: 16,
+    },
+    forumCard: {
+        backgroundColor: SoundMateLightColors.surface,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        padding: 12,
         marginBottom: 12,
     },
-    subscriptionDescription: {
-        fontSize: 14,
-        color: 'rgba(255,255,255,0.9)',
-        textAlign: 'center',
-        lineHeight: 20,
-        marginBottom: 20,
-    },
-    subscriptionPrice: {
-        fontWeight: '700',
-        fontSize: 16,
-    },
-    subscriptionButton: {
+    forumAuthorRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFFFFF',
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        borderRadius: 12,
-        gap: 8,
+        marginBottom: 8,
     },
-    subscriptionButtonText: {
-        fontSize: 16,
+    forumAvatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        borderWidth: 2,
+        borderColor: SoundMateLightColors.primary,
+        marginRight: 10,
+    },
+    forumAuthorInfo: {
+        flex: 1,
+    },
+    forumAuthorNameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 2,
+    },
+    forumAuthorName: {
+        maxWidth: '60%',
+        fontSize: 13,
         fontWeight: '700',
-        color: '#55C5F1',
+        color: SoundMateLightColors.textPrimary,
+        marginRight: 8,
+    },
+    forumBadge: {
+        borderRadius: 999,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+    },
+    forumBadgeText: {
+        color: '#FFFFFF',
+        fontSize: 9,
+        fontWeight: '800',
+    },
+    forumTime: {
+        fontSize: 10,
+        color: SoundMateLightColors.textMuted,
+    },
+    forumPostTitle: {
+        fontSize: 13,
+        color: SoundMateLightColors.textPrimary,
+        lineHeight: 19,
+        marginBottom: 10,
+    },
+    forumActionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    forumActionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F3F4F6',
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        marginRight: 8,
+    },
+    forumActionText: {
+        marginLeft: 5,
+        fontSize: 12,
+        fontWeight: '600',
+        color: SoundMateLightColors.textPrimary,
     },
 });

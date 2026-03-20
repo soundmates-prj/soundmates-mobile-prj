@@ -1,23 +1,26 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { showToast } from '../../../components/ui/Toast';
+import { authService, UpdateProfileRequest } from '../../api';
+import { UserData, useUser } from '../../context/UserContext';
 
 interface EditProfileScreenProps {
   onBack: () => void;
 }
 
 interface ProfileData {
-  displayName: string;
+  firstName: string;
+  lastName: string;
   username: string;
   bio: string;
   email: string;
@@ -30,42 +33,117 @@ interface ProfileData {
 }
 
 export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
-  const [profileData, setProfileData] = useState<ProfileData>({
-    displayName: 'Minh Anh',
-    username: 'minhanh_music',
-    bio: 'Yêu nhạc, yêu cuộc sống 🎵',
-    email: 'minhanh@soundmates.vn',
-    phone: '0912 345 678',
-    location: 'Hồ Chí Minh, Việt Nam',
-    birthday: '1998-05-15',
-    gender: 'Nữ',
-    website: 'soundmates.vn/minhanh',
-    favoriteGenre: 'Acoustic, Lofi, Ballad',
-  });
+  const { user, refreshUser } = useUser();
+  const formatDateForInput = (value?: string) => {
+    if (!value) return '';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+    return parsed.toISOString().slice(0, 10);
+  };
 
-  const [avatarUrl] = useState('https://i.pravatar.cc/150?img=10');
+  const buildProfileData = (userData?: UserData | null): ProfileData => {
+    return {
+      firstName: userData?.firstName || '',
+      lastName: userData?.lastName || '',
+      username: userData?.username || '',
+      bio: userData?.bio || '',
+      email: userData?.email || '',
+      phone: userData?.phone || '',
+      location: userData?.location || '',
+      birthday: formatDateForInput(userData?.dateOfBirth),
+      gender: userData?.gender || 'Không muốn tiết lộ',
+      website: userData?.website || '',
+      favoriteGenre: 'Acoustic, Lofi, Ballad',
+    };
+  };
+
+  const [profileData, setProfileData] = useState<ProfileData>(() => buildProfileData(user));
   const [showGenderPicker, setShowGenderPicker] = useState(false);
-  const [showAvatarOptions, setShowAvatarOptions] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showSavedToast, setShowSavedToast] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
+  const [hasRequestedProfile, setHasRequestedProfile] = useState(false);
 
   const genderOptions = ['Nam', 'Nữ', 'Khác', 'Không muốn tiết lộ'];
+
+  useEffect(() => {
+    setProfileData(buildProfileData(user));
+  }, [user]);
+
+  useEffect(() => {
+    if (!user && !hasRequestedProfile) {
+      setHasRequestedProfile(true);
+      refreshUser();
+    }
+  }, [hasRequestedProfile, refreshUser, user]);
+
+  const normalizeDateOfBirth = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const iso = new Date(`${trimmed}T00:00:00.000Z`);
+      return Number.isNaN(iso.getTime()) ? undefined : iso.toISOString();
+    }
+
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) {
+      const [day, month, year] = trimmed.split('/');
+      const iso = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
+      return Number.isNaN(iso.getTime()) ? undefined : iso.toISOString();
+    }
+
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+  };
 
   const handleChange = (field: keyof ProfileData, value: string) => {
     setProfileData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (isSaving) return;
+
     setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+
+    const firstName = profileData.firstName.trim() || undefined;
+    const lastName = profileData.lastName.trim() || undefined;
+
+    try {
+      const payload: UpdateProfileRequest = {
+        firstName,
+        lastName,
+        bio: profileData.bio.trim() || undefined,
+        phone: profileData.phone.trim() || undefined,
+        gender: profileData.gender.trim() || undefined,
+        dateOfBirth: normalizeDateOfBirth(profileData.birthday),
+        location: profileData.location.trim() || undefined,
+        website: profileData.website.trim() || undefined,
+      };
+
+      const result = await authService.updateProfile(payload);
+      if (!result.success) {
+        showToast.error('Cập nhật thất bại', result.message || 'Vui lòng thử lại sau');
+        return;
+      }
+
+      await refreshUser({
+        expectedUpdatedAt: result.data?.updatedAt,
+        maxAttempts: 6,
+        delayMs: 100,
+      });
+
       setShowSavedToast(true);
       setTimeout(() => {
         setShowSavedToast(false);
         onBack();
-      }, 1200);
-    }, 800);
+      }, 1000);
+    } catch (error: any) {
+      showToast.error('Cập nhật thất bại', error?.message || 'Vui lòng thử lại sau');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -86,81 +164,17 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
           <Ionicons name="arrow-back" size={22} color="#1E293B" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chỉnh sửa hồ sơ</Text>
-        <TouchableOpacity
+        {/* <TouchableOpacity
           onPress={handleSave}
           disabled={isSaving}
           style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
         >
           <Text style={styles.saveButtonText}>{isSaving ? 'Đang lưu...' : 'Lưu'}</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
+        <View style={styles.saveButton}></View>
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Avatar Section */}
-        <View style={styles.avatarSection}>
-          <LinearGradient
-            colors={['#55C5F1', '#A78BFA']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.avatarGradient}
-          >
-            {/* Decorative circles */}
-            <View style={[styles.decorCircle, styles.decorCircle1]} />
-            <View style={[styles.decorCircle, styles.decorCircle2]} />
-
-            {/* Avatar */}
-            <View style={styles.avatarWrapper}>
-              <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-              <TouchableOpacity
-                onPress={() => setShowAvatarOptions(!showAvatarOptions)}
-                style={styles.cameraButton}
-              >
-                <Ionicons name="camera" size={16} color="white" />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.avatarLabel}>Nhấn vào ảnh để thay đổi</Text>
-          </LinearGradient>
-
-          {/* Avatar Options Dropdown */}
-          {showAvatarOptions && (
-            <View style={styles.avatarOptionsContainer}>
-              <TouchableOpacity
-                style={styles.avatarOption}
-                onPress={() => setShowAvatarOptions(false)}
-              >
-                <Ionicons name="images-outline" size={18} color="#55C5F1" />
-                <Text style={styles.avatarOptionText}>Chọn từ thư viện</Text>
-              </TouchableOpacity>
-              <View style={styles.optionDivider} />
-              <TouchableOpacity
-                style={styles.avatarOption}
-                onPress={() => setShowAvatarOptions(false)}
-              >
-                <Ionicons name="camera-outline" size={18} color="#A78BFA" />
-                <Text style={styles.avatarOptionText}>Chụp ảnh mới</Text>
-              </TouchableOpacity>
-              <View style={styles.optionDivider} />
-              <TouchableOpacity
-                style={styles.avatarOption}
-                onPress={() => setShowAvatarOptions(false)}
-              >
-                <Ionicons name="eye-outline" size={18} color="#10B981" />
-                <Text style={styles.avatarOptionText}>Xem ảnh đại diện</Text>
-              </TouchableOpacity>
-              <View style={styles.optionDivider} />
-              <TouchableOpacity
-                style={styles.avatarOption}
-                onPress={() => setShowAvatarOptions(false)}
-              >
-                <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                <Text style={[styles.avatarOptionText, styles.avatarOptionTextDanger]}>
-                  Xóa ảnh đại diện
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
         {/* Form Section - Basic Info */}
         <View style={styles.formSection}>
           <Text style={styles.sectionTitle}>THÔNG TIN CƠ BẢN</Text>
@@ -171,17 +185,35 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                 <Ionicons name="person-outline" size={18} color="#55C5F1" />
               </View>
               <View style={styles.inputContent}>
-                <Text style={styles.inputLabel}>Tên hiển thị</Text>
-                <TextInput
-                  value={profileData.displayName}
-                  onChangeText={(value) => handleChange('displayName', value)}
-                  onFocus={() => setEditingField('displayName')}
-                  onBlur={() => setEditingField(null)}
-                  style={[
-                    styles.input,
-                    editingField === 'displayName' && styles.inputFocused,
-                  ]}
-                />
+                <Text style={styles.inputLabel}>Họ và tên</Text>
+                <View style={styles.nameRow}>
+                  <TextInput
+                    value={profileData.firstName}
+                    onChangeText={(value) => handleChange('firstName', value)}
+                    onFocus={() => setEditingField('firstName')}
+                    onBlur={() => setEditingField(null)}
+                    placeholder="Họ"
+                    placeholderTextColor="#D1D5DB"
+                    style={[
+                      styles.input,
+                      styles.nameField,
+                      editingField === 'firstName' && styles.inputFocused,
+                    ]}
+                  />
+                  <TextInput
+                    value={profileData.lastName}
+                    onChangeText={(value) => handleChange('lastName', value)}
+                    onFocus={() => setEditingField('lastName')}
+                    onBlur={() => setEditingField(null)}
+                    placeholder="Tên"
+                    placeholderTextColor="#D1D5DB"
+                    style={[
+                      styles.input,
+                      styles.nameField,
+                      editingField === 'lastName' && styles.inputFocused,
+                    ]}
+                  />
+                </View>
               </View>
             </View>
 
@@ -195,7 +227,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
               <View style={styles.inputContent}>
                 <Text style={styles.inputLabel}>Tên người dùng</Text>
                 <View style={styles.usernameRow}>
-                  <Text style={styles.atSymbol}>@</Text>
+                  {/* <Text style={styles.atSymbol}>@</Text> */}
                   <TextInput
                     value={profileData.username}
                     onChangeText={(value) => handleChange('username', value)}
@@ -537,6 +569,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
         {/* Bottom spacer */}
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
     </SafeAreaView>
   );
 }
@@ -597,7 +630,7 @@ const styles = StyleSheet.create({
     color: '#1E293B',
   },
   saveButton: {
-    backgroundColor: '#55C5F1',
+    // backgroundColor: '#55C5F1',
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 12,
@@ -614,100 +647,6 @@ const styles = StyleSheet.create({
   // Scroll View
   scrollView: {
     flex: 1,
-  },
-
-  // Avatar Section
-  avatarSection: {
-    paddingBottom: 24,
-  },
-  avatarGradient: {
-    paddingVertical: 24,
-    alignItems: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  decorCircle: {
-    position: 'absolute',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 999,
-  },
-  decorCircle1: {
-    width: 70,
-    height: 70,
-    top: -15,
-    right: -15,
-  },
-  decorCircle2: {
-    width: 50,
-    height: 50,
-    bottom: -10,
-    left: 20,
-  },
-  avatarWrapper: {
-    position: 'relative',
-    marginTop: 32,
-    marginBottom: 12,
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 4,
-    borderColor: 'white',
-  },
-  cameraButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#55C5F1',
-    borderWidth: 3,
-    borderColor: 'white',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarLabel: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    marginTop: 12,
-  },
-
-  // Avatar Options
-  avatarOptionsContainer: {
-    marginTop: 12,
-    marginHorizontal: 20,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  avatarOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  optionDivider: {
-    height: 1,
-    backgroundColor: '#F3F4F6',
-  },
-  avatarOptionText: {
-    fontSize: 14,
-    color: '#1E293B',
-  },
-  avatarOptionTextDanger: {
-    color: '#EF4444',
   },
 
   // Form Section
@@ -738,6 +677,13 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  nameField: {
+    flex: 1,
   },
   iconBox: {
     width: 36,

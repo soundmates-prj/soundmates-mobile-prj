@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { authService } from '../api';
 
 // User data interface matching AuthResult from BE
 export interface UserData {
@@ -12,6 +13,21 @@ export interface UserData {
     roleName?: string;
     isActive: boolean;
     createdAt?: string;
+    updatedAt?: string;
+    bio?: string;
+    phone?: string;
+    gender?: string;
+    dateOfBirth?: string;
+    profileImageUrl?: string;
+    backgroundImageUrl?: string;
+    location?: string;
+    website?: string;
+}
+
+interface RefreshUserOptions {
+    expectedUpdatedAt?: string;
+    maxAttempts?: number;
+    delayMs?: number;
 }
 
 interface UserContextType {
@@ -19,6 +35,7 @@ interface UserContextType {
     setUser: (user: UserData | null) => void;
     saveUser: (user: UserData) => Promise<void>;
     clearUser: () => Promise<void>;
+    refreshUser: (options?: RefreshUserOptions) => Promise<void>;
     isLoading: boolean;
 }
 
@@ -40,12 +57,19 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             console.log('[UserContext] Loading user from AsyncStorage...');
             const userData = await AsyncStorage.getItem(USER_STORAGE_KEY);
             console.log('[UserContext] Raw userData from storage:', userData);
+
+            let parsedUser: UserData | null = null;
             if (userData) {
-                const parsedUser = JSON.parse(userData);
+                parsedUser = JSON.parse(userData);
                 console.log('[UserContext] Parsed user data:', parsedUser);
                 setUserState(parsedUser);
             } else {
                 console.log('[UserContext] No user data found in storage');
+            }
+
+            const accessToken = await AsyncStorage.getItem('accessToken');
+            if (accessToken) {
+                await refreshUser();
             }
         } catch (error) {
             console.error('Error loading user data:', error);
@@ -80,8 +104,85 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
+    const refreshUser = useCallback(async (options?: RefreshUserOptions) => {
+        console.log('[UserContext] refreshUser called');
+        const accessToken = await AsyncStorage.getItem('accessToken');
+        if (!accessToken) return;
+
+        const maxAttempts = options?.maxAttempts ?? 4;
+        const delayMs = options?.delayMs ?? 600;
+        const expectedUpdatedAt = options?.expectedUpdatedAt;
+        const expectedDate = expectedUpdatedAt ? new Date(expectedUpdatedAt) : null;
+
+        let lastProfile: UserData | null = null;
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+            const profileResult = await authService.getMyProfileFull();
+            if (profileResult.success && profileResult.data) {
+                const profile = profileResult.data;
+                const mergedUser: UserData = {
+                    userId: profile.userId ?? profile.id ?? user?.userId ?? '',
+                    username: profile.username ?? user?.username ?? '',
+                    email: profile.email ?? user?.email ?? '',
+                    firstName: profile.firstName ?? user?.firstName,
+                    lastName: profile.lastName ?? user?.lastName,
+                    roleId: profile.roleId ?? user?.roleId,
+                    roleName: profile.roleName ?? user?.roleName,
+                    isActive: profile.isActive ?? user?.isActive ?? true,
+                    createdAt: profile.createdAt ?? user?.createdAt,
+                    updatedAt: profile.updatedAt ?? user?.updatedAt,
+                    bio: profile.bio ?? user?.bio,
+                    phone: profile.phone ?? user?.phone,
+                    gender: profile.gender ?? user?.gender,
+                    dateOfBirth: profile.dateOfBirth ?? user?.dateOfBirth,
+                    profileImageUrl: profile.profileImageUrl !== undefined
+                        ? profile.profileImageUrl
+                        : user?.profileImageUrl,
+                    backgroundImageUrl: profile.backgroundImageUrl !== undefined
+                        ? profile.backgroundImageUrl
+                        : user?.backgroundImageUrl,
+                    location: profile.location ?? user?.location,
+                    website: profile.website ?? user?.website,
+                };
+
+                lastProfile = mergedUser;
+
+                if (!expectedUpdatedAt) {
+                    await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(mergedUser));
+                    setUserState(mergedUser);
+                    return;
+                }
+
+                const profileDate = new Date(profile.updatedAt || '');
+                if (expectedDate && !Number.isNaN(expectedDate.getTime()) && !Number.isNaN(profileDate.getTime())) {
+                    if (profileDate.getTime() >= expectedDate.getTime()) {
+                        await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(mergedUser));
+                        setUserState(mergedUser);
+                        return;
+                    }
+                }
+            }
+
+            if (attempt < maxAttempts) {
+                await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));
+            }
+        }
+
+        if (lastProfile) {
+            if (expectedDate && !Number.isNaN(expectedDate.getTime())) {
+                const lastProfileDate = new Date(lastProfile.updatedAt || '');
+                if (Number.isNaN(lastProfileDate.getTime()) || lastProfileDate.getTime() < expectedDate.getTime()) {
+                    // Keep the current local state when backend read model is still stale.
+                    return;
+                }
+            }
+
+            await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(lastProfile));
+            setUserState(lastProfile);
+        }
+    }, [user]);
+
     return (
-        <UserContext.Provider value={{ user, setUser, saveUser, clearUser, isLoading }}>
+        <UserContext.Provider value={{ user, setUser, saveUser, clearUser, refreshUser, isLoading }}>
             {children}
         </UserContext.Provider>
     );

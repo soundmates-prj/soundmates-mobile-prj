@@ -6,9 +6,23 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { showToast, toastConfig } from './components/ui/Toast';
 import { SoundMateLightColors } from './constants/theme';
-import { authService } from './src/api';
-import { UserData, UserProvider, useUser } from './src/context/UserContext';
-import { ForgotPasswordScreen, HomeScreen, LoginScreen, OTPScreen, ProfileScreen, ProfileSetupScreen, RegisterScreen } from './src/pages';
+import { authService, registerUnauthorizedHandler } from './src/api';
+import { UserProvider, useUser } from './src/context/UserContext';
+import {
+    ForgotPasswordScreen,
+    HomeScreen,
+    LivestreamScreen,
+    LoginScreen,
+    OTPScreen,
+    PaymentCheckoutScreen,
+    PaymentResultScreen,
+    ProfileScreen,
+    ProfileSetupScreen,
+    RegisterScreen,
+    SubscriptionScreen,
+} from './src/pages';
+import type { SelectedPlan } from './src/pages/subscription/PaymentCheckoutScreen';
+import type { TabName } from './src/pages/BottomNavigation';
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -23,19 +37,30 @@ const STORAGE_KEYS = {
 enum Screen {
     LOGIN = 'login',
     HOME = 'home',
+    LIVE = 'live',
     REGISTER = 'register',
     OTP = 'otp',
     PROFILE_SETUP = 'profile_setup',
     PROFILE = 'profile',
     FORGOT_PASSWORD = 'forgot_password',
+    SUBSCRIPTION = 'subscription',
+    PAYMENT_CHECKOUT = 'payment_checkout',
+    PAYMENT_RESULT = 'payment_result',
 }
 
+type HomeEntryTab = Extract<TabName, 'home' | 'blog' | 'podcast'>;
+
 function AppContent() {
-    const { saveUser, clearUser } = useUser();
+    const { clearUser, refreshUser } = useUser();
     const [currentScreen, setCurrentScreen] = useState<Screen>(Screen.LOGIN);
     const [userEmail, setUserEmail] = useState<string>('');
     const [pendingPassword, setPendingPassword] = useState<string>('');
     const [isNewRegistration, setIsNewRegistration] = useState<boolean>(false);
+    const [homeEntryTab, setHomeEntryTab] = useState<HomeEntryTab>('home');
+    // Payment flow state
+    const [selectedPlan, setSelectedPlan] = useState<SelectedPlan | null>(null);
+    const [paymentResultType, setPaymentResultType] = useState<'success' | 'failed'>('success');
+    const [paymentResultMessage, setPaymentResultMessage] = useState<string>('');
 
     // Check for saved tokens on app start
     useEffect(() => {
@@ -53,20 +78,20 @@ function AppContent() {
         checkAuth();
     }, []);
 
-    // Save authentication tokens and user data
-    const saveAuthTokens = useCallback(async (accessToken: string, refreshToken: string, userData?: UserData) => {
+    // Save authentication tokens only
+    const saveAuthTokens = useCallback(async (accessToken?: string, refreshToken?: string) => {
         try {
-            console.log('[App.tsx] saveAuthTokens called with userData:', userData);
-            await AsyncStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
-            await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
-            if (userData) {
-                console.log('[App.tsx] Calling saveUser with:', userData);
-                await saveUser(userData);
+            console.log('[App.tsx] saveAuthTokens called');
+            if (accessToken) {
+                await AsyncStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
+            }
+            if (refreshToken) {
+                await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
             }
         } catch (error) {
             console.error('Error saving auth tokens:', error);
         }
-    }, [saveUser]);
+    }, []);
 
     // Clear authentication tokens and user data
     const clearAuthTokens = useCallback(async () => {
@@ -96,14 +121,13 @@ function AppContent() {
             console.log('[App.tsx] Unwrapped response.data:', userData);
         }
         
-        if (userData?.accessToken && userData?.refreshToken) {
-            // Extract user data (excluding tokens)
-            const { accessToken, refreshToken, ...userInfo } = userData;
-            console.log('[App.tsx] Extracted userInfo:', userInfo);
-            await saveAuthTokens(accessToken, refreshToken, userInfo as UserData);
+        if (userData?.accessToken) {
+            const { accessToken, refreshToken } = userData;
+            await saveAuthTokens(accessToken, refreshToken);
+            await refreshUser();
         }
         setCurrentScreen(Screen.HOME);
-    }, [saveAuthTokens]);
+    }, [refreshUser, saveAuthTokens]);
 
     // Handle login attempt with unverified email (error 403)
     const handleUnverifiedEmail = useCallback(async (email: string, password: string) => {
@@ -166,13 +190,12 @@ function AppContent() {
                 if (loginResponse.success && loginResponse.data) {
                     console.log('[App.tsx] OTP auto-login success, data:', loginResponse.data);
                     
-                    // Extract user data (excluding tokens)
-                    const { accessToken, refreshToken, ...userData } = loginResponse.data;
-                    console.log('[App.tsx] OTP extracted userData:', userData);
-                    
-                    // Save tokens and user data
-                    if (accessToken && refreshToken) {
-                        await saveAuthTokens(accessToken, refreshToken, userData as UserData);
+                    const { accessToken, refreshToken } = loginResponse.data;
+
+                    // Save tokens only, then refresh user profile via API
+                    if (accessToken) {
+                        await saveAuthTokens(accessToken, refreshToken);
+                        await refreshUser();
                     }
 
                     // Clear pending credentials
@@ -206,7 +229,7 @@ function AppContent() {
         // Reset pending data
         setPendingPassword('');
         setIsNewRegistration(false);
-    }, [userEmail, pendingPassword, isNewRegistration, saveAuthTokens]);
+    }, [userEmail, pendingPassword, isNewRegistration, refreshUser, saveAuthTokens]);
 
     // Handle profile setup complete
     const handleProfileSetupComplete = useCallback(() => {
@@ -245,8 +268,13 @@ function AppContent() {
         setCurrentScreen(Screen.PROFILE);
     }, []);
 
-    const handleBackToHome = useCallback(() => {
+    const handleBackToHome = useCallback((tab: HomeEntryTab = 'home') => {
+        setHomeEntryTab(tab);
         setCurrentScreen(Screen.HOME);
+    }, []);
+
+    const handleNavigateToLive = useCallback(() => {
+        setCurrentScreen(Screen.LIVE);
     }, []);
 
     const handleNavigateToForgotPassword = useCallback(() => {
@@ -256,6 +284,69 @@ function AppContent() {
     const handleForgotPasswordBack = useCallback(() => {
         setCurrentScreen(Screen.LOGIN);
     }, []);
+
+    // ─── Payment flow navigation ─────────────────────
+    const handleNavigateToSubscription = useCallback(() => {
+        setCurrentScreen(Screen.SUBSCRIPTION);
+    }, []);
+
+    const handleSubscriptionBack = useCallback(() => {
+        setCurrentScreen(Screen.PROFILE);
+    }, []);
+
+    const handleSelectPlan = useCallback((plan: SelectedPlan) => {
+        setSelectedPlan(plan);
+        setCurrentScreen(Screen.PAYMENT_CHECKOUT);
+    }, []);
+
+    const handlePaymentCheckoutBack = useCallback(() => {
+        setCurrentScreen(Screen.SUBSCRIPTION);
+    }, []);
+
+    const handlePaymentSuccess = useCallback(() => {
+        setPaymentResultType('success');
+        setPaymentResultMessage('');
+        setCurrentScreen(Screen.PAYMENT_RESULT);
+    }, []);
+
+    const handlePaymentFailed = useCallback((reason?: string) => {
+        setPaymentResultType('failed');
+        setPaymentResultMessage(reason || '');
+        setCurrentScreen(Screen.PAYMENT_RESULT);
+    }, []);
+
+    const handlePaymentResultDone = useCallback(() => {
+        setSelectedPlan(null);
+        setHomeEntryTab('home');
+        setCurrentScreen(Screen.HOME);
+    }, []);
+
+    const handlePaymentRetry = useCallback(() => {
+        if (selectedPlan) {
+            setCurrentScreen(Screen.PAYMENT_CHECKOUT);
+        } else {
+            setCurrentScreen(Screen.SUBSCRIPTION);
+        }
+    }, [selectedPlan]);
+
+    useEffect(() => {
+        const unregisterUnauthorizedHandler = registerUnauthorizedHandler(async () => {
+            const accessToken = await AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+            if (!accessToken) {
+                return;
+            }
+
+            await clearAuthTokens();
+            setPendingPassword('');
+            setIsNewRegistration(false);
+            setCurrentScreen(Screen.LOGIN);
+            showToast.warning('Phiên đăng nhập hết hạn', 'Vui lòng đăng nhập lại để tiếp tục');
+        });
+
+        return () => {
+            unregisterUnauthorizedHandler();
+        };
+    }, [clearAuthTokens]);
 
     const renderScreen = () => {
         switch (currentScreen) {
@@ -269,12 +360,22 @@ function AppContent() {
                     />
                 );
             case Screen.HOME:
-                return <HomeScreen onLogout={handleLogout} onNavigateToProfile={handleNavigateToProfile} />;
+                return (
+                    <HomeScreen
+                        initialTab={homeEntryTab}
+                        onLogout={handleLogout}
+                        onNavigateToProfile={handleNavigateToProfile}
+                        onNavigateToLive={handleNavigateToLive}
+                    />
+                );
+            case Screen.LIVE:
+                return <LivestreamScreen onBack={handleBackToHome} />;
             case Screen.PROFILE:
                 return (
                     <ProfileScreen 
                         onBackToHome={handleBackToHome} 
                         onNavigateToForgotPassword={handleNavigateToForgotPassword}
+                        onNavigateToSubscription={handleNavigateToSubscription}
                         onLogout={handleLogout}
                     />
                 );
@@ -305,6 +406,32 @@ function AppContent() {
                     <ForgotPasswordScreen
                         onBack={handleForgotPasswordBack}
                         prefillEmail={userEmail}
+                    />
+                );
+            case Screen.SUBSCRIPTION:
+                return (
+                    <SubscriptionScreen
+                        onBack={handleSubscriptionBack}
+                        onSelectPlan={handleSelectPlan}
+                    />
+                );
+            case Screen.PAYMENT_CHECKOUT:
+                return selectedPlan ? (
+                    <PaymentCheckoutScreen
+                        plan={selectedPlan}
+                        onBack={handlePaymentCheckoutBack}
+                        onPaymentSuccess={handlePaymentSuccess}
+                        onPaymentFailed={handlePaymentFailed}
+                    />
+                ) : null;
+            case Screen.PAYMENT_RESULT:
+                return (
+                    <PaymentResultScreen
+                        type={paymentResultType}
+                        planName={selectedPlan?.name}
+                        message={paymentResultMessage}
+                        onDone={handlePaymentResultDone}
+                        onRetry={paymentResultType === 'failed' ? handlePaymentRetry : undefined}
                     />
                 );
             default:

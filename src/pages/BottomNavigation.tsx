@@ -23,12 +23,16 @@ interface NavItemProps {
 
 const NavItem = ({ icon, iconActive, label, isActive, onPress }: NavItemProps) => (
     <TouchableOpacity style={styles.navItem} onPress={onPress} activeOpacity={0.7}>
-        <Ionicons
-            name={isActive ? iconActive : icon}
-            size={24}
-            color={isActive ? SoundMateLightColors.primary : SoundMateLightColors.textMuted}
-        />
-        <Text style={[styles.navText, isActive && styles.navTextActive]}>{label}</Text>
+        <View style={styles.iconContainer}>
+            <Ionicons
+                name={isActive ? iconActive : icon}
+                size={24}
+                color={isActive ? SoundMateLightColors.primary : SoundMateLightColors.textMuted}
+            />
+        </View>
+        <Text style={[styles.navText, isActive && styles.navTextActive]} numberOfLines={1}>
+            {label}
+        </Text>
     </TouchableOpacity>
 );
 
@@ -76,13 +80,21 @@ export default function BottomNavigation({ activeTab, onTabPress, onLogout }: Bo
                 onPress={() => onTabPress('blog')}
             />
 
-            {/* Logout Button (temporary) */}
             <TouchableOpacity style={styles.navItem} onPress={() => onTabPress('profile')} activeOpacity={0.7}>
-                <Image
-                    source={{ uri: 'https://i.pravatar.cc/150?img=10' }}
-                    style={styles.userAvatar}
-                />
-                <Text style={styles.navText}>Trang Cá Nhân</Text>
+                <View style={styles.iconContainer}>
+                    <Image
+                        source={{ uri: 'https://i.pravatar.cc/150?img=10' }}
+                        style={styles.userAvatar}
+                    />
+                </View>
+                <Text
+                    style={[styles.navText, activeTab === 'profile' && styles.navTextActive]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.82}
+                >
+                    Trang Cá Nhân
+                </Text>
             </TouchableOpacity>
         </View>
     );
@@ -110,10 +122,16 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
+    iconContainer: {
+        width: 24,
+        height: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     navItemCenter: {
         flex: 1,
         alignItems: 'center',
-        marginTop: -30,
+        marginTop: -18,
     },
     navItemCenterGradient: {
         width: 56,
@@ -129,18 +147,20 @@ const styles = StyleSheet.create({
     },
     navText: {
         fontSize: 11,
+        lineHeight: 14,
         color: SoundMateLightColors.textMuted,
         marginTop: 4,
-        fontWeight: '500',
+        fontWeight: '400',
+        textAlign: 'center',
     },
     navTextActive: {
         color: SoundMateLightColors.primary,
         fontWeight: '600',
     },
     userAvatar: {
-        width: 25,
-        height: 25,
-        borderRadius: 20,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
         borderWidth: 1,
         borderColor: SoundMateLightColors.primary,
     },
