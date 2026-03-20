@@ -112,6 +112,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         const maxAttempts = options?.maxAttempts ?? 4;
         const delayMs = options?.delayMs ?? 600;
         const expectedUpdatedAt = options?.expectedUpdatedAt;
+        const expectedDate = expectedUpdatedAt ? new Date(expectedUpdatedAt) : null;
 
         let lastProfile: UserData | null = null;
         for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -133,8 +134,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                     phone: profile.phone ?? user?.phone,
                     gender: profile.gender ?? user?.gender,
                     dateOfBirth: profile.dateOfBirth ?? user?.dateOfBirth,
-                    profileImageUrl: profile.profileImageUrl ?? user?.profileImageUrl,
-                    backgroundImageUrl: profile.backgroundImageUrl ?? user?.backgroundImageUrl,
+                    profileImageUrl: profile.profileImageUrl !== undefined
+                        ? profile.profileImageUrl
+                        : user?.profileImageUrl,
+                    backgroundImageUrl: profile.backgroundImageUrl !== undefined
+                        ? profile.backgroundImageUrl
+                        : user?.backgroundImageUrl,
                     location: profile.location ?? user?.location,
                     website: profile.website ?? user?.website,
                 };
@@ -147,9 +152,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                     return;
                 }
 
-                const expectedDate = new Date(expectedUpdatedAt);
                 const profileDate = new Date(profile.updatedAt || '');
-                if (!Number.isNaN(expectedDate.getTime()) && !Number.isNaN(profileDate.getTime())) {
+                if (expectedDate && !Number.isNaN(expectedDate.getTime()) && !Number.isNaN(profileDate.getTime())) {
                     if (profileDate.getTime() >= expectedDate.getTime()) {
                         await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(mergedUser));
                         setUserState(mergedUser);
@@ -164,6 +168,14 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (lastProfile) {
+            if (expectedDate && !Number.isNaN(expectedDate.getTime())) {
+                const lastProfileDate = new Date(lastProfile.updatedAt || '');
+                if (Number.isNaN(lastProfileDate.getTime()) || lastProfileDate.getTime() < expectedDate.getTime()) {
+                    // Keep the current local state when backend read model is still stale.
+                    return;
+                }
+            }
+
             await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(lastProfile));
             setUserState(lastProfile);
         }

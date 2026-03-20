@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import {
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -60,11 +59,8 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
     };
   };
 
-  const defaultAvatarUrl = 'https://i.pravatar.cc/150?img=10';
   const [profileData, setProfileData] = useState<ProfileData>(() => buildProfileData(user));
-  const [avatarUrl, setAvatarUrl] = useState(user?.profileImageUrl || defaultAvatarUrl);
   const [showGenderPicker, setShowGenderPicker] = useState(false);
-  const [showAvatarOptions, setShowAvatarOptions] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showSavedToast, setShowSavedToast] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -74,7 +70,6 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
 
   useEffect(() => {
     setProfileData(buildProfileData(user));
-    setAvatarUrl(user?.profileImageUrl || defaultAvatarUrl);
   }, [user]);
 
   useEffect(() => {
@@ -114,20 +109,19 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
 
     const firstName = profileData.firstName.trim() || undefined;
     const lastName = profileData.lastName.trim() || undefined;
-    const payload: UpdateProfileRequest = {
-      firstName,
-      lastName,
-      bio: profileData.bio.trim() || undefined,
-      phone: profileData.phone.trim() || undefined,
-      gender: profileData.gender.trim() || undefined,
-      dateOfBirth: normalizeDateOfBirth(profileData.birthday),
-      profileImageUrl: avatarUrl,
-      backgroundImageUrl: undefined,
-      location: profileData.location.trim() || undefined,
-      website: profileData.website.trim() || undefined,
-    };
 
     try {
+      const payload: UpdateProfileRequest = {
+        firstName,
+        lastName,
+        bio: profileData.bio.trim() || undefined,
+        phone: profileData.phone.trim() || undefined,
+        gender: profileData.gender.trim() || undefined,
+        dateOfBirth: normalizeDateOfBirth(profileData.birthday),
+        location: profileData.location.trim() || undefined,
+        website: profileData.website.trim() || undefined,
+      };
+
       const result = await authService.updateProfile(payload);
       if (!result.success) {
         showToast.error('Cập nhật thất bại', result.message || 'Vui lòng thử lại sau');
@@ -181,71 +175,6 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Avatar Section */}
-        <View style={styles.avatarSection}>
-          {/* Cover area */}
-          <LinearGradient
-            colors={['#55C5F1', '#A78BFA']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.coverGradient}
-          >
-            <View style={[styles.decorCircle, styles.decorCircle1]} />
-            <View style={[styles.decorCircle, styles.decorCircle2]} />
-          </LinearGradient>
-
-          {/* Avatar */}
-          <View style={styles.avatarWrapper}>
-            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-            <TouchableOpacity
-              onPress={() => setShowAvatarOptions(!showAvatarOptions)}
-              style={styles.cameraButton}
-            >
-              <Ionicons name="camera" size={16} color="white" />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.avatarLabel}>Nhấn vào ảnh để thay đổi</Text>
-
-          {/* Avatar Options Dropdown */}
-          {showAvatarOptions && (
-            <View style={styles.avatarOptionsContainer}>
-              <TouchableOpacity
-                style={styles.avatarOption}
-                onPress={() => setShowAvatarOptions(false)}
-              >
-                <Ionicons name="images-outline" size={18} color="#55C5F1" />
-                <Text style={styles.avatarOptionText}>Chọn từ thư viện</Text>
-              </TouchableOpacity>
-              <View style={styles.optionDivider} />
-              <TouchableOpacity
-                style={styles.avatarOption}
-                onPress={() => setShowAvatarOptions(false)}
-              >
-                <Ionicons name="camera-outline" size={18} color="#A78BFA" />
-                <Text style={styles.avatarOptionText}>Chụp ảnh mới</Text>
-              </TouchableOpacity>
-              <View style={styles.optionDivider} />
-              <TouchableOpacity
-                style={styles.avatarOption}
-                onPress={() => setShowAvatarOptions(false)}
-              >
-                <Ionicons name="eye-outline" size={18} color="#10B981" />
-                <Text style={styles.avatarOptionText}>Xem ảnh đại diện</Text>
-              </TouchableOpacity>
-              <View style={styles.optionDivider} />
-              <TouchableOpacity
-                style={styles.avatarOption}
-                onPress={() => setShowAvatarOptions(false)}
-              >
-                <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                <Text style={[styles.avatarOptionText, styles.avatarOptionTextDanger]}>
-                  Xóa ảnh đại diện
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
         {/* Form Section - Basic Info */}
         <View style={styles.formSection}>
           <Text style={styles.sectionTitle}>THÔNG TIN CƠ BẢN</Text>
@@ -640,6 +569,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
         {/* Bottom spacer */}
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
     </SafeAreaView>
   );
 }
@@ -717,105 +647,6 @@ const styles = StyleSheet.create({
   // Scroll View
   scrollView: {
     flex: 1,
-  },
-
-  // Avatar Section
-  avatarSection: {
-    paddingTop: 24,
-    paddingBottom: 24,
-    alignItems: 'center',
-    position: 'relative',
-  },
-  coverGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 100,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    overflow: 'hidden',
-  },
-  decorCircle: {
-    position: 'absolute',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 999,
-  },
-  decorCircle1: {
-    width: 70,
-    height: 70,
-    top: -15,
-    right: -15,
-  },
-  decorCircle2: {
-    width: 50,
-    height: 50,
-    bottom: -10,
-    left: 20,
-  },
-  avatarWrapper: {
-    position: 'relative',
-    marginTop: 32,
-    marginBottom: 12,
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 4,
-    borderColor: 'white',
-  },
-  cameraButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#55C5F1',
-    borderWidth: 3,
-    borderColor: 'white',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarLabel: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    marginTop: 12,
-  },
-
-  // Avatar Options
-  avatarOptionsContainer: {
-    marginTop: 12,
-    marginHorizontal: 20,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  avatarOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  optionDivider: {
-    height: 1,
-    backgroundColor: '#F3F4F6',
-  },
-  avatarOptionText: {
-    fontSize: 14,
-    color: '#1E293B',
-  },
-  avatarOptionTextDanger: {
-    color: '#EF4444',
   },
 
   // Form Section

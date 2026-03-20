@@ -14,10 +14,14 @@ import {
     LivestreamScreen,
     LoginScreen,
     OTPScreen,
+    PaymentCheckoutScreen,
+    PaymentResultScreen,
     ProfileScreen,
     ProfileSetupScreen,
     RegisterScreen,
+    SubscriptionScreen,
 } from './src/pages';
+import type { SelectedPlan } from './src/pages/subscription/PaymentCheckoutScreen';
 import type { TabName } from './src/pages/BottomNavigation';
 
 // Storage keys
@@ -39,6 +43,9 @@ enum Screen {
     PROFILE_SETUP = 'profile_setup',
     PROFILE = 'profile',
     FORGOT_PASSWORD = 'forgot_password',
+    SUBSCRIPTION = 'subscription',
+    PAYMENT_CHECKOUT = 'payment_checkout',
+    PAYMENT_RESULT = 'payment_result',
 }
 
 type HomeEntryTab = Extract<TabName, 'home' | 'blog' | 'podcast'>;
@@ -50,6 +57,10 @@ function AppContent() {
     const [pendingPassword, setPendingPassword] = useState<string>('');
     const [isNewRegistration, setIsNewRegistration] = useState<boolean>(false);
     const [homeEntryTab, setHomeEntryTab] = useState<HomeEntryTab>('home');
+    // Payment flow state
+    const [selectedPlan, setSelectedPlan] = useState<SelectedPlan | null>(null);
+    const [paymentResultType, setPaymentResultType] = useState<'success' | 'failed'>('success');
+    const [paymentResultMessage, setPaymentResultMessage] = useState<string>('');
 
     // Check for saved tokens on app start
     useEffect(() => {
@@ -274,6 +285,50 @@ function AppContent() {
         setCurrentScreen(Screen.LOGIN);
     }, []);
 
+    // ─── Payment flow navigation ─────────────────────
+    const handleNavigateToSubscription = useCallback(() => {
+        setCurrentScreen(Screen.SUBSCRIPTION);
+    }, []);
+
+    const handleSubscriptionBack = useCallback(() => {
+        setCurrentScreen(Screen.PROFILE);
+    }, []);
+
+    const handleSelectPlan = useCallback((plan: SelectedPlan) => {
+        setSelectedPlan(plan);
+        setCurrentScreen(Screen.PAYMENT_CHECKOUT);
+    }, []);
+
+    const handlePaymentCheckoutBack = useCallback(() => {
+        setCurrentScreen(Screen.SUBSCRIPTION);
+    }, []);
+
+    const handlePaymentSuccess = useCallback(() => {
+        setPaymentResultType('success');
+        setPaymentResultMessage('');
+        setCurrentScreen(Screen.PAYMENT_RESULT);
+    }, []);
+
+    const handlePaymentFailed = useCallback((reason?: string) => {
+        setPaymentResultType('failed');
+        setPaymentResultMessage(reason || '');
+        setCurrentScreen(Screen.PAYMENT_RESULT);
+    }, []);
+
+    const handlePaymentResultDone = useCallback(() => {
+        setSelectedPlan(null);
+        setHomeEntryTab('home');
+        setCurrentScreen(Screen.HOME);
+    }, []);
+
+    const handlePaymentRetry = useCallback(() => {
+        if (selectedPlan) {
+            setCurrentScreen(Screen.PAYMENT_CHECKOUT);
+        } else {
+            setCurrentScreen(Screen.SUBSCRIPTION);
+        }
+    }, [selectedPlan]);
+
     useEffect(() => {
         const unregisterUnauthorizedHandler = registerUnauthorizedHandler(async () => {
             const accessToken = await AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
@@ -320,6 +375,7 @@ function AppContent() {
                     <ProfileScreen 
                         onBackToHome={handleBackToHome} 
                         onNavigateToForgotPassword={handleNavigateToForgotPassword}
+                        onNavigateToSubscription={handleNavigateToSubscription}
                         onLogout={handleLogout}
                     />
                 );
@@ -350,6 +406,32 @@ function AppContent() {
                     <ForgotPasswordScreen
                         onBack={handleForgotPasswordBack}
                         prefillEmail={userEmail}
+                    />
+                );
+            case Screen.SUBSCRIPTION:
+                return (
+                    <SubscriptionScreen
+                        onBack={handleSubscriptionBack}
+                        onSelectPlan={handleSelectPlan}
+                    />
+                );
+            case Screen.PAYMENT_CHECKOUT:
+                return selectedPlan ? (
+                    <PaymentCheckoutScreen
+                        plan={selectedPlan}
+                        onBack={handlePaymentCheckoutBack}
+                        onPaymentSuccess={handlePaymentSuccess}
+                        onPaymentFailed={handlePaymentFailed}
+                    />
+                ) : null;
+            case Screen.PAYMENT_RESULT:
+                return (
+                    <PaymentResultScreen
+                        type={paymentResultType}
+                        planName={selectedPlan?.name}
+                        message={paymentResultMessage}
+                        onDone={handlePaymentResultDone}
+                        onRetry={paymentResultType === 'failed' ? handlePaymentRetry : undefined}
                     />
                 );
             default:

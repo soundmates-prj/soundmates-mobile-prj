@@ -4,4 +4,6 @@ declare module '@env' {
     export const AUTH_BASE_URL: string;
     export const MAIN_BASE_URL: string;
     export const AZURACAST_BASE: string;
+    export const VITE_CLOUDINARY_CLOUD_NAME: string;
+    export const VITE_CLOUDINARY_UPLOAD_PRESET: string;
 }
