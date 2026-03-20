@@ -1,4 +1,6 @@
+import { VITE_CLOUDINARY_CLOUD_NAME, VITE_CLOUDINARY_UPLOAD_PRESET } from '@env';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -6,7 +8,9 @@ import {
   Alert,
   Dimensions,
   Image,
+  Linking,
   Modal,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -16,7 +20,7 @@ import {
 } from 'react-native';
 import { showToast } from '../../../components/ui/Toast';
 import { SoundMateLightColors } from '../../../constants/theme';
-import { BlogPostResponse, blogService, ReactionResponse } from '../../api';
+import { authService, BlogPostResponse, blogService, ReactionResponse, UpdateProfileRequest } from '../../api';
 import { BlogPostCard, DisplayPost } from '../../components/blog/BlogPostCard';
 import { useUser } from '../../context/UserContext';
 import BottomNavigation, { TabName } from '../BottomNavigation';
@@ -27,6 +31,46 @@ import ChangePasswordScreen from './ChangePasswordScreen';
 import EditProfileScreen from './EditProfileScreen';
 
 const { width } = Dimensions.get('window');
+
+const defaultAvatarUrl = 'https://i.pravatar.cc/150?img=10';
+
+const buildUploadFileName = (asset: ImagePicker.ImagePickerAsset) => {
+  if (asset.fileName) {
+    return asset.fileName;
+  }
+
+  const extension = asset.mimeType?.split('/')[1] || 'jpg';
+  return `image-${Date.now()}.${extension}`;
+};
+
+const uploadToCloudinary = async (asset: ImagePicker.ImagePickerAsset): Promise<string> => {
+  const cloudName = VITE_CLOUDINARY_CLOUD_NAME?.trim();
+  const uploadPreset = VITE_CLOUDINARY_UPLOAD_PRESET?.trim();
+
+  if (!cloudName || !uploadPreset) {
+    throw new Error('Thiếu cấu hình Cloudinary. Vui lòng kiểm tra biến VITE_CLOUDINARY_CLOUD_NAME và VITE_CLOUDINARY_UPLOAD_PRESET trong .env.');
+  }
+
+  const formData = new FormData();
+  formData.append('file', {
+    uri: asset.uri,
+    name: buildUploadFileName(asset),
+    type: asset.mimeType || 'image/jpeg',
+  } as any);
+  formData.append('upload_preset', uploadPreset);
+
+  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  const data = await response.json();
+  if (!response.ok || !data?.secure_url) {
+    throw new Error(data?.error?.message || 'Upload ảnh thất bại');
+  }
+
+  return data.secure_url as string;
+};
 
 // ─── Data ───────────────────────────────────────────────
 
@@ -255,7 +299,7 @@ interface ProfileScreenProps {
 }
 
 export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword, onNavigateToSubscription, onLogout }: ProfileScreenProps) {
-  const { user } = useUser();
+  const { user, refreshUser, saveUser } = useUser();
   console.log('[ProfileScreen] Current user:', user);
   const joinedDateLabel = (() => {
     if (!user?.createdAt) return '';
@@ -283,17 +327,217 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
   const [postsPage, setPostsPage] = useState(1);
   const [postsTotalPages, setPostsTotalPages] = useState(1);
   const [totalMyPosts, setTotalMyPosts] = useState(0);
+  const [avatarUrl, setAvatarUrl] = useState(user?.profileImageUrl || defaultAvatarUrl);
+  const [coverImageUrl, setCoverImageUrl] = useState(user?.backgroundImageUrl || '');
+  const [showImageOptionsPopup, setShowImageOptionsPopup] = useState(false);
+  const [activeImageTarget, setActiveImageTarget] = useState<'avatar' | 'cover'>('avatar');
+  const [isUpdatingProfileImage, setIsUpdatingProfileImage] = useState(false);
+  const [showImagePreviewPopup, setShowImagePreviewPopup] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState('');
+  const [previewImageTarget, setPreviewImageTarget] = useState<'avatar' | 'cover'>('avatar');
 
   // Debug: Log user changes
   useEffect(() => {
     console.log('[ProfileScreen] User data changed:', user);
   }, [user]);
 
+  useEffect(() => {
+    setAvatarUrl(user?.profileImageUrl || defaultAvatarUrl);
+    setCoverImageUrl(user?.backgroundImageUrl || '');
+  }, [user?.backgroundImageUrl, user?.profileImageUrl]);
+
   const handleTabPress = (tab: TabName) => {
     setActiveBottomTab(tab);
 
     if ((tab === 'home' || tab === 'blog' || tab === 'podcast') && onBackToHome) {
       onBackToHome(tab);
+    }
+  };
+
+  const openImageOptionsPopup = (target: 'avatar' | 'cover') => {
+    setActiveImageTarget(target);
+    setShowImageOptionsPopup(true);
+  };
+
+  const promptOpenSettings = (message: string) => {
+    Alert.alert(
+      'Cần cấp quyền',
+      message,
+      [
+        { text: 'Để sau', style: 'cancel' },
+        { text: 'Mở cài đặt', onPress: () => Linking.openSettings() },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const updateProfileImageField = async (target: 'avatar' | 'cover', value: string) => {
+    const requestedAt = new Date().toISOString();
+    const payload: UpdateProfileRequest = target === 'avatar'
+      ? { profileImageUrl: value }
+      : { backgroundImageUrl: value };
+
+    const result = await authService.updateProfile(payload);
+    if (!result.success) {
+      throw new Error(result.message || 'Không thể cập nhật ảnh');
+    }
+
+    if (user) {
+      const nextUser = {
+        ...user,
+        profileImageUrl: target === 'avatar' ? (value || undefined) : user.profileImageUrl,
+        backgroundImageUrl: target === 'cover' ? (value || undefined) : user.backgroundImageUrl,
+        updatedAt: result.data?.updatedAt || user.updatedAt,
+      };
+      await saveUser(nextUser);
+    }
+
+    await refreshUser({
+      expectedUpdatedAt: result.data?.updatedAt || requestedAt,
+      maxAttempts: 12,
+      delayMs: 250,
+    });
+  };
+
+  const applySelectedAsset = async (asset: ImagePicker.ImagePickerAsset) => {
+    const target = activeImageTarget;
+    const previousAvatarUrl = avatarUrl;
+    const previousCoverUrl = coverImageUrl;
+
+    if (target === 'avatar') {
+      setAvatarUrl(asset.uri);
+    } else {
+      setCoverImageUrl(asset.uri);
+    }
+
+    setIsUpdatingProfileImage(true);
+    try {
+      const uploadedUrl = await uploadToCloudinary(asset);
+
+      if (target === 'avatar') {
+        setAvatarUrl(uploadedUrl);
+      } else {
+        setCoverImageUrl(uploadedUrl);
+      }
+
+      await updateProfileImageField(target, uploadedUrl);
+      showToast.success('Cập nhật thành công', target === 'avatar' ? 'Đã đổi ảnh đại diện' : 'Đã đổi ảnh bìa');
+    } catch (error: any) {
+      setAvatarUrl(previousAvatarUrl);
+      setCoverImageUrl(previousCoverUrl);
+      showToast.error('Cập nhật thất bại', error?.message || 'Vui lòng thử lại sau');
+    } finally {
+      setIsUpdatingProfileImage(false);
+    }
+  };
+
+  const pickImageFromLibrary = async () => {
+    if (isUpdatingProfileImage) return;
+
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        if (!permission.canAskAgain) {
+          promptOpenSettings('Vui lòng cấp quyền thư viện ảnh trong Cài đặt để chọn ảnh.');
+          return;
+        }
+
+        showToast.warning('Chưa có quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh để tiếp tục');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: activeImageTarget === 'avatar' ? [1, 1] : [16, 9],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        await applySelectedAsset(result.assets[0]);
+      }
+    } catch {
+      showToast.error('Không thể chọn ảnh', 'Vui lòng thử lại sau');
+    }
+  };
+
+  const takePhoto = async () => {
+    if (isUpdatingProfileImage) return;
+
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        if (!permission.canAskAgain) {
+          promptOpenSettings('Vui lòng cấp quyền camera trong Cài đặt để chụp ảnh mới.');
+          return;
+        }
+
+        showToast.warning('Chưa có quyền camera', 'Vui lòng cấp quyền camera để chụp ảnh');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: activeImageTarget === 'avatar' ? [1, 1] : [16, 9],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        await applySelectedAsset(result.assets[0]);
+      }
+    } catch {
+      showToast.error('Không thể mở camera', 'Vui lòng thử lại sau');
+    }
+  };
+
+  const handlePickImageFromLibrary = async () => {
+    setShowImageOptionsPopup(false);
+    await pickImageFromLibrary();
+  };
+
+  const handleTakePhoto = async () => {
+    setShowImageOptionsPopup(false);
+    await takePhoto();
+  };
+
+  const handleViewImage = () => {
+    const imageUrl = activeImageTarget === 'avatar' ? avatarUrl : coverImageUrl;
+    if (!imageUrl) {
+      showToast.warning('Chưa có ảnh', 'Vui lòng thêm ảnh trước khi xem');
+      return;
+    }
+
+    setShowImageOptionsPopup(false);
+    setPreviewImageTarget(activeImageTarget);
+    setPreviewImageUrl(imageUrl);
+    setShowImagePreviewPopup(true);
+  };
+
+  const handleRemoveImage = async () => {
+    if (isUpdatingProfileImage) return;
+
+    setShowImageOptionsPopup(false);
+    const target = activeImageTarget;
+    const previousAvatarUrl = avatarUrl;
+    const previousCoverUrl = coverImageUrl;
+
+    if (target === 'avatar') {
+      setAvatarUrl(defaultAvatarUrl);
+    } else {
+      setCoverImageUrl('');
+    }
+
+    setIsUpdatingProfileImage(true);
+    try {
+      await updateProfileImageField(target, '');
+      showToast.success('Đã xóa ảnh', target === 'avatar' ? 'Đã xóa ảnh đại diện' : 'Đã xóa ảnh bìa');
+    } catch (error: any) {
+      setAvatarUrl(previousAvatarUrl);
+      setCoverImageUrl(previousCoverUrl);
+      showToast.error('Xóa ảnh thất bại', error?.message || 'Vui lòng thử lại sau');
+    } finally {
+      setIsUpdatingProfileImage(false);
     }
   };
 
@@ -506,24 +750,37 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
         <View style={styles.profileCardContainer}>
           <View style={styles.profileCard}>
             <View style={styles.profileCoverContainer}>
-              {user?.backgroundImageUrl ? (
-                <Image source={{ uri: user.backgroundImageUrl }} style={styles.profileCoverImage} />
-              ) : (
-                <LinearGradient
-                  colors={['#55C5F1', '#A78BFA']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.profileCoverFallback}
-                >
-                  <View style={[styles.decorCircle, styles.decorCircle1]} />
-                  <View style={[styles.decorCircle, styles.decorCircle2]} />
-                </LinearGradient>
-              )}
+              <TouchableOpacity
+                disabled={isUpdatingProfileImage}
+                onPress={() => openImageOptionsPopup('cover')}
+                activeOpacity={0.92}
+                style={styles.coverPressable}
+              >
+                {coverImageUrl ? (
+                  <Image source={{ uri: coverImageUrl }} style={styles.profileCoverImage} />
+                ) : (
+                  <LinearGradient
+                    colors={['#55C5F1', '#A78BFA']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.profileCoverFallback}
+                  >
+                    <View style={[styles.decorCircle, styles.decorCircle1]} />
+                    <View style={[styles.decorCircle, styles.decorCircle2]} />
+                  </LinearGradient>
+                )}
+              </TouchableOpacity>
             </View>
 
             <View style={styles.profileInfo}>
               <View style={styles.avatarContainer}>
-                <Image source={{ uri: user?.profileImageUrl || 'https://i.pravatar.cc/150?img=10' }} style={styles.avatar} />
+                <TouchableOpacity
+                  disabled={isUpdatingProfileImage}
+                  onPress={() => openImageOptionsPopup('avatar')}
+                  activeOpacity={0.85}
+                >
+                  <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+                </TouchableOpacity>
                 <View style={styles.onlineIndicator} />
               </View>
               <View style={styles.profileDetails}>
@@ -696,6 +953,72 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
+      {showImageOptionsPopup && (
+        <View style={styles.popupOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowImageOptionsPopup(false)} />
+
+          <View style={styles.popupCard}>
+            <View style={styles.popupHeader}>
+              <Text style={styles.popupTitle}>
+                Cập nhật {activeImageTarget === 'avatar' ? 'ảnh đại diện' : 'ảnh bìa'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowImageOptionsPopup(false)}>
+                <Ionicons name="close" size={18} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            {((activeImageTarget === 'avatar' && !!avatarUrl) ||
+              (activeImageTarget === 'cover' && !!coverImageUrl)) && (
+              <TouchableOpacity disabled={isUpdatingProfileImage} style={styles.popupOption} onPress={handleViewImage}>
+                <Ionicons name="eye-outline" size={18} color="#0EA5E9" />
+                <Text style={styles.popupOptionText}>Xem ảnh hiện tại</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity disabled={isUpdatingProfileImage} style={styles.popupOption} onPress={handlePickImageFromLibrary}>
+              <Ionicons name="images-outline" size={18} color="#55C5F1" />
+              <Text style={styles.popupOptionText}>Chọn từ album / thư viện</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity disabled={isUpdatingProfileImage} style={styles.popupOption} onPress={handleTakePhoto}>
+              <Ionicons name="camera-outline" size={18} color="#A78BFA" />
+              <Text style={styles.popupOptionText}>Chụp ảnh mới</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity disabled={isUpdatingProfileImage} style={styles.popupOption} onPress={handleRemoveImage}>
+              <Ionicons name="trash-outline" size={18} color="#EF4444" />
+              <Text style={[styles.popupOptionText, styles.popupOptionDangerText]}>
+                Xóa {activeImageTarget === 'avatar' ? 'ảnh đại diện' : 'ảnh bìa'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      <Modal
+        visible={showImagePreviewPopup}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowImagePreviewPopup(false)}
+      >
+        <View style={styles.imageViewerOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowImagePreviewPopup(false)} />
+
+          <View style={styles.imageViewerCard}>
+            <View style={styles.imageViewerHeader}>
+              <Text style={styles.imageViewerTitle}>
+                {previewImageTarget === 'avatar' ? 'Ảnh đại diện' : 'Ảnh bìa'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowImagePreviewPopup(false)}>
+                <Ionicons name="close" size={20} color="white" />
+              </TouchableOpacity>
+            </View>
+
+            <Image source={{ uri: previewImageUrl }} style={styles.imageViewerImage} resizeMode="contain" />
+          </View>
+        </View>
+      </Modal>
+
       {/* ── Header ── */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Trang cá nhân</Text>
@@ -854,6 +1177,9 @@ const styles = StyleSheet.create({
     height: 220,
     backgroundColor: '#E2E8F0',
   },
+  coverPressable: {
+    flex: 1,
+  },
   profileCoverImage: {
     width: '100%',
     height: '100%',
@@ -961,6 +1287,96 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
   },
+
+  // Image popup
+  popupOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    zIndex: 60,
+  },
+  popupCard: {
+    width: '100%',
+    backgroundColor: 'white',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  popupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  popupTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  popupOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  popupOptionText: {
+    fontSize: 14,
+    color: '#1E293B',
+  },
+  popupOptionDangerText: {
+    color: '#EF4444',
+    fontWeight: '600',
+  },
+
+  imageViewerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  imageViewerCard: {
+    width: '100%',
+    height: '72%',
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.35)',
+  },
+  imageViewerHeader: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(148, 163, 184, 0.25)',
+  },
+  imageViewerTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: 'white',
+  },
+  imageViewerImage: {
+    flex: 1,
+    width: '100%',
+  },
+
   profileStats: {
     backgroundColor: 'white',
     flexDirection: 'row',

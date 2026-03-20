@@ -1,13 +1,7 @@
-import { VITE_CLOUDINARY_CLOUD_NAME, VITE_CLOUDINARY_UPLOAD_PRESET } from '@env';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import {
-  Alert,
-  Image,
-  Linking,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -38,49 +32,6 @@ interface ProfileData {
   favoriteGenre: string;
 }
 
-const isRemoteImageUrl = (value?: string | null): value is string => {
-  if (!value) return false;
-  return /^https?:\/\//i.test(value.trim());
-};
-
-const buildUploadFileName = (asset: ImagePicker.ImagePickerAsset) => {
-  if (asset.fileName) {
-    return asset.fileName;
-  }
-
-  const extension = asset.mimeType?.split('/')[1] || 'jpg';
-  return `image-${Date.now()}.${extension}`;
-};
-
-const uploadToCloudinary = async (asset: ImagePicker.ImagePickerAsset): Promise<string> => {
-  const cloudName = VITE_CLOUDINARY_CLOUD_NAME?.trim();
-  const uploadPreset = VITE_CLOUDINARY_UPLOAD_PRESET?.trim();
-
-  if (!cloudName || !uploadPreset) {
-    throw new Error('Thiếu cấu hình Cloudinary. Vui lòng kiểm tra biến VITE_CLOUDINARY_CLOUD_NAME và VITE_CLOUDINARY_UPLOAD_PRESET trong .env.');
-  }
-
-  const formData = new FormData();
-  formData.append('file', {
-    uri: asset.uri,
-    name: buildUploadFileName(asset),
-    type: asset.mimeType || 'image/jpeg',
-  } as any);
-  formData.append('upload_preset', uploadPreset);
-
-  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-    method: 'POST',
-    body: formData,
-  });
-
-  const data = await response.json();
-  if (!response.ok || !data?.secure_url) {
-    throw new Error(data?.error?.message || 'Upload ảnh thất bại');
-  }
-
-  return data.secure_url as string;
-};
-
 export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
   const { user, refreshUser } = useUser();
   const formatDateForInput = (value?: string) => {
@@ -108,16 +59,8 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
     };
   };
 
-  const defaultAvatarUrl = 'https://i.pravatar.cc/150?img=10';
-  const defaultCoverImageUrl = '';
   const [profileData, setProfileData] = useState<ProfileData>(() => buildProfileData(user));
-  const [avatarUrl, setAvatarUrl] = useState(user?.profileImageUrl || defaultAvatarUrl);
-  const [coverImageUrl, setCoverImageUrl] = useState(user?.backgroundImageUrl || defaultCoverImageUrl);
-  const [avatarAsset, setAvatarAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
-  const [coverAsset, setCoverAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [showGenderPicker, setShowGenderPicker] = useState(false);
-  const [showImageOptionsPopup, setShowImageOptionsPopup] = useState(false);
-  const [activeImageTarget, setActiveImageTarget] = useState<'avatar' | 'cover'>('avatar');
   const [isSaving, setIsSaving] = useState(false);
   const [showSavedToast, setShowSavedToast] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -127,10 +70,6 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
 
   useEffect(() => {
     setProfileData(buildProfileData(user));
-    setAvatarUrl(user?.profileImageUrl || defaultAvatarUrl);
-    setCoverImageUrl(user?.backgroundImageUrl || defaultCoverImageUrl);
-    setAvatarAsset(null);
-    setCoverAsset(null);
   }, [user]);
 
   useEffect(() => {
@@ -163,113 +102,6 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
     setProfileData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const openImageOptionsPopup = (target: 'avatar' | 'cover') => {
-    setActiveImageTarget(target);
-    setShowImageOptionsPopup(true);
-  };
-
-  const applySelectedImage = (asset: ImagePicker.ImagePickerAsset) => {
-    if (activeImageTarget === 'avatar') {
-      setAvatarUrl(asset.uri);
-      setAvatarAsset(asset);
-      return;
-    }
-    setCoverImageUrl(asset.uri);
-    setCoverAsset(asset);
-  };
-
-  const promptOpenSettings = (message: string) => {
-    Alert.alert(
-      'Cần cấp quyền',
-      message,
-      [
-        { text: 'Để sau', style: 'cancel' },
-        { text: 'Mở cài đặt', onPress: () => Linking.openSettings() },
-      ],
-      { cancelable: true }
-    );
-  };
-
-  const pickImageFromLibrary = async () => {
-
-    try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        if (!permission.canAskAgain) {
-          promptOpenSettings('Vui lòng cấp quyền thư viện ảnh trong Cài đặt để chọn ảnh.');
-          return;
-        }
-
-        showToast.warning('Chưa có quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh để tiếp tục');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: activeImageTarget === 'avatar' ? [1, 1] : [16, 9],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets?.[0]) {
-        applySelectedImage(result.assets[0]);
-      }
-    } catch (error) {
-      showToast.error('Không thể chọn ảnh', 'Vui lòng thử lại sau');
-    }
-  };
-
-  const takePhoto = async () => {
-
-    try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        if (!permission.canAskAgain) {
-          promptOpenSettings('Vui lòng cấp quyền camera trong Cài đặt để chụp ảnh mới.');
-          return;
-        }
-
-        showToast.warning('Chưa có quyền camera', 'Vui lòng cấp quyền camera để chụp ảnh');
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: activeImageTarget === 'avatar' ? [1, 1] : [16, 9],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets?.[0]) {
-        applySelectedImage(result.assets[0]);
-      }
-    } catch (error) {
-      showToast.error('Không thể mở camera', 'Vui lòng thử lại sau');
-    }
-  };
-
-  const handlePickImageFromLibrary = async () => {
-    setShowImageOptionsPopup(false);
-    await pickImageFromLibrary();
-  };
-
-  const handleTakePhoto = async () => {
-    setShowImageOptionsPopup(false);
-    await takePhoto();
-  };
-
-  const handleRemoveImage = () => {
-    if (activeImageTarget === 'avatar') {
-      setAvatarUrl(defaultAvatarUrl);
-      setAvatarAsset(null);
-    } else {
-      setCoverImageUrl(defaultCoverImageUrl);
-      setCoverAsset(null);
-    }
-
-    setShowImageOptionsPopup(false);
-  };
-
   const handleSave = async () => {
     if (isSaving) return;
 
@@ -279,17 +111,6 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
     const lastName = profileData.lastName.trim() || undefined;
 
     try {
-      let profileImageUrl = isRemoteImageUrl(avatarUrl) ? avatarUrl : undefined;
-      let backgroundImageUrl = isRemoteImageUrl(coverImageUrl) ? coverImageUrl : undefined;
-
-      if (avatarAsset) {
-        profileImageUrl = await uploadToCloudinary(avatarAsset);
-      }
-
-      if (coverAsset) {
-        backgroundImageUrl = await uploadToCloudinary(coverAsset);
-      }
-
       const payload: UpdateProfileRequest = {
         firstName,
         lastName,
@@ -297,8 +118,6 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
         phone: profileData.phone.trim() || undefined,
         gender: profileData.gender.trim() || undefined,
         dateOfBirth: normalizeDateOfBirth(profileData.birthday),
-        profileImageUrl,
-        backgroundImageUrl,
         location: profileData.location.trim() || undefined,
         website: profileData.website.trim() || undefined,
       };
@@ -356,45 +175,6 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Avatar Section */}
-        <View style={styles.avatarSection}>
-          {/* Cover area */}
-          <View style={styles.coverContainer}>
-            {coverImageUrl ? (
-              <Image source={{ uri: coverImageUrl }} style={styles.coverImage} />
-            ) : (
-              <LinearGradient
-                colors={['#55C5F1', '#A78BFA']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.coverGradient}
-              >
-                <View style={[styles.decorCircle, styles.decorCircle1]} />
-                <View style={[styles.decorCircle, styles.decorCircle2]} />
-              </LinearGradient>
-            )}
-
-            <TouchableOpacity
-              onPress={() => openImageOptionsPopup('cover')}
-              style={styles.coverEditButton}
-            >
-              <Ionicons name="image-outline" size={15} color="white" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Avatar */}
-          <View style={styles.avatarWrapper}>
-            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-            <TouchableOpacity
-              onPress={() => openImageOptionsPopup('avatar')}
-              style={styles.cameraButton}
-            >
-              <Ionicons name="camera" size={16} color="white" />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.avatarLabel}>Nhấn biểu tượng camera để thay đổi ảnh đại diện</Text>
-        </View>
-
         {/* Form Section - Basic Info */}
         <View style={styles.formSection}>
           <Text style={styles.sectionTitle}>THÔNG TIN CƠ BẢN</Text>
@@ -790,39 +570,6 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      {showImageOptionsPopup && (
-        <View style={styles.popupOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowImageOptionsPopup(false)} />
-
-          <View style={styles.popupCard}>
-            <View style={styles.popupHeader}>
-              <Text style={styles.popupTitle}>
-                Cập nhật {activeImageTarget === 'avatar' ? 'ảnh đại diện' : 'ảnh bìa'}
-              </Text>
-              <TouchableOpacity onPress={() => setShowImageOptionsPopup(false)}>
-                <Ionicons name="close" size={18} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity style={styles.popupOption} onPress={handlePickImageFromLibrary}>
-              <Ionicons name="images-outline" size={18} color="#55C5F1" />
-              <Text style={styles.popupOptionText}>Chọn từ album / thư viện</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.popupOption} onPress={handleTakePhoto}>
-              <Ionicons name="camera-outline" size={18} color="#A78BFA" />
-              <Text style={styles.popupOptionText}>Chụp ảnh mới</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.popupOption} onPress={handleRemoveImage}>
-              <Ionicons name="trash-outline" size={18} color="#EF4444" />
-              <Text style={[styles.popupOptionText, styles.popupOptionDangerText]}>
-                Xóa {activeImageTarget === 'avatar' ? 'ảnh đại diện' : 'ảnh bìa'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
     </SafeAreaView>
   );
 }
@@ -900,147 +647,6 @@ const styles = StyleSheet.create({
   // Scroll View
   scrollView: {
     flex: 1,
-  },
-
-  // Avatar Section
-  avatarSection: {
-    paddingTop: 24,
-    paddingBottom: 24,
-    alignItems: 'center',
-    position: 'relative',
-  },
-  coverContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 100,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    overflow: 'hidden',
-  },
-  coverGradient: {
-    flex: 1,
-    overflow: 'hidden',
-  },
-  coverImage: {
-    width: '100%',
-    height: '100%',
-  },
-  coverEditButton: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  decorCircle: {
-    position: 'absolute',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 999,
-  },
-  decorCircle1: {
-    width: 70,
-    height: 70,
-    top: -15,
-    right: -15,
-  },
-  decorCircle2: {
-    width: 50,
-    height: 50,
-    bottom: -10,
-    left: 20,
-  },
-  avatarWrapper: {
-    position: 'relative',
-    marginTop: 32,
-    marginBottom: 12,
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 4,
-    borderColor: 'white',
-  },
-  cameraButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#55C5F1',
-    borderWidth: 3,
-    borderColor: 'white',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarLabel: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    marginTop: 12,
-    textAlign: 'center',
-  },
-
-  // Popup
-  popupOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-    zIndex: 200,
-  },
-  popupCard: {
-    width: '100%',
-    backgroundColor: 'white',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  popupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  popupTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  popupOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
-  },
-  popupOptionText: {
-    fontSize: 14,
-    color: '#1E293B',
-  },
-  popupOptionDangerText: {
-    color: '#EF4444',
-    fontWeight: '600',
   },
 
   // Form Section
