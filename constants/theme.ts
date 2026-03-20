@@ -99,7 +99,7 @@ export const SoundMateLightColors = {
   textPlaceholder: '#55C5F1',
 
   // Borders
-  border: '#1E293B',
+  border: '#55C5F1',
   borderLight: '#D1D5DB',
   borderActive: '#55C5F1',
 

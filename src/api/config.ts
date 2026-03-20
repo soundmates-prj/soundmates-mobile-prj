@@ -74,4 +74,17 @@ export const BLOG_ENDPOINTS = {
     MY_REACTIONS: '/me/reactions',
 };
 
+// Subscription Endpoints
+export const SUBSCRIPTION_ENDPOINTS = {
+    PLANS: '/subscription-plans',
+    MY_SUBSCRIPTION: '/me/subscriptions',
+    MY_SUBSCRIPTION_HISTORY: '/me/subscriptions/history',
+};
+
+// Payment Endpoints
+export const PAYMENT_ENDPOINTS = {
+    CREATE: '/payments',
+    VNPAY_CALLBACK: '/payments/vnpay/callback',
+};
+
 export default API_CONFIG;

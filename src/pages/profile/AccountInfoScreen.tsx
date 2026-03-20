@@ -2,16 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import {
-  Alert,
-  Clipboard,
-  Dimensions,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    Alert,
+    Clipboard,
+    Dimensions,
+    Platform,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showToast } from '../../../components/ui/Toast';
@@ -21,6 +21,7 @@ const { width } = Dimensions.get('window');
 
 interface AccountInfoScreenProps {
   onBack: () => void;
+  onOpenSubscription?: () => void;
 }
 
 // ─── Data ───────────────────────────────────────────────
@@ -155,7 +156,7 @@ function SectionHeader({ title }: { title: string }) {
 
 // ─── Main Component ─────────────────────────────────────
 
-export default function AccountInfoScreen({ onBack }: AccountInfoScreenProps) {
+export default function AccountInfoScreen({ onBack, onOpenSubscription }: AccountInfoScreenProps) {
   const insets = useSafeAreaInsets();
   const { user } = useUser();
   console.log('User data in AccountInfoScreen:', user);
@@ -292,6 +293,7 @@ export default function AccountInfoScreen({ onBack }: AccountInfoScreenProps) {
             value={`${accountType} — đến ${premiumExpiry}`}
             badge="Đang hoạt động"
             badgeColor="#10B981"
+            onPress={onOpenSubscription}
           />
         </View>
 

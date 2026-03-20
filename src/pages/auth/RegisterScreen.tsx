@@ -209,7 +209,7 @@ export default function RegisterScreen({
                                 <TextInput
                                     style={styles.inputHalf}
                                     placeholder="Họ"
-                                    placeholderTextColor={SoundMateLightColors.textPlaceholder}
+                                    placeholderTextColor={SoundMateLightColors.textPrimary}
                                     value={firstName}
                                     onChangeText={setFirstName}
                                     autoCapitalize="words"
@@ -228,7 +228,7 @@ export default function RegisterScreen({
                                 <TextInput
                                     style={styles.inputHalf}
                                     placeholder="Tên"
-                                    placeholderTextColor={SoundMateLightColors.textPlaceholder}
+                                    placeholderTextColor={SoundMateLightColors.textPrimary}
                                     value={lastName}
                                     onChangeText={setLastName}
                                     autoCapitalize="words"
@@ -248,7 +248,7 @@ export default function RegisterScreen({
                             <TextInput
                                 style={styles.input}
                                 placeholder="Tên người dùng"
-                                placeholderTextColor={SoundMateLightColors.textPlaceholder}
+                                placeholderTextColor={SoundMateLightColors.textPrimary}
                                 value={username}
                                 onChangeText={setUsername}
                                 autoCapitalize="none"
@@ -268,7 +268,7 @@ export default function RegisterScreen({
                             <TextInput
                                 style={styles.input}
                                 placeholder="Email"
-                                placeholderTextColor={SoundMateLightColors.textPlaceholder}
+                                placeholderTextColor={SoundMateLightColors.textPrimary}
                                 value={email}
                                 onChangeText={setEmail}
                                 keyboardType="email-address"
@@ -289,7 +289,7 @@ export default function RegisterScreen({
                             <TextInput
                                 style={styles.input}
                                 placeholder="Mật khẩu"
-                                placeholderTextColor={SoundMateLightColors.textPlaceholder}
+                                placeholderTextColor={SoundMateLightColors.textPrimary}
                                 value={password}
                                 onChangeText={setPassword}
                                 secureTextEntry={!showPassword}
@@ -318,7 +318,7 @@ export default function RegisterScreen({
                             <TextInput
                                 style={styles.input}
                                 placeholder="Xác nhận mật khẩu"
-                                placeholderTextColor={SoundMateLightColors.textPlaceholder}
+                                placeholderTextColor={SoundMateLightColors.textPrimary}
                                 value={confirmPassword}
                                 onChangeText={setConfirmPassword}
                                 secureTextEntry={!showConfirmPassword}

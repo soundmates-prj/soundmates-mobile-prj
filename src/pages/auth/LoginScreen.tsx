@@ -209,7 +209,7 @@ export default function LoginScreen({
                             <TextInput
                                 style={styles.input}
                                 placeholder="Email"
-                                placeholderTextColor={SoundMateLightColors.textPlaceholder}
+                                placeholderTextColor={SoundMateLightColors.textPrimary}
                                 value={emailOrUsername}
                                 onChangeText={setEmailOrUsername}
                                 autoCapitalize="none"
@@ -230,7 +230,7 @@ export default function LoginScreen({
                             <TextInput
                                 style={styles.input}
                                 placeholder="Mật khẩu"
-                                placeholderTextColor={SoundMateLightColors.textPlaceholder}
+                                placeholderTextColor={SoundMateLightColors.textPrimary}
                                 value={password}
                                 onChangeText={setPassword}
                                 secureTextEntry={!showPassword}

@@ -131,18 +131,28 @@ function PostComposer({ onPress, avatarUrl }: { onPress: () => void; avatarUrl?:
 
 // ─── Settings Drawer ────────────────────────────────────
 
-function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountInfo, onLogout }: { 
+function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountInfo, onOpenSubscription, onLogout }: { 
   isOpen: boolean; 
   onClose: () => void; 
   onOpenChangePassword?: () => void;
   onOpenAccountInfo?: () => void;
+  onOpenSubscription?: () => void;
   onLogout?: () => void;
 }) {
+  const openAfterClose = (callback?: () => void) => {
+    onClose();
+    if (callback) {
+      setTimeout(callback, 220);
+    }
+  };
+
   const handleMenuItemPress = (label: string) => {
     if (label === 'Đổi mật khẩu' && onOpenChangePassword) {
-      onOpenChangePassword();
+      openAfterClose(onOpenChangePassword);
     } else if (label === 'Thông tin tài khoản' && onOpenAccountInfo) {
-      onOpenAccountInfo();
+      openAfterClose(onOpenAccountInfo);
+    } else if (label === 'Gói đăng ký' && onOpenSubscription) {
+      openAfterClose(onOpenSubscription);
     }
   };
 
@@ -240,10 +250,11 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
 interface ProfileScreenProps {
   onBackToHome?: (tab?: TabName) => void;
   onNavigateToForgotPassword?: () => void;
+  onNavigateToSubscription?: () => void;
   onLogout?: () => void;
 }
 
-export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword, onLogout }: ProfileScreenProps) {
+export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword, onNavigateToSubscription, onLogout }: ProfileScreenProps) {
   const { user } = useUser();
   console.log('[ProfileScreen] Current user:', user);
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -688,12 +699,15 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
         isOpen={showSettings} 
         onClose={() => setShowSettings(false)} 
         onOpenChangePassword={() => {
-          setShowSettings(false);
           setShowChangePassword(true);
         }}
         onOpenAccountInfo={() => {
-          setShowSettings(false);
           setShowAccountInfo(true);
+        }}
+        onOpenSubscription={() => {
+          if (onNavigateToSubscription) {
+            onNavigateToSubscription();
+          }
         }}
         onLogout={onLogout}
       />
@@ -729,7 +743,15 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
         presentationStyle="fullScreen"
         onRequestClose={() => setShowAccountInfo(false)}
       >
-        <AccountInfoScreen onBack={() => setShowAccountInfo(false)} />
+        <AccountInfoScreen
+          onBack={() => setShowAccountInfo(false)}
+          onOpenSubscription={() => {
+            setShowAccountInfo(false);
+            if (onNavigateToSubscription) {
+              setTimeout(() => onNavigateToSubscription(), 220);
+            }
+          }}
+        />
       </Modal>
     </View>
   );

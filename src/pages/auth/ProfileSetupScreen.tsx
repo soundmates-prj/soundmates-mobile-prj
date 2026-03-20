@@ -212,7 +212,7 @@ export default function ProfileSetupScreen({
                             <TextInput
                                 style={styles.input}
                                 placeholder="Số điện thoại"
-                                placeholderTextColor={SoundMateLightColors.textPlaceholder}
+                                placeholderTextColor={SoundMateLightColors.textPrimary}
                                 value={phone}
                                 onChangeText={setPhone}
                                 keyboardType="phone-pad"
@@ -305,7 +305,7 @@ export default function ProfileSetupScreen({
                             <TextInput
                                 style={[styles.input, styles.bioInput]}
                                 placeholder="Tiểu sử"
-                                placeholderTextColor={SoundMateLightColors.textPlaceholder}
+                                placeholderTextColor={SoundMateLightColors.textPrimary}
                                 value={bio}
                                 onChangeText={setBio}
                                 multiline
@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
     },
     placeholderText: {
-        color: SoundMateLightColors.textPlaceholder,
+        color: SoundMateLightColors.textPrimary,
     },
     genderOptionsContainer: {
         flexDirection: 'row',
