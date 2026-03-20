@@ -257,6 +257,17 @@ interface ProfileScreenProps {
 export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword, onNavigateToSubscription, onLogout }: ProfileScreenProps) {
   const { user } = useUser();
   console.log('[ProfileScreen] Current user:', user);
+  const joinedDateLabel = (() => {
+    if (!user?.createdAt) return '';
+    const parsed = new Date(user.createdAt);
+    if (Number.isNaN(parsed.getTime())) return '';
+
+    const day = `${parsed.getDate()}`.padStart(2, '0');
+    const month = `${parsed.getMonth() + 1}`.padStart(2, '0');
+    const year = parsed.getFullYear();
+    return `Tham gia từ ${day}/${month}/${year}`;
+  })();
+
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -491,30 +502,24 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
             : undefined
         }
       >
-        {/* ── Header ── */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Trang cá nhân</Text>
-          <View style={styles.headerActions}>
-            <TouchableOpacity onPress={() => setShowEditProfile(true)} style={styles.headerButton}>
-              <Ionicons name="create-outline" size={20} color="#1E293B" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowSettings(true)} style={styles.headerButton}>
-              <Ionicons name="ellipsis-vertical" size={20} color="#1E293B" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
         {/* ── Profile Card ── */}
         <View style={styles.profileCardContainer}>
-          <LinearGradient
-            colors={['#55C5F1', '#A78BFA']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.profileCard}
-          >
-            {/* Decorative circles */}
-            <View style={[styles.decorCircle, styles.decorCircle1]} />
-            <View style={[styles.decorCircle, styles.decorCircle2]} />
+          <View style={styles.profileCard}>
+            <View style={styles.profileCoverContainer}>
+              {user?.backgroundImageUrl ? (
+                <Image source={{ uri: user.backgroundImageUrl }} style={styles.profileCoverImage} />
+              ) : (
+                <LinearGradient
+                  colors={['#55C5F1', '#A78BFA']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.profileCoverFallback}
+                >
+                  <View style={[styles.decorCircle, styles.decorCircle1]} />
+                  <View style={[styles.decorCircle, styles.decorCircle2]} />
+                </LinearGradient>
+              )}
+            </View>
 
             <View style={styles.profileInfo}>
               <View style={styles.avatarContainer}>
@@ -533,10 +538,20 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
                   </View>
                 </View>
                 <Text style={styles.profileUsername}>{user?.username || 'username'}</Text>
-                <Text style={styles.profileBio}>{user?.bio || 'Chưa có mô tả'}</Text>
               </View>
             </View>
 
+            <View style={styles.profileMetaSection}>
+              {user?.bio && user.bio.length > 0 && (
+                <Text style={styles.profileBio}>{user.bio}</Text>
+              )}
+              {!!joinedDateLabel && (
+                <View style={styles.joinedDateRow}>
+                  <Ionicons name="calendar-outline" size={13} color="#6B7280" />
+                  <Text style={styles.joinedDateText}>{joinedDateLabel}</Text>
+                </View>
+              )}
+            </View>
             <View style={styles.profileStats}>
               <View style={styles.profileStatItem}>
                 <Text style={styles.profileStatValue}>{totalMyPosts}</Text>
@@ -555,7 +570,7 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
                 <Text style={styles.profileStatLabel}>Đang theo dõi</Text>
               </View>
             </View>
-          </LinearGradient>
+          </View>
         </View>
 
         {/* ── Quick Stats Cards ── */}
@@ -681,6 +696,19 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
+      {/* ── Header ── */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Trang cá nhân</Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={() => setShowEditProfile(true)} style={styles.headerButton}>
+            <Ionicons name="create-outline" size={20} color="white" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowSettings(true)} style={styles.headerButton}>
+            <Ionicons name="ellipsis-vertical" size={20} color="white" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* Bottom Navigation */}
       <BottomNavigation activeTab={activeBottomTab} onTabPress={handleTabPress} />
 
@@ -773,43 +801,65 @@ const styles = StyleSheet.create({
   
   // Header
   header: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 40,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    height: 52,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    height: 60,
+    backgroundColor: 'transparent',
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1E293B',
+    color: 'white',
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   headerActions: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 8,
   },
   headerButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
+    backgroundColor: 'rgba(15, 23, 42, 0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   // Profile Card
   profileCardContainer: {
-    marginHorizontal: 20,
-    marginTop: 16,
+    marginHorizontal: 0,
+    marginTop: 0,
     marginBottom: 20,
-    borderRadius: 20,
-    overflow: 'hidden',
   },
   profileCard: {
-    padding: 24,
+    backgroundColor: 'white',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    overflow: 'hidden',
     position: 'relative',
+  },
+  profileCoverContainer: {
+    height: 220,
+    backgroundColor: '#E2E8F0',
+  },
+  profileCoverImage: {
+    width: '100%',
+    height: '100%',
+  },
+  profileCoverFallback: {
+    flex: 1,
   },
   decorCircle: {
     position: 'absolute',
@@ -830,6 +880,10 @@ const styles = StyleSheet.create({
   },
   profileInfo: {
     flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    marginTop: -50,
     position: 'relative',
     zIndex: 10,
   },
@@ -837,79 +891,94 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 3,
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    borderWidth: 4,
     borderColor: 'white',
+    backgroundColor: '#E5E7EB',
   },
   onlineIndicator: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    bottom: 6,
+    right: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: '#10B981',
     borderWidth: 2,
     borderColor: 'white',
   },
   profileDetails: {
-    marginLeft: 16,
+    marginLeft: 14,
     flex: 1,
+    paddingBottom: 2,
   },
   profileNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 4,
+    marginBottom: 3,
   },
   profileName: {
-    fontSize: 22,
+    fontSize: 21,
     fontWeight: 'bold',
-    color: 'white',
+    color: '#111827',
   },
   premiumBadge: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: '#EDE9FE',
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   premiumBadgeText: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: 'white',
+    color: '#6D28D9',
   },
   profileUsername: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: 8,
+    color: '#6B7280',
+    marginBottom: 2,
+  },
+  profileMetaSection: {
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+    marginTop: 4,
   },
   profileBio: {
+    fontSize: 13,
+    color: '#374151',
+    lineHeight: 20,
+  },
+  joinedDateRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  joinedDateText: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
+    color: '#6B7280',
   },
   profileStats: {
+    backgroundColor: 'white',
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginTop: 20,
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.2)',
-    position: 'relative',
-    zIndex: 10,
+    marginTop: 10,
+    paddingVertical: 14,
   },
   profileStatItem: {
     alignItems: 'center',
   },
   profileStatValue: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: 'white',
+    color: '#111827',
   },
   profileStatLabel: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
+    color: '#6B7280',
   },
 
   // Stats Cards

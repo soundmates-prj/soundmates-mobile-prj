@@ -2,16 +2,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import {
-    Alert,
-    Clipboard,
-    Dimensions,
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Alert,
+  Clipboard,
+  Dimensions,
+  Image,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showToast } from '../../../components/ui/Toast';
@@ -176,6 +177,8 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
   const displayName =
     user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.username || 'User';
   const username = user?.username || 'username';
+  const coverImageUrl = user?.backgroundImageUrl || null;
+  const avatarUrl = user?.profileImageUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(displayName) + '&background=55C5F1&color=fff';
   const email = user?.email || 'user@soundmates.vn';
   const accountId = user?.userId || 'SM-2024-00128';
   const joinDate = formatDate(user?.createdAt) || '12/01/2024';
@@ -234,21 +237,27 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
         {/* ── Profile Header Card ── */}
         <View style={styles.profileCardContainer}>
           <View style={styles.profileCard}>
-            <LinearGradient
-              colors={['#55C5F1', '#A78BFA']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.profileGradient}
-            >
-              <View style={[styles.decorCircle, styles.decorCircle1]} />
-              <View style={[styles.decorCircle, styles.decorCircle2]} />
-            </LinearGradient>
+            <View style={styles.coverContainer}>
+              {coverImageUrl ? (
+                <Image source={{ uri: coverImageUrl }} style={styles.coverImage} />
+              ) : (
+                <LinearGradient
+                  colors={['#55C5F1', '#A78BFA']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.coverGradient}
+                >
+                  <View style={[styles.decorCircle, styles.decorCircle1]} />
+                  <View style={[styles.decorCircle, styles.decorCircle2]} />
+                </LinearGradient>
+              )}
+            </View>
 
             <View style={styles.profileContent}>
               <View style={styles.profileHeader}>
                 <View style={styles.avatarWrapper}>
                   <View style={styles.avatarContainer}>
-                    <Text style={styles.avatarText}>{displayName.charAt(0).toUpperCase()}</Text>
+                    <Image source={{ uri: avatarUrl }} style={styles.avatar} />
                   </View>
                   {isVerified && (
                     <View style={styles.verifiedBadge}>
@@ -608,6 +617,20 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     overflow: 'hidden',
   },
+  coverContainer: {
+    height: 100,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    overflow: 'hidden',
+  },
+  coverGradient: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  coverImage: {
+    width: '100%',
+    height: '100%',
+  },
   profileGradient: {
     height: 80,
     position: 'relative',
@@ -646,20 +669,21 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#55C5F1',
     borderWidth: 3,
     borderColor: 'white',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: 'white',
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 4,
+    borderColor: 'white',
   },
   verifiedBadge: {
     position: 'absolute',
-    bottom: -2,
+    bottom: -20,
     right: -2,
     width: 24,
     height: 24,
@@ -672,7 +696,9 @@ const styles = StyleSheet.create({
   },
   profileInfo: {
     flex: 1,
-    paddingBottom: 4,
+    // paddingBottom: 8,
+    position: 'relative',
+    top: 10,
   },
   profileNameRow: {
     flexDirection: 'row',

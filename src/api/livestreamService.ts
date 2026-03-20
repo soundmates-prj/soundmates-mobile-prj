@@ -54,7 +54,7 @@ const api = axios.create({
   headers: API_CONFIG.HEADERS,
 });
 
-const STATION_UUID = '98fa2e44-e332-4325-836a-91e18025d62c';
+const STATION_UUID = '143a299c-9d19-47ac-9988-828528004771';
 const AZURACAST_BASE = API_CONFIG.AZURACAST_BASE;
 const STATION_ID = 1;
 

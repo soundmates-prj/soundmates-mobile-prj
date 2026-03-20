@@ -30,6 +30,14 @@
     },
     "plugins": [
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cho phep SoundMate truy cap thu vien anh de cap nhat anh dai dien va anh bia.",
+          "cameraPermission": "Cho phep SoundMate su dung camera de chup anh dai dien va anh bia.",
+          "microphonePermission": "Cho phep SoundMate su dung microphone khi quay video tu camera."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
