@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
+    BackHandler,
     Image,
     KeyboardAvoidingView,
     Platform,
@@ -14,8 +16,9 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { useUser } from '../../context/UserContext';
+import { showToast } from '../../../components/ui/Toast';
 import { blogService } from '../../api';
+import { useUser } from '../../context/UserContext';
 
 // ─────────────────────────────────────────────────────
 // MOOD TAG CHIPS
@@ -41,19 +44,53 @@ const MOOD_TAGS = [
 interface CreatePostScreenProps {
     onBack: () => void;
     onPostCreated: () => void;
+    editingPost?: EditablePostDraft | null;
 }
 
-export default function CreatePostScreen({ onBack, onPostCreated }: CreatePostScreenProps) {
-    const { user } = useUser();
+export interface EditablePostDraft {
+    id: string;
+    title: string;
+    contentText: string;
+    moodTag?: string | null;
+    imageUrl?: string | null;
+}
 
-    const [title, setTitle] = useState('');
-    const [content, setContent] = useState('');
-    const [selectedMoodTag, setSelectedMoodTag] = useState<string | null>(null);
-    const [selectedImage, setSelectedImage] = useState<string | null>(null);
+export default function CreatePostScreen({ onBack, onPostCreated, editingPost = null }: CreatePostScreenProps) {
+    const { user } = useUser();
+    const isEditMode = !!editingPost?.id;
+    const initialTitle = editingPost?.title?.trim() || '';
+    const initialContent = editingPost?.contentText?.trim() || '';
+    const initialMoodTag = editingPost?.moodTag || '';
+    const initialImageUrl = editingPost?.imageUrl || '';
+
+    const [title, setTitle] = useState(editingPost?.title || '');
+    const [content, setContent] = useState(editingPost?.contentText || '');
+    const [selectedMoodTag, setSelectedMoodTag] = useState<string | null>(editingPost?.moodTag || null);
+    const [selectedImage, setSelectedImage] = useState<string | null>(editingPost?.imageUrl || null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const isPostEnabled = title.trim().length > 0 && content.trim().length > 0 && !isSubmitting;
+    useEffect(() => {
+        setTitle(editingPost?.title || '');
+        setContent(editingPost?.contentText || '');
+        setSelectedMoodTag(editingPost?.moodTag || null);
+        setSelectedImage(editingPost?.imageUrl || null);
+    }, [editingPost]);
+
+    const hasUnsavedChanges =
+        title.trim() !== initialTitle ||
+        content.trim() !== initialContent ||
+        (selectedMoodTag || '') !== initialMoodTag ||
+        (selectedImage || '') !== initialImageUrl;
+
+    const hasRequiredFields = title.trim().length > 0 && content.trim().length > 0;
+    const isPostEnabled =
+        hasRequiredFields &&
+        !isSubmitting &&
+        (!isEditMode || hasUnsavedChanges);
     const characterCount = content.length;
+    const shouldPromptBeforeExit = isEditMode
+        ? hasUnsavedChanges
+        : title.trim().length > 0 || content.trim().length > 0 || !!selectedMoodTag || !!selectedImage;
 
     // Get display name
     const displayName = user?.firstName && user?.lastName
@@ -93,29 +130,88 @@ export default function CreatePostScreen({ onBack, onPostCreated }: CreatePostSc
 
         setIsSubmitting(true);
         try {
-            const result = await blogService.createPost({
-                title: title.trim(),
-                contentText: content.trim(),
-                moodTag: selectedMoodTag || undefined,
-                imageUrl: selectedImage || undefined,
-                privacyScope: 'Public',
-            });
+            if (isEditMode && editingPost?.id) {
+                const updateResult = await blogService.updatePost(editingPost.id, {
+                    title: title.trim(),
+                    contentText: content.trim(),
+                    moodTag: selectedMoodTag || undefined,
+                    imageUrl: selectedImage || undefined,
+                    privacyScope: 'Public',
+                });
 
-            if (result.success && result.data?.id) {
-                // Backend may automatically publish the post. Only publish if it's not already 'Published'
-                if (result.data.status !== 'Published') {
-                    await blogService.publishPost(result.data.id);
+                if (updateResult.success) {
+                    showToast.success('Cập nhật thành công', 'Bài viết đã được cập nhật');
+                    onPostCreated();
+                } else {
+                    showToast.error('Cập nhật thất bại', updateResult.message || 'Vui lòng thử lại');
                 }
-                onPostCreated();
             } else {
-                console.error('[CreatePost] Failed:', result.message);
+                const result = await blogService.createPost({
+                    title: title.trim(),
+                    contentText: content.trim(),
+                    moodTag: selectedMoodTag || undefined,
+                    imageUrl: selectedImage || undefined,
+                    privacyScope: 'Public',
+                });
+
+                if (result.success && result.data?.id) {
+                    // Backend may automatically publish the post. Only publish if it's not already 'Published'
+                    if (result.data.status !== 'Published') {
+                        await blogService.publishPost(result.data.id);
+                    }
+                    showToast.success('Đăng bài thành công', 'Bài viết đã được đăng');
+                    onPostCreated();
+                } else {
+                    showToast.error('Đăng bài thất bại', result.message || 'Vui lòng thử lại');
+                }
             }
         } catch (error) {
             console.error('[CreatePost] Error:', error);
+            showToast.error(isEditMode ? 'Cập nhật thất bại' : 'Đăng bài thất bại', 'Vui lòng thử lại sau');
         } finally {
             setIsSubmitting(false);
         }
     };
+
+    const handleExitRequest = useCallback(() => {
+        if (isSubmitting) {
+            return;
+        }
+
+        if (!shouldPromptBeforeExit) {
+            onBack();
+            return;
+        }
+
+        Alert.alert(
+            isEditMode ? 'Bỏ thay đổi?' : 'Bỏ bài viết?',
+            isEditMode
+                ? 'Các thay đổi chưa được lưu. Bạn muốn bỏ thay đổi hay tiếp tục chỉnh sửa?'
+                : 'Bài viết đang soạn chưa được đăng. Bạn muốn bỏ bài viết hay tiếp tục viết?',
+            [
+                {
+                    text: 'Tiếp tục viết',
+                    style: 'cancel',
+                },
+                {
+                    text: isEditMode ? 'Bỏ thay đổi' : 'Bỏ bài viết',
+                    style: 'destructive',
+                    onPress: onBack,
+                },
+            ],
+        );
+    }, [isEditMode, isSubmitting, onBack, shouldPromptBeforeExit]);
+
+    useEffect(() => {
+        const backSubscription = BackHandler.addEventListener('hardwareBackPress', () => {
+            handleExitRequest();
+            return true;
+        });
+
+        return () => {
+            backSubscription.remove();
+        };
+    }, [handleExitRequest]);
 
     // ───── Render ─────
 
@@ -124,7 +220,7 @@ export default function CreatePostScreen({ onBack, onPostCreated }: CreatePostSc
             {/* ── Header ── */}
             <View style={styles.header}>
                 <TouchableOpacity
-                    onPress={onBack}
+                    onPress={handleExitRequest}
                     activeOpacity={0.7}
                     style={styles.headerBackButton}
                     disabled={isSubmitting}
@@ -132,7 +228,7 @@ export default function CreatePostScreen({ onBack, onPostCreated }: CreatePostSc
                     <Ionicons name="close" size={24} color="#1E293B" />
                 </TouchableOpacity>
 
-                <Text style={styles.headerTitle}>Tạo bài viết</Text>
+                <Text style={styles.headerTitle}>{isEditMode ? 'Chỉnh sửa bài viết' : 'Tạo bài viết'}</Text>
 
                 <TouchableOpacity
                     onPress={handleSubmit}
@@ -150,7 +246,7 @@ export default function CreatePostScreen({ onBack, onPostCreated }: CreatePostSc
                             <ActivityIndicator size="small" color="#FFFFFF" />
                         ) : (
                             <Text style={[styles.headerPostText, !isPostEnabled && styles.headerPostTextDisabled]}>
-                                Đăng bài
+                                {isEditMode ? 'Cập nhật' : 'Đăng bài'}
                             </Text>
                         )}
                     </LinearGradient>

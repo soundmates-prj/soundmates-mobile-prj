@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SoundMateLightColors } from '../../../constants/theme';
+import { blogService, PopularPostResponse } from '../../api';
 import BlogScreen from '../blog/BlogScreen';
 import CreatePostScreen from '../blog/CreatePostScreen';
 import PostDetailScreen from '../blog/PostDetailScreen';
@@ -26,9 +27,8 @@ type PodcastItem = {
 
 type ForumPostItem = {
     id: string;
-    author: string;
-    badge: string;
-    avatar: string;
+    userId: string;
+    moodTag?: string | null;
     title: string;
     likes: number;
     comments: number;
@@ -99,40 +99,8 @@ const PODCASTS: PodcastItem[] = [
     { id: '4', title: 'Tâm Sự Đêm Khuya', host: 'Thu Hà', image: 'https://i.pravatar.cc/200?img=9' },
 ];
 
-const FORUM_POSTS: ForumPostItem[] = [
-    {
-        id: '1',
-        author: 'Phan Minh',
-        badge: 'Premium',
-        avatar: 'https://i.pravatar.cc/100?img=1',
-        title: 'Playlist tổng hợp các bài nhạc chill cùng team music',
-        likes: 32,
-        comments: 24,
-        time: '10 phút',
-    },
-    {
-        id: '2',
-        author: 'Anh Tuấn Music',
-        badge: 'Artist',
-        avatar: 'https://i.pravatar.cc/100?img=2',
-        title: 'Các anh chị ơi mình cần chọn loại tai nghe gì?',
-        likes: 56,
-        comments: 200,
-        time: '24 giờ',
-    },
-    {
-        id: '3',
-        author: 'Nhạc Việt DJ',
-        badge: 'VIP',
-        avatar: 'https://i.pravatar.cc/100?img=3',
-        title: 'Bài hát nào hay nhất trong playlist của bạn?',
-        likes: 128,
-        comments: 89,
-        time: '2 ngày',
-    },
-];
-
 interface HomeScreenProps {
+    initialTab?: TabName;
     onLogout?: () => void;
     onNavigateToProfile?: () => void;
     onNavigateToLive?: () => void;
@@ -141,17 +109,40 @@ interface HomeScreenProps {
 interface SectionHeaderProps {
     title: string;
     titleColor?: string;
+    onPressSeeAll?: () => void;
 }
 
-function SectionHeader({ title, titleColor = '#0059C5' }: SectionHeaderProps) {
+function SectionHeader({ title, titleColor = '#0059C5', onPressSeeAll }: SectionHeaderProps) {
     return (
         <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: titleColor }]}>{title}</Text>
-            <TouchableOpacity activeOpacity={0.7}>
+            <TouchableOpacity activeOpacity={0.7} onPress={onPressSeeAll}>
                 <Text style={styles.seeAllText}>Xem tất cả</Text>
             </TouchableOpacity>
         </View>
     );
+}
+
+function formatTimeAgo(dateStr: string): string {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+
+    if (diffMin < 1) return 'Vừa xong';
+    if (diffMin < 60) return `${diffMin} phút`;
+
+    const diffHrs = Math.floor(diffMin / 60);
+    if (diffHrs < 24) return `${diffHrs} giờ`;
+
+    const diffDays = Math.floor(diffHrs / 24);
+    if (diffDays < 7) return `${diffDays} ngày`;
+
+    const diffWeeks = Math.floor(diffDays / 7);
+    if (diffWeeks < 5) return `${diffWeeks} tuần`;
+
+    const diffMonths = Math.floor(diffDays / 30);
+    return `${diffMonths} tháng`;
 }
 
 function PlaylistCard({ item }: { item: PlaylistItem }) {
@@ -197,15 +188,20 @@ function PodcastCard({ item }: { item: PodcastItem }) {
     );
 }
 
-function ForumPost({ post }: { post: ForumPostItem }) {
+function ForumPost({ post, onPress }: { post: ForumPostItem; onPress?: () => void }) {
+    const badgeText = post.moodTag ? `#${post.moodTag}` : 'Popular';
+
     return (
-        <View style={styles.forumCard}>
+        <TouchableOpacity style={styles.forumCard} activeOpacity={0.9} onPress={onPress}>
             <View style={styles.forumAuthorRow}>
-                <Image source={{ uri: post.avatar }} style={styles.forumAvatar} />
+                <Image
+                    source={{ uri: `https://api.dicebear.com/7.x/initials/png?seed=${post.userId}&backgroundColor=55C5F1` }}
+                    style={styles.forumAvatar}
+                />
                 <View style={styles.forumAuthorInfo}>
                     <View style={styles.forumAuthorNameRow}>
                         <Text style={styles.forumAuthorName} numberOfLines={1}>
-                            {post.author}
+                            {post.userId.substring(0, 8)}...
                         </Text>
                         <LinearGradient
                             colors={[SoundMateLightColors.primary, SoundMateLightColors.primaryDark]}
@@ -213,7 +209,7 @@ function ForumPost({ post }: { post: ForumPostItem }) {
                             end={{ x: 1, y: 0 }}
                             style={styles.forumBadge}
                         >
-                            <Text style={styles.forumBadgeText}>{post.badge}</Text>
+                            <Text style={styles.forumBadgeText}>{badgeText}</Text>
                         </LinearGradient>
                     </View>
                     <Text style={styles.forumTime}>{post.time} trước</Text>
@@ -234,14 +230,16 @@ function ForumPost({ post }: { post: ForumPostItem }) {
                     <Text style={styles.forumActionText}>{post.comments}</Text>
                 </TouchableOpacity>
             </View>
-        </View>
+        </TouchableOpacity>
     );
 }
 
-export default function HomeScreen({ onLogout, onNavigateToProfile, onNavigateToLive }: HomeScreenProps) {
-    const [activeTab, setActiveTab] = useState<TabName>('home');
+export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateToProfile, onNavigateToLive }: HomeScreenProps) {
+    const [activeTab, setActiveTab] = useState<TabName>(initialTab);
     const [showCreatePost, setShowCreatePost] = useState(false);
     const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+    const [communityPosts, setCommunityPosts] = useState<ForumPostItem[]>([]);
+    const [isCommunityLoading, setIsCommunityLoading] = useState(false);
     const pulseAnim = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
@@ -267,6 +265,12 @@ export default function HomeScreen({ onLogout, onNavigateToProfile, onNavigateTo
         };
     }, [pulseAnim]);
 
+    useEffect(() => {
+        if (initialTab === 'home' || initialTab === 'blog' || initialTab === 'podcast') {
+            setActiveTab(initialTab);
+        }
+    }, [initialTab]);
+
     const handleTabPress = (tab: TabName) => {
         setActiveTab(tab);
 
@@ -284,6 +288,38 @@ export default function HomeScreen({ onLogout, onNavigateToProfile, onNavigateTo
         setActiveTab('live');
         onNavigateToLive?.();
     };
+
+    const fetchCommunityPosts = useCallback(async () => {
+        setIsCommunityLoading(true);
+        try {
+            const result = await blogService.getPopularPosts({ page: 1, pageSize: 10 });
+            if (result.success && result.data?.items) {
+                const mappedPosts = result.data.items.map((post: PopularPostResponse) => ({
+                    id: post.id,
+                    userId: post.userId,
+                    moodTag: post.moodTag,
+                    title: post.title,
+                    likes: post.reactionCount,
+                    comments: post.commentCount,
+                    time: formatTimeAgo(post.publishedAt || post.createdAt),
+                }));
+                setCommunityPosts(mappedPosts);
+            } else {
+                setCommunityPosts([]);
+            }
+        } catch (error) {
+            console.error('[HomeScreen] fetchCommunityPosts error:', error);
+            setCommunityPosts([]);
+        } finally {
+            setIsCommunityLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (activeTab === 'home') {
+            fetchCommunityPosts();
+        }
+    }, [activeTab, fetchCommunityPosts]);
 
     return (
         <View style={styles.container}>
@@ -413,10 +449,28 @@ export default function HomeScreen({ onLogout, onNavigateToProfile, onNavigateTo
                             </LinearGradient>
 
                             <View style={styles.communitySection}>
-                                <SectionHeader title="Cộng đồng" titleColor="#1D4ED8" />
-                                {FORUM_POSTS.map((post) => (
-                                    <ForumPost key={post.id} post={post} />
-                                ))}
+                                <SectionHeader
+                                    title="Cộng đồng"
+                                    titleColor="#1D4ED8"
+                                    onPressSeeAll={() => setActiveTab('blog')}
+                                />
+
+                                {isCommunityLoading ? (
+                                    <View style={styles.communityLoadingWrap}>
+                                        <ActivityIndicator size="small" color={SoundMateLightColors.primary} />
+                                        <Text style={styles.communityLoadingText}>Đang tải bài viết cộng đồng...</Text>
+                                    </View>
+                                ) : communityPosts.length === 0 ? (
+                                    <Text style={styles.communityEmptyText}>Chưa có bài viết cộng đồng</Text>
+                                ) : (
+                                    communityPosts.map((post) => (
+                                        <ForumPost
+                                            key={post.id}
+                                            post={post}
+                                            onPress={() => setSelectedPostId(post.id)}
+                                        />
+                                    ))
+                                )}
                             </View>
                         </ScrollView>
                     )}
@@ -667,6 +721,22 @@ const styles = StyleSheet.create({
     communitySection: {
         paddingHorizontal: 16,
         paddingTop: 12,
+    },
+    communityLoadingWrap: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 18,
+    },
+    communityLoadingText: {
+        marginTop: 8,
+        fontSize: 12,
+        color: SoundMateLightColors.textSecondary,
+    },
+    communityEmptyText: {
+        fontSize: 13,
+        color: SoundMateLightColors.textMuted,
+        textAlign: 'center',
+        paddingVertical: 16,
     },
     forumCard: {
         backgroundColor: SoundMateLightColors.surface,

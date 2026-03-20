@@ -18,6 +18,7 @@ import {
     ProfileSetupScreen,
     RegisterScreen,
 } from './src/pages';
+import type { TabName } from './src/pages/BottomNavigation';
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -40,12 +41,15 @@ enum Screen {
     FORGOT_PASSWORD = 'forgot_password',
 }
 
+type HomeEntryTab = Extract<TabName, 'home' | 'blog' | 'podcast'>;
+
 function AppContent() {
     const { clearUser, refreshUser } = useUser();
     const [currentScreen, setCurrentScreen] = useState<Screen>(Screen.LOGIN);
     const [userEmail, setUserEmail] = useState<string>('');
     const [pendingPassword, setPendingPassword] = useState<string>('');
     const [isNewRegistration, setIsNewRegistration] = useState<boolean>(false);
+    const [homeEntryTab, setHomeEntryTab] = useState<HomeEntryTab>('home');
 
     // Check for saved tokens on app start
     useEffect(() => {
@@ -253,7 +257,8 @@ function AppContent() {
         setCurrentScreen(Screen.PROFILE);
     }, []);
 
-    const handleBackToHome = useCallback(() => {
+    const handleBackToHome = useCallback((tab: HomeEntryTab = 'home') => {
+        setHomeEntryTab(tab);
         setCurrentScreen(Screen.HOME);
     }, []);
 
@@ -302,6 +307,7 @@ function AppContent() {
             case Screen.HOME:
                 return (
                     <HomeScreen
+                        initialTab={homeEntryTab}
                         onLogout={handleLogout}
                         onNavigateToProfile={handleNavigateToProfile}
                         onNavigateToLive={handleNavigateToLive}
