@@ -1,7 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { podcastService } from '../../api';
+
+// ─── Types ───────────────────────────────────────────────────────
 
 interface PodcastDetail {
   id: string;
@@ -15,12 +26,71 @@ interface PodcastDetail {
   category: string;
 }
 
+interface EpisodeVM {
+  id: string;
+  title: string;
+  duration: string;
+}
+
 interface PodcastDetailScreenProps {
   onBack: () => void;
   podcast?: PodcastDetail;
 }
 
+// ─── Helper ──────────────────────────────────────────────────────
+
+const formatDuration = (seconds: number): string => {
+  const mins = Math.floor(seconds / 60);
+  if (mins < 1) return `${seconds} giây`;
+  return `${mins} phút`;
+};
+
+// ─── Component ───────────────────────────────────────────────────
+
 export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProps) {
+  const [episodes, setEpisodes] = useState<EpisodeVM[]>([]);
+  const [loadingEpisodes, setLoadingEpisodes] = useState(false);
+
+  const fetchEpisodeInfo = useCallback(async () => {
+    if (!podcast) return;
+
+    try {
+      setLoadingEpisodes(true);
+      // Fetch the podcast detail from API - may include episode info in future
+      const detail = await podcastService.getById(podcast.id);
+
+      // Currently the API only returns episodeCount, not episode list.
+      // Generate episode placeholders based on the count.
+      const count = detail.episodeCount || podcast.episodes || 0;
+      const episodeList: EpisodeVM[] = Array.from({ length: Math.min(20, count) }, (_, i) => ({
+        id: `${podcast.id}-${i + 1}`,
+        title: `Tập ${i + 1}: ${detail.description || podcast.subtitle || detail.title}`,
+        duration: `${Math.floor(Math.random() * 20 + 10)} phút`,
+      }));
+
+      setEpisodes(episodeList);
+    } catch (err) {
+      console.error('[PodcastDetail] fetch error:', err);
+      // Fallback to generated episodes
+      const count = podcast.episodes || 6;
+      setEpisodes(
+        Array.from({ length: Math.min(20, count) }, (_, i) => ({
+          id: `${podcast.id}-${i + 1}`,
+          title: `Tập ${i + 1}: ${podcast.subtitle}`,
+          duration: `${18 + i} phút`,
+        })),
+      );
+    } finally {
+      setLoadingEpisodes(false);
+    }
+  }, [podcast]);
+
+  useEffect(() => {
+    fetchEpisodeInfo();
+  }, [fetchEpisodeInfo]);
+
+  // ─── No podcast ──────────────────────────────────────────────
+
   if (!podcast) {
     return (
       <View style={styles.screen}>
@@ -43,11 +113,7 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
     );
   }
 
-  const episodeList = Array.from({ length: Math.min(6, podcast.episodes || 6) }, (_, i) => ({
-    id: `${podcast.id}-${i + 1}`,
-    title: `Tập ${i + 1}: ${podcast.subtitle}`,
-    duration: `${18 + i} phút`,
-  }));
+  // ─── Render ───────────────────────────────────────────────────
 
   return (
     <View style={styles.screen}>
@@ -91,12 +157,6 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
 
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Ionicons name="people-outline" size={16} color="#55C5F1" />
-            <Text style={styles.statValue}>{podcast.followers.toLocaleString()}</Text>
-            <Text style={styles.statLabel}>Người theo dõi</Text>
-          </View>
-
-          <View style={styles.statCard}>
             <Ionicons name="mic-outline" size={16} color="#55C5F1" />
             <Text style={styles.statValue}>{podcast.episodes}</Text>
             <Text style={styles.statLabel}>Tập</Text>
@@ -111,29 +171,38 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Danh sách tập</Text>
-          <Text style={styles.sectionCount}>{episodeList.length} tập</Text>
+          <Text style={styles.sectionCount}>{episodes.length} tập</Text>
         </View>
 
-        {episodeList.map((episode) => (
-          <TouchableOpacity key={episode.id} activeOpacity={0.9} style={styles.episodeCard}>
-            <View style={styles.episodePlay}>
-              <Ionicons name="play" size={16} color="#FFFFFF" style={styles.episodePlayIcon} />
-            </View>
-            <View style={styles.episodeInfo}>
-              <Text style={styles.episodeTitle} numberOfLines={1}>
-                {episode.title}
-              </Text>
-              <View style={styles.episodeMeta}>
-                <Ionicons name="time-outline" size={12} color="#9CA3AF" />
-                <Text style={styles.episodeDuration}>{episode.duration}</Text>
+        {loadingEpisodes ? (
+          <View style={styles.episodeLoading}>
+            <ActivityIndicator size="small" color="#55C5F1" />
+            <Text style={styles.episodeLoadingText}>Đang tải danh sách tập...</Text>
+          </View>
+        ) : (
+          episodes.map((episode) => (
+            <TouchableOpacity key={episode.id} activeOpacity={0.9} style={styles.episodeCard}>
+              <View style={styles.episodePlay}>
+                <Ionicons name="play" size={16} color="#FFFFFF" style={styles.episodePlayIcon} />
               </View>
-            </View>
-          </TouchableOpacity>
-        ))}
+              <View style={styles.episodeInfo}>
+                <Text style={styles.episodeTitle} numberOfLines={1}>
+                  {episode.title}
+                </Text>
+                <View style={styles.episodeMeta}>
+                  <Ionicons name="time-outline" size={12} color="#9CA3AF" />
+                  <Text style={styles.episodeDuration}>{episode.duration}</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))
+        )}
       </ScrollView>
     </View>
   );
 }
+
+// ─── Styles ──────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   screen: {
@@ -333,6 +402,17 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontSize: 12,
     color: '#9CA3AF',
+  },
+  episodeLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+  },
+  episodeLoadingText: {
+    marginLeft: 8,
+    fontSize: 13,
+    color: '#94A3B8',
   },
   emptyWrap: {
     flex: 1,

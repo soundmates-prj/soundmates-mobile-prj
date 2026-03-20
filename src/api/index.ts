@@ -4,7 +4,7 @@
  */
 
 // Config
-export { API_CONFIG, AUTH_ENDPOINTS, BLOG_ENDPOINTS, PAYMENT_ENDPOINTS, SUBSCRIPTION_ENDPOINTS, USER_ENDPOINTS } from './config';
+export { API_CONFIG, AUTH_ENDPOINTS, BLOG_ENDPOINTS, PAYMENT_ENDPOINTS, PODCAST_ENDPOINTS, SUBSCRIPTION_ENDPOINTS, USER_ENDPOINTS } from './config';
 
 // API Client
 export { authApiClient, handleApiError, registerUnauthorizedHandler } from './apiClient';
@@ -32,4 +32,6 @@ export type {
     SubscriptionHistoryPaginationResponse, SubscriptionPlanResponse,
     SubscriptionResponse
 } from './paymentService';
+export { podcastService } from './podcastService';
+export type { PodcastResponse } from './podcastService';
 

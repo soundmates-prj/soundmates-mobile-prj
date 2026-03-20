@@ -105,4 +105,10 @@ export const PAYMENT_ENDPOINTS = {
     VNPAY_CALLBACK: '/payments/vnpay/callback',
 };
 
+// Podcast Endpoints (routed through API Gateway → live-session-service)
+export const PODCAST_ENDPOINTS = {
+    LIST: '/live-session/podcast',
+    DETAIL: (id: string) => `/live-session/podcast/${id}`,
+};
+
 export default API_CONFIG;
