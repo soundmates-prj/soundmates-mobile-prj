@@ -1,3 +1,4 @@
+import { API_HOST } from '@env';
 import axios from 'axios';
 import { API_CONFIG } from './config';
 
@@ -40,6 +41,12 @@ interface ApiResponse<T> {
   errorCode: string | null;
 }
 
+interface StationSummary {
+  id: string;
+  externalStationId?: number;
+  isEnabled?: boolean;
+}
+
 export interface SongRequestItem {
   song_id: string;
   title: string;
@@ -54,22 +61,105 @@ const api = axios.create({
   headers: API_CONFIG.HEADERS,
 });
 
-const STATION_UUID = '143a299c-9d19-47ac-9988-828528004771';
-const AZURACAST_BASE = API_CONFIG.AZURACAST_BASE;
-const STATION_ID = 1;
+const FALLBACK_STATION_UUID = '143a299c-9d19-47ac-9988-828528004771';
+const DEFAULT_STATION_ID = 1;
+
+const normalizeAzuraCastBase = (rawBase: string): string => {
+  const trimmed = (rawBase || '').trim().replace(/\/+$/, '');
+  if (!trimmed) return `http://${API_HOST}:5000/api`;
+  if (/\/apis$/i.test(trimmed)) {
+    return trimmed.replace(/\/apis$/i, '/api');
+  }
+  if (/\/api$/i.test(trimmed)) {
+    return trimmed;
+  }
+  return `${trimmed}/api`;
+};
+
+const AZURACAST_BASE = normalizeAzuraCastBase(API_CONFIG.AZURACAST_BASE);
+const MAIN_API_HOST = (() => {
+  try {
+    return new URL(API_CONFIG.MAIN_BASE_URL).hostname;
+  } catch {
+    return '';
+  }
+})();
+
+let cachedStationUuid: string | null = null;
+let cachedExternalStationId: number | null = null;
+
+const normalizeNetworkUrl = (url?: string): string => {
+  if (!url) return '';
+
+  if (!MAIN_API_HOST || !url.includes('host.docker.internal')) {
+    return url;
+  }
+
+  return url.replace(/host\.docker\.internal/gi, MAIN_API_HOST);
+};
+
+const normalizeTrackInfo = (track: TrackInfo): TrackInfo => ({
+  ...track,
+  artUrl: normalizeNetworkUrl(track.artUrl),
+});
+
+const resolveStationUuid = async (): Promise<string> => {
+  if (cachedStationUuid) {
+    return cachedStationUuid;
+  }
+
+  try {
+    const response = await api.get<ApiResponse<StationSummary[]>>('station');
+    const stations = response.data.data || [];
+    const activeStation = stations.find((station) => station.isEnabled) || stations[0];
+
+    if (activeStation?.id) {
+      cachedStationUuid = activeStation.id;
+      if (typeof activeStation.externalStationId === 'number') {
+        cachedExternalStationId = activeStation.externalStationId;
+      }
+      return cachedStationUuid;
+    }
+  } catch {
+    // Fallback to known station UUID if station discovery fails.
+  }
+
+  cachedStationUuid = FALLBACK_STATION_UUID;
+  return cachedStationUuid;
+};
+
+const resolveStationId = (): number => cachedExternalStationId || DEFAULT_STATION_ID;
 
 export const livestreamService = {
   async getNowPlaying(): Promise<NowPlayingData> {
+    const stationUuid = await resolveStationUuid();
     const response = await api.get<ApiResponse<NowPlayingData>>(
-      `station/${STATION_UUID}/now-playing`,
+      `station/${stationUuid}/now-playing`,
     );
-    return response.data.data;
+
+    const rawData = response.data.data;
+    const normalizedData: NowPlayingData = {
+      ...rawData,
+      listenUrl: normalizeNetworkUrl(rawData.listenUrl),
+      publicPlayerUrl: normalizeNetworkUrl(rawData.publicPlayerUrl),
+      currentTrack: normalizeTrackInfo(rawData.currentTrack),
+      playingNext: normalizeTrackInfo(rawData.playingNext),
+      songHistory: rawData.songHistory.map(normalizeTrackInfo),
+    };
+
+    if (typeof normalizedData.externalStationId === 'number') {
+      cachedExternalStationId = normalizedData.externalStationId;
+    }
+
+    return normalizedData;
   },
 
   async getRequestableSongs(): Promise<SongRequestItem[]> {
+    const stationId = resolveStationId();
+
     try {
       const response = await fetch(
-        `${AZURACAST_BASE}/station/${STATION_ID}/requests`,
+        `${AZURACAST_BASE}/station/${stationId}/requests`,
       );
       const data = await response.json();
       return data || [];
@@ -79,9 +169,11 @@ export const livestreamService = {
   },
 
   async requestSong(requestId: string): Promise<boolean> {
+    const stationId = resolveStationId();
+
     try {
       const response = await fetch(
-        `${AZURACAST_BASE}/station/${STATION_ID}/request/${requestId}`,
+        `${AZURACAST_BASE}/station/${stationId}/request/${encodeURIComponent(requestId)}`,
         {
           method: 'POST',
         },
@@ -93,7 +185,8 @@ export const livestreamService = {
   },
 
   getListenUrl(listenUrl?: string): string {
-    return listenUrl || 'http://localhost/listen/my_fav_station/radio.mp3';
+    const fallbackUrl = normalizeNetworkUrl(`http://${API_HOST}:5000/listen/duc_phan/radio.mp3`);
+    return normalizeNetworkUrl(listenUrl) || fallbackUrl;
   },
 };
 

@@ -14,16 +14,34 @@ const DEFAULT_AUTH_BASE_URL = 'http://localhost:8080/api/v1';
 const DEFAULT_MAIN_BASE_URL = 'http://localhost:8080/api/v1';
 const DEFAULT_AZURACAST_BASE = 'http://localhost:5000/api';
 
+const resolveBaseUrl = (
+    primary?: string,
+    fallback?: string,
+    defaultValue?: string,
+): string => {
+    const primaryValue = primary?.trim();
+    if (primaryValue) {
+        return primaryValue;
+    }
+
+    const fallbackValue = fallback?.trim();
+    if (fallbackValue) {
+        return fallbackValue;
+    }
+
+    return defaultValue || '';
+};
+
 // Base URLs for different services
 export const API_CONFIG = {
     // Auth Service Base URL - reads from .env file
-    AUTH_BASE_URL: ENV_AUTH_BASE_URL || DEFAULT_AUTH_BASE_URL,
+    AUTH_BASE_URL: resolveBaseUrl(ENV_AUTH_BASE_URL, undefined, DEFAULT_AUTH_BASE_URL),
 
-    // Main API Base URL - reads from .env file
-    MAIN_BASE_URL: ENV_MAIN_BASE_URL || DEFAULT_MAIN_BASE_URL,
+    // Main API Base URL - fallback to AUTH_BASE_URL when MAIN_BASE_URL is not set
+    MAIN_BASE_URL: resolveBaseUrl(ENV_MAIN_BASE_URL, ENV_AUTH_BASE_URL, DEFAULT_MAIN_BASE_URL),
 
     // AzuraCast Base URL - reads from .env file
-    AZURACAST_BASE: ENV_AZURACAST_BASE || DEFAULT_AZURACAST_BASE,
+    AZURACAST_BASE: resolveBaseUrl(ENV_AZURACAST_BASE, undefined, DEFAULT_AZURACAST_BASE),
 
     // Add more service URLs here as needed
     // MAIN_BASE_URL: process.env.MAIN_BASE_URL || 'http://localhost:8080/api/v1',
