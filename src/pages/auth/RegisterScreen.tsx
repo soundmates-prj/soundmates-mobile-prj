@@ -142,7 +142,7 @@ export default function RegisterScreen({
                 showToast.error('Đăng ký thất bại', response.message || 'Có lỗi xảy ra, vui lòng thử lại');
             }
         } catch (error: any) {
-            console.error('Register error:', error);
+            console.log('Register error:', error);
             const errorMessage = error?.response?.data?.message ||
                 error?.message ||
                 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.';

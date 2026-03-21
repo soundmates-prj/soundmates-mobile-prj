@@ -156,7 +156,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] getPublishedPosts error:', error);
+            console.log('[BlogService] getPublishedPosts error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể tải bài viết',
@@ -183,7 +183,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] getTrendingPosts error:', error);
+            console.log('[BlogService] getTrendingPosts error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể tải bài viết thịnh hành',
@@ -210,7 +210,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] getPopularPosts error:', error);
+            console.log('[BlogService] getPopularPosts error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể tải bài viết phổ biến',
@@ -236,7 +236,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] getPublishedPostById error:', error);
+            console.log('[BlogService] getPublishedPostById error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không tìm thấy bài viết',
@@ -262,7 +262,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] getPostById error:', error);
+            console.log('[BlogService] getPostById error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không tìm thấy bài viết',
@@ -288,7 +288,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] getPostStats error:', error);
+            console.log('[BlogService] getPostStats error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể tải thống kê',
@@ -315,7 +315,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] getMyPosts error:', error);
+            console.log('[BlogService] getMyPosts error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể tải bài viết của bạn',
@@ -342,7 +342,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] createPost error:', error);
+            console.log('[BlogService] createPost error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể tạo bài viết',
@@ -369,7 +369,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] updatePost error:', error);
+            console.log('[BlogService] updatePost error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể cập nhật bài viết',
@@ -393,7 +393,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] deletePost error:', error);
+            console.log('[BlogService] deletePost error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể xóa bài viết',
@@ -417,7 +417,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] publishPost error:', error);
+            console.log('[BlogService] publishPost error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể publish bài viết',
@@ -448,7 +448,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] getPostComments error:', error);
+            console.log('[BlogService] getPostComments error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể tải bình luận',
@@ -475,7 +475,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] createComment error:', error);
+            console.log('[BlogService] createComment error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể gửi bình luận',
@@ -502,7 +502,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] replyComment error:', error);
+            console.log('[BlogService] replyComment error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể phản hồi bình luận',
@@ -529,7 +529,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] updateComment error:', error);
+            console.log('[BlogService] updateComment error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể cập nhật bình luận',
@@ -553,7 +553,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] deleteComment error:', error);
+            console.log('[BlogService] deleteComment error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể xóa bình luận',
@@ -584,7 +584,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] addReaction error:', error);
+            console.log('[BlogService] addReaction error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể thêm phản ứng',
@@ -608,7 +608,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] removeReaction error:', error);
+            console.log('[BlogService] removeReaction error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể bỏ phản ứng',
@@ -634,7 +634,7 @@ export const blogService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[BlogService] getPostReactions error:', error);
+            console.log('[BlogService] getPostReactions error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể tải phản ứng',

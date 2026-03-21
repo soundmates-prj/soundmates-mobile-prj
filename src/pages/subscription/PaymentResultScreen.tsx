@@ -121,7 +121,7 @@ export default function PaymentResultScreen({
                         {isSuccess && '. Hãy tận hưởng các tính năng mới!'}
                     </Text>
 
-                    {isSuccess && (
+                    {/* {isSuccess && (
                         <View style={styles.benefitsBox}>
                             <View style={styles.benefitRow}>
                                 <Ionicons name="checkmark-circle" size={18} color="#10B981" />
@@ -136,7 +136,7 @@ export default function PaymentResultScreen({
                                 <Text style={styles.benefitText}>Giọng đọc AI cá nhân hóa</Text>
                             </View>
                         </View>
-                    )}
+                    )} */}
                 </Animated.View>
 
                 {/* ─── Actions ─── */}

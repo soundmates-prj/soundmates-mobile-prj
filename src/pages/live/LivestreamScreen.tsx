@@ -689,6 +689,8 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
   const autoPlayedRef = useRef(false);
   const [isStreamPlaying, setIsStreamPlaying] = useState(false);
   const [isStreamLoading, setIsStreamLoading] = useState(false);
+  const [streamAvailability, setStreamAvailability] = useState<'checking' | 'ready' | 'unavailable'>('checking');
+  const [retryProbeTick, setRetryProbeTick] = useState(0);
   const [isStreamMuted, setIsStreamMuted] = useState(false);
   const [displayElapsed, setDisplayElapsed] = useState<number>(0);
   const [streamVolume] = useState(0.8);
@@ -732,6 +734,7 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
   const isLiveSession = nowPlaying
     ? nowPlaying.isLive || nowPlaying.isOnline
     : LIVE_SESSION.isLive;
+  const hasLiveStream = streamAvailability === 'ready';
   const currentStreamUrl = useMemo(
     () => livestreamService.getListenUrl(nowPlaying?.listenUrl),
     [nowPlaying?.listenUrl],
@@ -784,9 +787,11 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
   }, []);
 
   const startStream = useCallback(async () => {
-    if (!currentStreamUrl || isStreamLoading) {
+    if (!currentStreamUrl || isStreamLoading || !hasLiveStream) {
       if (!currentStreamUrl) {
         showToast.warning('Chưa có nguồn phát', 'Vui lòng đợi dữ liệu livestream cập nhật');
+      } else if (!hasLiveStream) {
+        showToast.info('Không có phiên live', 'Hiện đang không có phiên live nào');
       }
       return;
     }
@@ -819,14 +824,16 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
       soundRef.current = sound;
       activeStreamUrlRef.current = currentStreamUrl;
       setIsStreamPlaying(true);
+      setStreamAvailability('ready');
     } catch (error) {
       console.log('[LivestreamScreen] startStream error:', error);
       showToast.error('Không thể phát livestream', 'Kiểm tra kết nối mạng hoặc URL stream');
       setIsStreamPlaying(false);
+      setStreamAvailability('unavailable');
     } finally {
       setIsStreamLoading(false);
     }
-  }, [currentStreamUrl, isStreamLoading, isStreamMuted, streamVolume, unloadStream]);
+  }, [currentStreamUrl, hasLiveStream, isStreamLoading, isStreamMuted, streamVolume, unloadStream]);
 
   const toggleStreamPlayback = useCallback(async () => {
     if (isStreamLoading) return;
@@ -879,16 +886,58 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
   }, [unloadStream]);
 
   useEffect(() => {
-    if (!currentStreamUrl || autoPlayedRef.current) return;
-    autoPlayedRef.current = true;
-    void startStream();
-  }, [currentStreamUrl, startStream]);
+    let isCancelled = false;
+
+    const probeStream = async () => {
+      if (!currentStreamUrl) {
+        setStreamAvailability('unavailable');
+        return;
+      }
+
+      setStreamAvailability('checking');
+
+      try {
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: currentStreamUrl },
+          {
+            shouldPlay: false,
+            isMuted: true,
+            volume: 0,
+          },
+        );
+
+        await sound.unloadAsync();
+
+        if (!isCancelled) {
+          setStreamAvailability('ready');
+        }
+      } catch (error) {
+        console.log('[LivestreamScreen] probeStream error:', error);
+        if (!isCancelled) {
+          setStreamAvailability('unavailable');
+          setIsStreamPlaying(false);
+        }
+      }
+    };
+
+    void probeStream();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentStreamUrl, retryProbeTick]);
 
   useEffect(() => {
-    if (!currentStreamUrl || !soundRef.current || !isStreamPlaying) return;
+    if (!currentStreamUrl || autoPlayedRef.current || streamAvailability !== 'ready') return;
+    autoPlayedRef.current = true;
+    void startStream();
+  }, [currentStreamUrl, startStream, streamAvailability]);
+
+  useEffect(() => {
+    if (!currentStreamUrl || !soundRef.current || !isStreamPlaying || streamAvailability !== 'ready') return;
     if (activeStreamUrlRef.current === currentStreamUrl) return;
     void startStream();
-  }, [currentStreamUrl, isStreamPlaying, startStream]);
+  }, [currentStreamUrl, isStreamPlaying, startStream, streamAvailability]);
 
   const nowPlayingItems = useMemo(() => {
     if (!nowPlaying) return NOW_PLAYING;
@@ -1009,7 +1058,9 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
           setIsPaused(true);
           dragX.setValue(0);
         },
-        onPanResponderMove: Animated.event([null, { dx: dragX }], { useNativeDriver: true }),
+        onPanResponderMove: (_, gesture) => {
+          dragX.setValue(gesture.dx);
+        },
         onPanResponderRelease: (_, gesture) => {
           const threshold = 60;
 
@@ -1075,7 +1126,7 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
             </TouchableOpacity>
 
             <View style={styles.headerStatusRow}>
-              {isLiveSession && (
+              {isLiveSession && hasLiveStream && (
                 <View style={styles.liveBadge}>
                   <View style={styles.liveDot} />
                   <Text style={styles.liveBadgeText}>LIVE</Text>
@@ -1088,7 +1139,7 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
               <TouchableOpacity
                 style={[styles.streamControlButton, isStreamPlaying && styles.streamControlButtonActive]}
                 onPress={() => void toggleStreamPlayback()}
-                disabled={isStreamLoading}
+                disabled={isStreamLoading || !hasLiveStream}
               >
                 {isStreamLoading ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
@@ -1099,7 +1150,7 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
               <TouchableOpacity
                 style={styles.streamControlButton}
                 onPress={() => void toggleStreamMute()}
-                disabled={isStreamLoading}
+                disabled={isStreamLoading || !hasLiveStream}
               >
                 <Ionicons name={isStreamMuted ? 'volume-mute' : 'volume-high'} size={14} color="#FFFFFF" />
               </TouchableOpacity>
@@ -1149,6 +1200,29 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
                   </Text>
                 ) : null}
               </View>
+            </View>
+          )}
+
+          {streamAvailability === 'unavailable' && (
+            <View style={styles.noLiveCard}>
+              <Ionicons name="radio-outline" size={16} color="#FBBF24" />
+              <Text style={styles.noLiveText}>Hiện đang không có phiên live nào</Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={() => {
+                  void fetchNowPlaying();
+                  setRetryProbeTick((prev) => prev + 1);
+                }}
+              >
+                <Text style={styles.retryButtonText}>Thử lại</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {streamAvailability === 'checking' && (
+            <View style={styles.noLiveCard}>
+              <ActivityIndicator size="small" color="#7DD3FC" />
+              <Text style={styles.noLiveText}>Đang kiểm tra phiên live...</Text>
             </View>
           )}
         </View>
@@ -1412,6 +1486,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 4,
+  },
+  noLiveCard: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    backgroundColor: 'rgba(15,23,42,0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.4)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  noLiveText: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 13,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  retryButton: {
+    marginLeft: 'auto',
+    backgroundColor: 'rgba(85,197,241,0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(125,211,252,0.7)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  retryButtonText: {
+    color: '#E0F2FE',
+    fontSize: 12,
+    fontWeight: '700',
   },
   currentTrackBadge: {
     flexDirection: 'row',

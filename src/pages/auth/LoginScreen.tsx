@@ -66,6 +66,20 @@ export default function LoginScreen({
         setShowPassword(prev => !prev);
     }, []);
 
+    const isUnverifiedEmailMessage = useCallback((message: string) => {
+        const normalizedMessage = (message || '').toLowerCase();
+        if (!normalizedMessage) {
+            return false;
+        }
+
+        return normalizedMessage.includes('not verified')
+            || normalizedMessage.includes('chưa xác thực')
+            || normalizedMessage.includes('please verify')
+            || normalizedMessage.includes('verification required')
+            || normalizedMessage.includes('verify your email')
+            || normalizedMessage.includes('verify your email address');
+    }, []);
+
     const handleLogin = useCallback(async () => {
         // Validation
         if (!emailOrUsername.trim()) {
@@ -93,58 +107,41 @@ export default function LoginScreen({
                     onLoginSuccess(response.data);
                 }
             } else {
-                // Check if email is not verified
-                // Only treat as unverified email if message contains specific verification keywords
-                // (not just generic words like "email" which appears in many error messages)
                 const errorMessage = response.message || '';
-                const isUnverifiedEmail = 
-                    errorMessage.toLowerCase().includes('not verified') ||
-                    errorMessage.toLowerCase().includes('chưa xác thực') ||
-                    errorMessage.toLowerCase().includes('please verify') ||
-                    errorMessage.toLowerCase().includes('verification required') ||
-                    errorMessage.toLowerCase().includes('verify your email');
-
-                if (isUnverifiedEmail && onUnverifiedEmail) {
-                    // Show error toast first before redirecting
+                if (isUnverifiedEmailMessage(errorMessage) && onUnverifiedEmail) {
                     showToast.warning(
-                        'Email chưa xác thực', 
-                        'Vui lòng xác thực email để tiếp tục. Chúng tôi sẽ gửi lại mã OTP cho bạn.'
+                        'Email chưa xác thực',
+                        errorMessage || 'Vui lòng xác thực email để tiếp tục.'
                     );
-                    
-                    // Wait a bit for user to see the toast, then redirect to OTP
-                    setTimeout(() => {
-                        onUnverifiedEmail(emailOrUsername.trim().toLowerCase(), password);
-                    }, 1500);
+                    onUnverifiedEmail(emailOrUsername.trim().toLowerCase(), password);
                 } else {
                     // Show error for other login failures (e.g., invalid credentials)
                     showToast.error('Đăng nhập thất bại', response.message || 'Email hoặc mật khẩu không đúng');
                 }
             }
         } catch (error: any) {
-            console.error('Login error:', error);
+            console.log('Login error:', error);
+
+            const errorMessage = error?.response?.data?.message
+                || error?.response?.data?.Message
+                || error?.message
+                || 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.';
 
             // Check for 403 error in axios response
-            if (error?.response?.status === 403 && onUnverifiedEmail) {
+            if ((error?.response?.status === 403 || isUnverifiedEmailMessage(errorMessage)) && onUnverifiedEmail) {
                 showToast.warning(
-                    'Email chưa xác thực', 
-                    'Vui lòng xác thực email để tiếp tục. Chúng tôi sẽ gửi lại mã OTP cho bạn.'
+                    'Email chưa xác thực',
+                    errorMessage || 'Vui lòng xác thực email để tiếp tục.'
                 );
-                
-                // Wait a bit for user to see the toast, then redirect to OTP
-                setTimeout(() => {
-                    onUnverifiedEmail(emailOrUsername.trim().toLowerCase(), password);
-                }, 1500);
+                onUnverifiedEmail(emailOrUsername.trim().toLowerCase(), password);
             } else {
                 // Show error message from API or generic error
-                const errorMessage = error?.response?.data?.message || 
-                                   error?.message || 
-                                   'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.';
                 showToast.error('Lỗi đăng nhập', errorMessage);
             }
         } finally {
             setIsLoading(false);
         }
-    }, [emailOrUsername, password, onLoginSuccess, onUnverifiedEmail]);
+    }, [emailOrUsername, isUnverifiedEmailMessage, onLoginSuccess, onUnverifiedEmail, password]);
 
     const handleForgotPassword = useCallback(() => {
         if (onNavigateToForgotPassword) {

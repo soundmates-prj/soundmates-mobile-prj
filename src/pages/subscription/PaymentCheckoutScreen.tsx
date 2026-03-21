@@ -1,18 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as WebBrowser from 'expo-web-browser';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
     ActivityIndicator,
-    Platform,
+    Modal,
     ScrollView,
-    StatusBar,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { WebView } from 'react-native-webview';
 import { paymentService, type SubscriptionPlanResponse } from '../../api/paymentService';
 
 // ─── Types ───────────────────────────────────────────
@@ -47,6 +46,8 @@ const PAYMENT_METHODS = [
         iconName: 'qr-code-outline' as const,
     },
 ] as const;
+
+const VNPAY_CALLBACK_PATH = '/payments/vnpay/callback';
 
 const GUID_REGEX =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -123,11 +124,66 @@ export default function PaymentCheckoutScreen({
     onPaymentFailed,
 }: PaymentCheckoutScreenProps) {
     const insets = useSafeAreaInsets();
-    const fallbackTopInset = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
-    const topInset = Math.max(insets.top, fallbackTopInset);
 
     const [selectedPayment, setSelectedPayment] = useState('vnpay');
     const [isProcessing, setIsProcessing] = useState(false);
+    const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+    const [isVerifyingCallback, setIsVerifyingCallback] = useState(false);
+    const callbackHandledRef = useRef(false);
+
+    const isVnpayCallbackUrl = (url: string) => {
+        try {
+            const parsedUrl = new URL(url);
+            return parsedUrl.pathname.toLowerCase().includes(VNPAY_CALLBACK_PATH)
+                && parsedUrl.searchParams.has('vnp_TxnRef');
+        } catch {
+            return url.includes(VNPAY_CALLBACK_PATH);
+        }
+    };
+
+    const verifyCallbackAndFinish = async (callbackUrl: string) => {
+        if (callbackHandledRef.current) {
+            return;
+        }
+
+        callbackHandledRef.current = true;
+        setPaymentUrl(null);
+        setIsVerifyingCallback(true);
+        setIsProcessing(true);
+
+        try {
+            const verifyResult = await paymentService.verifyVnpayCallback(callbackUrl);
+            if (!verifyResult.success) {
+                setIsProcessing(false);
+                onPaymentFailed(verifyResult.message || 'Không thể xác thực kết quả thanh toán từ VNPay.');
+                return;
+            }
+
+            const transactionStatus = verifyResult.data?.transactionStatus?.toLowerCase();
+            if (transactionStatus === 'success' || transactionStatus === 'succeeded' || transactionStatus === 'paid') {
+                setIsProcessing(false);
+                onPaymentSuccess();
+                return;
+            }
+
+            await checkPaymentResult();
+        } catch (error) {
+            console.log('[PaymentCheckout] verify callback error:', error);
+            setIsProcessing(false);
+            onPaymentFailed('Không thể xác thực kết quả thanh toán. Vui lòng thử lại.');
+        } finally {
+            setIsVerifyingCallback(false);
+        }
+    };
+
+    const tryHandleCallbackUrl = (url: string) => {
+        if (!url || !isVnpayCallbackUrl(url)) {
+            return false;
+        }
+
+        void verifyCallbackAndFinish(url);
+        return true;
+    };
 
     const handlePayment = async () => {
         if (isProcessing) return;
@@ -172,25 +228,12 @@ export default function PaymentCheckoutScreen({
                 return;
             }
 
-            // 2. Mở trình duyệt VNPay
-            const browserResult = await WebBrowser.openBrowserAsync(result.data.paymentUrl, {
-                dismissButtonStyle: 'cancel',
-                showTitle: true,
-                enableBarCollapsing: false,
-            });
-
-            // 3. Xử lý kết quả sau khi user đóng browser
-            // VNPay callback sẽ tự động xử lý ở BE
-            // Sau khi user đóng browser, kiểm tra subscription status
-            if (browserResult.type === 'cancel' || browserResult.type === 'dismiss') {
-                // User đóng browser, check subscription status
-                await checkPaymentResult();
-            } else {
-                // Browser closed normally
-                await checkPaymentResult();
-            }
+            // 2. Mở cổng thanh toán ngay trong app để bắt callback URL và tự đóng khi hoàn tất.
+            callbackHandledRef.current = false;
+            setPaymentUrl(result.data.paymentUrl);
+            setIsProcessing(false);
         } catch (error: any) {
-            console.error('[PaymentCheckout] Payment error:', error);
+            console.log('[PaymentCheckout] Payment error:', error);
             setIsProcessing(false);
             onPaymentFailed('Đã xảy ra lỗi trong quá trình thanh toán. Vui lòng thử lại.');
         }
@@ -210,10 +253,20 @@ export default function PaymentCheckoutScreen({
                 setIsProcessing(false);
                 onPaymentFailed('Thanh toán chưa được xác nhận. Vui lòng kiểm tra lại.');
             }
-        } catch (err) {
+        } catch {
             setIsProcessing(false);
             onPaymentFailed('Không thể xác nhận kết quả thanh toán.');
         }
+    };
+
+    const handleClosePaymentWebView = () => {
+        if (isVerifyingCallback) {
+            return;
+        }
+
+        setPaymentUrl(null);
+        setIsProcessing(false);
+        onPaymentFailed('Bạn đã đóng cổng thanh toán trước khi hoàn tất giao dịch.');
     };
 
     return (
@@ -365,6 +418,39 @@ export default function PaymentCheckoutScreen({
                     )}
                 </TouchableOpacity>
             </View>
+
+            <Modal
+                visible={!!paymentUrl}
+                animationType="slide"
+                presentationStyle="fullScreen"
+                onRequestClose={handleClosePaymentWebView}
+            >
+                <SafeAreaView style={styles.webViewScreen} edges={['top', 'bottom']}>
+                    {paymentUrl && (
+                        <WebView
+                            source={{ uri: paymentUrl }}
+                            startInLoadingState
+                            onShouldStartLoadWithRequest={(request) => !tryHandleCallbackUrl(request.url)}
+                            onNavigationStateChange={(navigationState) => {
+                                tryHandleCallbackUrl(navigationState.url);
+                            }}
+                            renderLoading={() => (
+                                <View style={styles.webViewLoadingWrap}>
+                                    <ActivityIndicator size="large" color="#55C5F1" />
+                                    <Text style={styles.webViewLoadingText}>Đang mở cổng thanh toán...</Text>
+                                </View>
+                            )}
+                        />
+                    )}
+
+                    {isVerifyingCallback && (
+                        <View style={styles.webViewVerifyOverlay}>
+                            <ActivityIndicator size="large" color="white" />
+                            <Text style={styles.webViewVerifyText}>Đang xác thực kết quả thanh toán...</Text>
+                        </View>
+                    )}
+                </SafeAreaView>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -651,6 +737,57 @@ const styles = StyleSheet.create({
     payButtonText: {
         fontSize: 16,
         fontWeight: '700',
+        color: 'white',
+    },
+
+    // Payment WebView
+    webViewScreen: {
+        flex: 1,
+        backgroundColor: '#FFFFFF',
+    },
+    webViewHeader: {
+        height: 56,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+    },
+    webViewTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#1E293B',
+    },
+    webViewCloseButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#F3F4F6',
+    },
+    webViewLoadingWrap: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+        backgroundColor: '#F9FAFB',
+    },
+    webViewLoadingText: {
+        fontSize: 13,
+        color: '#6B7280',
+    },
+    webViewVerifyOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(15, 23, 42, 0.7)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+    },
+    webViewVerifyText: {
+        fontSize: 13,
+        fontWeight: '600',
         color: 'white',
     },
 });

@@ -6,7 +6,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { showToast, toastConfig } from './components/ui/Toast';
 import { SoundMateLightColors } from './constants/theme';
-import { authService, registerUnauthorizedHandler } from './src/api';
+import { authService, livestreamService, registerUnauthorizedHandler } from './src/api';
 import { UserProvider, useUser } from './src/context/UserContext';
 import {
     ForgotPasswordScreen,
@@ -21,8 +21,8 @@ import {
     RegisterScreen,
     SubscriptionScreen,
 } from './src/pages';
-import type { SelectedPlan } from './src/pages/subscription/PaymentCheckoutScreen';
 import type { TabName } from './src/pages/BottomNavigation';
+import type { SelectedPlan } from './src/pages/subscription/PaymentCheckoutScreen';
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -72,10 +72,14 @@ function AppContent() {
                     setCurrentScreen(Screen.HOME);
                 }
             } catch (error) {
-                console.error('Error checking auth:', error);
+                console.log('Error checking auth:', error);
             }
         };
         checkAuth();
+    }, []);
+
+    useEffect(() => {
+        void livestreamService.initializeStationContext();
     }, []);
 
     // Save authentication tokens only
@@ -89,9 +93,57 @@ function AppContent() {
                 await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
             }
         } catch (error) {
-            console.error('Error saving auth tokens:', error);
+            console.log('Error saving auth tokens:', error);
         }
     }, []);
+
+    const extractAuthPayload = useCallback((payload: any) => {
+        if (!payload || typeof payload !== 'object') {
+            return null;
+        }
+
+        let current = payload;
+        for (let depth = 0; depth < 4; depth += 1) {
+            if (!current || typeof current !== 'object') {
+                break;
+            }
+
+            if (
+                Object.prototype.hasOwnProperty.call(current, 'accessToken')
+                || Object.prototype.hasOwnProperty.call(current, 'refreshToken')
+            ) {
+                return current;
+            }
+
+            if (current.data && typeof current.data === 'object') {
+                current = current.data;
+                continue;
+            }
+
+            if (current.result && typeof current.result === 'object') {
+                current = current.result;
+                continue;
+            }
+
+            break;
+        }
+
+        return null;
+    }, []);
+
+    const establishAuthenticatedSession = useCallback(async (payload: any): Promise<boolean> => {
+        const authPayload = extractAuthPayload(payload);
+        const accessToken = authPayload?.accessToken;
+        const refreshToken = authPayload?.refreshToken;
+
+        if (!accessToken) {
+            return false;
+        }
+
+        await saveAuthTokens(accessToken, refreshToken);
+        await refreshUser();
+        return true;
+    }, [extractAuthPayload, refreshUser, saveAuthTokens]);
 
     // Clear authentication tokens and user data
     const clearAuthTokens = useCallback(async () => {
@@ -104,30 +156,23 @@ function AppContent() {
                 STORAGE_KEYS.PENDING_PASSWORD,
             ]);
         } catch (error) {
-            console.error('Error clearing auth tokens:', error);
+            console.log('Error clearing auth tokens:', error);
         }
     }, [clearUser]);
 
     // Handle successful login
     const handleLoginSuccess = useCallback(async (response: any) => {
         console.log('[App.tsx] handleLoginSuccess called with:', response);
-        
-        // Handle case where response might be wrapped or unwrapped
-        let userData = response;
-        
-        // If response has 'data' property, it's wrapped
-        if (response?.data) {
-            userData = response.data;
-            console.log('[App.tsx] Unwrapped response.data:', userData);
+
+        const sessionReady = await establishAuthenticatedSession(response);
+        if (!sessionReady) {
+            await clearAuthTokens();
+            showToast.error('Đăng nhập thất bại', 'Không nhận được token đăng nhập. Vui lòng thử lại.');
+            return;
         }
-        
-        if (userData?.accessToken) {
-            const { accessToken, refreshToken } = userData;
-            await saveAuthTokens(accessToken, refreshToken);
-            await refreshUser();
-        }
+
         setCurrentScreen(Screen.HOME);
-    }, [refreshUser, saveAuthTokens]);
+    }, [clearAuthTokens, establishAuthenticatedSession]);
 
     // Handle login attempt with unverified email (error 403)
     const handleUnverifiedEmail = useCallback(async (email: string, password: string) => {
@@ -141,20 +186,27 @@ function AppContent() {
             await AsyncStorage.setItem(STORAGE_KEYS.PENDING_EMAIL, email);
             await AsyncStorage.setItem(STORAGE_KEYS.PENDING_PASSWORD, password);
         } catch (error) {
-            console.error('Error storing pending credentials:', error);
+            console.log('Error storing pending credentials:', error);
         }
+
+        // Navigate immediately so user can input OTP right away
+        setCurrentScreen(Screen.OTP);
 
         // Send verification OTP
         showToast.info('Xác thực email', 'Đang gửi mã xác thực đến email của bạn...');
-        const resendResult = await authService.resendOtp(email);
-        if (resendResult.success) {
-            showToast.success('Đã gửi mã OTP', 'Vui lòng kiểm tra email để lấy mã xác thực');
-        } else {
-            showToast.warning('Lưu ý', 'Không thể gửi lại mã OTP. Vui lòng thử gửi lại mã trong màn hình xác thực.');
-        }
-
-        // Navigate to OTP screen
-        setCurrentScreen(Screen.OTP);
+        void (async () => {
+            try {
+                const resendResult = await authService.resendOtp(email);
+                if (resendResult.success) {
+                    showToast.success('Đã gửi mã OTP', 'Vui lòng kiểm tra email để lấy mã xác thực');
+                } else {
+                    showToast.warning('Lưu ý', 'Không thể gửi lại mã OTP. Vui lòng thử gửi lại mã trong màn hình xác thực.');
+                }
+            } catch (error) {
+                console.log('Resend OTP after unverified login failed:', error);
+                showToast.warning('Lưu ý', 'Không thể gửi lại mã OTP. Vui lòng thử gửi lại mã trong màn hình xác thực.');
+            }
+        })();
     }, []);
 
     // Handle registration success - go to OTP
@@ -168,7 +220,7 @@ function AppContent() {
                 await AsyncStorage.setItem(STORAGE_KEYS.PENDING_EMAIL, email || '');
                 await AsyncStorage.setItem(STORAGE_KEYS.PENDING_PASSWORD, password);
             } catch (error) {
-                console.error('Error storing registration credentials:', error);
+                console.log('Error storing registration credentials:', error);
             }
         }
         setIsNewRegistration(true);
@@ -189,13 +241,13 @@ function AppContent() {
 
                 if (loginResponse.success && loginResponse.data) {
                     console.log('[App.tsx] OTP auto-login success, data:', loginResponse.data);
-                    
-                    const { accessToken, refreshToken } = loginResponse.data;
 
-                    // Save tokens only, then refresh user profile via API
-                    if (accessToken) {
-                        await saveAuthTokens(accessToken, refreshToken);
-                        await refreshUser();
+                    const sessionReady = await establishAuthenticatedSession(loginResponse.data);
+                    if (!sessionReady) {
+                        await clearAuthTokens();
+                        showToast.error('Đăng nhập thất bại', 'Không nhận được token. Vui lòng đăng nhập lại.');
+                        setCurrentScreen(Screen.LOGIN);
+                        return;
                     }
 
                     // Clear pending credentials
@@ -217,7 +269,7 @@ function AppContent() {
                     setCurrentScreen(Screen.LOGIN);
                 }
             } catch (error) {
-                console.error('Auto-login error:', error);
+                console.log('Auto-login error:', error);
                 showToast.error('Lỗi đăng nhập', 'Vui lòng đăng nhập lại');
                 setCurrentScreen(Screen.LOGIN);
             }
@@ -229,7 +281,13 @@ function AppContent() {
         // Reset pending data
         setPendingPassword('');
         setIsNewRegistration(false);
-    }, [userEmail, pendingPassword, isNewRegistration, refreshUser, saveAuthTokens]);
+    }, [
+        clearAuthTokens,
+        establishAuthenticatedSession,
+        isNewRegistration,
+        pendingPassword,
+        userEmail,
+    ]);
 
     // Handle profile setup complete
     const handleProfileSetupComplete = useCallback(() => {
@@ -268,8 +326,9 @@ function AppContent() {
         setCurrentScreen(Screen.PROFILE);
     }, []);
 
-    const handleBackToHome = useCallback((tab: HomeEntryTab = 'home') => {
-        setHomeEntryTab(tab);
+    const handleBackToHome = useCallback((tab: TabName = 'home') => {
+        const entryTab: HomeEntryTab = tab === 'blog' || tab === 'podcast' ? tab : 'home';
+        setHomeEntryTab(entryTab);
         setCurrentScreen(Screen.HOME);
     }, []);
 

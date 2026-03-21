@@ -1,10 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useMemo, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+    ActivityIndicator,
+    Image,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import { PodcastResponse, podcastService } from '../../api';
 import { PodcastDetailScreen } from './PodcastDetailScreen';
 
-interface Podcast {
+// ─── Helpers ─────────────────────────────────────────────────────
+
+/** Map API response → view-model used by UI components */
+interface PodcastVM {
   id: string;
   title: string;
   subtitle: string;
@@ -14,93 +27,47 @@ interface Podcast {
   followers: number;
   episodes: number;
   category: string;
-  isNew?: boolean;
-  isTrending?: boolean;
+  isNew: boolean;
+  isTrending: boolean;
+  createdAt: string;
 }
 
-const CATEGORIES = ['Tất cả', 'Mới nhất', 'Thịnh hành', 'Yêu thích', 'Tâm sự', 'Nhạc', 'Câu chuyện'];
+const DEFAULT_COVER =
+  'https://images.unsplash.com/photo-1531369333294-39fa52b799ef?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=600';
 
-const PODCASTS: Podcast[] = [
-  {
-    id: '1',
-    title: 'Thuần Podcast',
-    subtitle: 'Yêu lành',
-    host: 'Minh Anh',
-    hostAvatar: 'https://i.pravatar.cc/100?img=10',
-    coverImage:
-      'https://images.unsplash.com/photo-1531369333294-39fa52b799ef?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx3b21hbiUyMHBvZGNhc3QlMjByZWNvcmRpbmclMjBvdXRkb29yJTIwbmF0dXJlfGVufDF8fHx8MTc3MzI5NjgxM3ww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
-    followers: 1234,
-    episodes: 2,
-    category: 'Tâm sự',
-    isNew: true,
-    isTrending: true,
-  },
-  {
-    id: '2',
-    title: 'Đêm Nghe Thơ',
-    subtitle: 'Thơ và đời',
-    host: 'Hoàng Lan',
-    hostAvatar: 'https://i.pravatar.cc/100?img=5',
-    coverImage:
-      'https://images.unsplash.com/photo-1764160750195-8a646b8c8437?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwb2RjYXN0JTIwcmVjb3JkaW5nJTIwbWljcm9waG9uZSUyMHNldHVwfGVufDF8fHx8MTc3MzI5NzA5N3ww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
-    followers: 2456,
-    episodes: 15,
-    category: 'Câu chuyện',
-    isTrending: true,
-  },
-  {
-    id: '3',
-    title: 'Âm Thanh Trị Liệu',
-    subtitle: 'Chữa lành tâm hồn',
-    host: 'Dr. Phương',
-    hostAvatar: 'https://i.pravatar.cc/100?img=7',
-    coverImage:
-      'https://images.unsplash.com/photo-1758876201548-ade1eff8b169?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtdXNpYyUyMHRoZXJhcHklMjByZWxheGF0aW9ufGVufDF8fHx8MTc3MzI5NzA5OHww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
-    followers: 3892,
-    episodes: 24,
-    category: 'Nhạc',
-  },
-  {
-    id: '4',
-    title: 'Chuyện Radio',
-    subtitle: 'Kể chuyện đêm khuya',
-    host: 'Quang Minh',
-    hostAvatar: 'https://i.pravatar.cc/100?img=3',
-    coverImage:
-      'https://images.unsplash.com/photo-1772812660568-994f09a62167?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxyYWRpbyUyMGJyb2FkY2FzdCUyMHZpbnRhZ2UlMjByZXRyb3xlbnwxfHx8fDE3NzMyOTcwOTh8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
-    followers: 5621,
-    episodes: 42,
-    category: 'Câu chuyện',
-    isTrending: true,
-  },
-  {
-    id: '5',
-    title: 'Tâm Tình Tuổi 20',
-    subtitle: 'Những suy nghĩ trẻ trung',
-    host: 'Thu Hà',
-    hostAvatar: 'https://i.pravatar.cc/100?img=9',
-    coverImage:
-      'https://images.unsplash.com/photo-1655468289134-bb764181b0e4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx3b21hbiUyMGhlYWRwaG9uZXMlMjBtdXNpYyUyMGxpc3RlbmluZ3xlbnwxfHx8fDE3NzMyMzUxMDB8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
-    followers: 1876,
-    episodes: 8,
-    category: 'Tâm sự',
-    isNew: true,
-  },
-  {
-    id: '6',
-    title: 'Podcast Letter',
-    subtitle: 'Những lá thư âm thanh',
-    host: 'Văn Anh',
-    hostAvatar: 'https://i.pravatar.cc/100?img=8',
-    coverImage:
-      'https://images.unsplash.com/photo-1764160750138-117c555328c0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzdG9yeXRlbGxpbmclMjBhdWRpbyUyMG1pY3JvcGhvbmV8ZW58MXx8fHwxNzczMjk3MDk4fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral',
-    followers: 4234,
-    episodes: 31,
-    category: 'Tâm sự',
-  },
-];
+const DEFAULT_AVATAR = 'https://i.pravatar.cc/100?img=10';
 
-function FeaturedPodcast({ podcast, onPress }: { podcast: Podcast; onPress: () => void }) {
+/** Consider podcast "new" if created within the last 7 days */
+const isRecentlyCreated = (dateStr: string): boolean => {
+  try {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    return diff < 7 * 24 * 60 * 60 * 1000;
+  } catch {
+    return false;
+  }
+};
+
+const mapToPodcastVM = (raw: PodcastResponse, idx: number): PodcastVM => ({
+  id: raw.id,
+  title: raw.title,
+  subtitle: raw.description || '',
+  host: raw.author || 'Unknown',
+  hostAvatar: DEFAULT_AVATAR,
+  coverImage: raw.banner || DEFAULT_COVER,
+  followers: 0,
+  episodes: raw.episodeCount,
+  category: raw.type || 'Khác',
+  isNew: isRecentlyCreated(raw.createdAt),
+  // Mark the top 3 podcasts (by episode count) as trending
+  isTrending: false, // will be set after sorting
+  createdAt: raw.createdAt,
+});
+
+const CATEGORIES = ['Tất cả', 'Mới nhất', 'Thịnh hành'];
+
+// ─── Sub-Components ──────────────────────────────────────────────
+
+function FeaturedPodcast({ podcast, onPress }: { podcast: PodcastVM; onPress: () => void }) {
   return (
     <TouchableOpacity activeOpacity={0.92} style={styles.featuredWrap} onPress={onPress}>
       <Image source={{ uri: podcast.coverImage }} style={styles.featuredImage} />
@@ -136,11 +103,6 @@ function FeaturedPodcast({ podcast, onPress }: { podcast: Podcast; onPress: () =
 
         <View style={styles.featuredStatsRow}>
           <View style={styles.featuredStatInline}>
-            <Ionicons name="people-outline" size={14} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.featuredStatText}>{podcast.followers.toLocaleString()}</Text>
-          </View>
-
-          <View style={styles.featuredStatInline}>
             <Ionicons name="mic-outline" size={14} color="rgba(255,255,255,0.7)" />
             <Text style={styles.featuredStatText}>{podcast.episodes} tập</Text>
           </View>
@@ -156,7 +118,7 @@ function FeaturedPodcast({ podcast, onPress }: { podcast: Podcast; onPress: () =
   );
 }
 
-function PodcastCard({ podcast, onPress }: { podcast: Podcast; onPress: () => void }) {
+function PodcastCard({ podcast, onPress }: { podcast: PodcastVM; onPress: () => void }) {
   return (
     <TouchableOpacity activeOpacity={0.9} style={styles.podcastCard} onPress={onPress}>
       <View style={styles.podcastCardTop}>
@@ -175,14 +137,16 @@ function PodcastCard({ podcast, onPress }: { podcast: Podcast; onPress: () => vo
 
           <View style={styles.podcastMetaRow}>
             <View style={styles.podcastMetaInline}>
-              <Ionicons name="people-outline" size={12} color="#9CA3AF" />
-              <Text style={styles.podcastMetaText}>{podcast.followers.toLocaleString()}</Text>
-            </View>
-
-            <View style={styles.podcastMetaInline}>
               <Ionicons name="mic-outline" size={12} color="#9CA3AF" />
               <Text style={styles.podcastMetaText}>{podcast.episodes} tập</Text>
             </View>
+
+            {podcast.category ? (
+              <View style={styles.podcastMetaInline}>
+                <Ionicons name="pricetag-outline" size={12} color="#9CA3AF" />
+                <Text style={styles.podcastMetaText}>{podcast.category}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -202,31 +166,121 @@ function PodcastCard({ podcast, onPress }: { podcast: Podcast; onPress: () => vo
   );
 }
 
+// ─── Main Screen ─────────────────────────────────────────────────
+
 export default function PodcastScreen() {
   const [activeCategory, setActiveCategory] = useState('Tất cả');
   const [selectedPodcast, setSelectedPodcast] = useState<string | null>(null);
+  const [podcasts, setPodcasts] = useState<PodcastVM[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchPodcasts = useCallback(async (isRefresh = false) => {
+    try {
+      if (!isRefresh) setLoading(true);
+      setError(null);
+
+      const data = await podcastService.getPublished();
+
+      // Sort by episode count descending to determine "trending"
+      const sorted = [...data].sort((a, b) => b.episodeCount - a.episodeCount);
+      const trendingIds = new Set(sorted.slice(0, 3).map((p) => p.id));
+
+      const mapped = data.map((raw, idx) => {
+        const vm = mapToPodcastVM(raw, idx);
+        vm.isTrending = trendingIds.has(raw.id);
+        return vm;
+      });
+
+      setPodcasts(mapped);
+    } catch (err: any) {
+      console.log('[PodcastScreen] fetchPodcasts error:', err);
+      setError('Không thể tải danh sách podcast. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+      if (isRefresh) setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPodcasts();
+  }, [fetchPodcasts]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchPodcasts(true);
+  }, [fetchPodcasts]);
+
+  // ─── Derived data ──────────────────────────────────────────────
 
   const filteredPodcasts = useMemo(() => {
-    return PODCASTS.filter((podcast) => {
+    return podcasts.filter((podcast) => {
       if (activeCategory === 'Tất cả') return true;
       if (activeCategory === 'Mới nhất') return podcast.isNew;
       if (activeCategory === 'Thịnh hành') return podcast.isTrending;
       return podcast.category === activeCategory;
     });
-  }, [activeCategory]);
+  }, [activeCategory, podcasts]);
 
   const featuredPodcast = useMemo(() => {
-    return PODCASTS.find((podcast) => podcast.isTrending) || PODCASTS[0];
-  }, []);
+    return podcasts.find((podcast) => podcast.isTrending) || podcasts[0];
+  }, [podcasts]);
 
   const selectedPodcastData = useMemo(() => {
     if (!selectedPodcast) return undefined;
-    return PODCASTS.find((podcast) => podcast.id === selectedPodcast);
-  }, [selectedPodcast]);
+    return podcasts.find((podcast) => podcast.id === selectedPodcast);
+  }, [selectedPodcast, podcasts]);
+
+  // Build dynamic category chips from the data
+  const dynamicCategories = useMemo(() => {
+    const typeSet = new Set<string>();
+    podcasts.forEach((p) => {
+      if (p.category) typeSet.add(p.category);
+    });
+    // Always keep base categories, append unique types from data
+    const extra = [...typeSet].filter((t) => !CATEGORIES.includes(t));
+    return [...CATEGORIES, ...extra];
+  }, [podcasts]);
+
+  // ─── Detail screen ────────────────────────────────────────────
 
   if (selectedPodcast) {
     return <PodcastDetailScreen onBack={() => setSelectedPodcast(null)} podcast={selectedPodcastData} />;
   }
+
+  // ─── Loading state ────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <View style={[styles.screen, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#55C5F1" />
+        <Text style={styles.loadingText}>Đang tải podcast...</Text>
+      </View>
+    );
+  }
+
+  // ─── Error state ──────────────────────────────────────────────
+
+  if (error && podcasts.length === 0) {
+    return (
+      <View style={[styles.screen, styles.centerContent]}>
+        <View style={styles.emptyIconWrap}>
+          <Ionicons name="cloud-offline-outline" size={32} color="#D1D5DB" />
+        </View>
+        <Text style={styles.emptyTitle}>{error}</Text>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={styles.retryButton}
+          onPress={() => fetchPodcasts()}
+        >
+          <Text style={styles.retryButtonText}>Thử lại</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ─── Render ───────────────────────────────────────────────────
 
   return (
     <View style={styles.screen}>
@@ -237,22 +291,32 @@ export default function PodcastScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.featuredSection}>
-          <View style={styles.featuredSectionTitleRow}>
-            <Ionicons name="sparkles" size={18} color="#55C5F1" />
-            <Text style={styles.featuredSectionTitle}>Nổi bật hôm nay</Text>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#55C5F1']} />
+        }
+      >
+        {/* Featured */}
+        {featuredPodcast && (
+          <View style={styles.featuredSection}>
+            <View style={styles.featuredSectionTitleRow}>
+              <Ionicons name="sparkles" size={18} color="#55C5F1" />
+              <Text style={styles.featuredSectionTitle}>Nổi bật hôm nay</Text>
+            </View>
+            <FeaturedPodcast podcast={featuredPodcast} onPress={() => setSelectedPodcast(featuredPodcast.id)} />
           </View>
-          <FeaturedPodcast podcast={featuredPodcast} onPress={() => setSelectedPodcast(featuredPodcast.id)} />
-        </View>
+        )}
 
+        {/* Categories */}
         <View style={styles.categoriesWrap}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoriesScrollContent}
           >
-            {CATEGORIES.map((category) => {
+            {dynamicCategories.map((category) => {
               const isActive = category === activeCategory;
 
               return (
@@ -271,6 +335,7 @@ export default function PodcastScreen() {
           </ScrollView>
         </View>
 
+        {/* Stats */}
         <View style={styles.statsWrap}>
           <LinearGradient
             colors={['#E0F2FE', '#F0F9FF']}
@@ -281,12 +346,14 @@ export default function PodcastScreen() {
             <View style={styles.statsRow}>
               <View>
                 <Text style={styles.statsLabel}>Tổng số podcast</Text>
-                <Text style={styles.statsPrimaryValue}>{PODCASTS.length}</Text>
+                <Text style={styles.statsPrimaryValue}>{podcasts.length}</Text>
               </View>
 
               <View style={styles.statsRightBlock}>
-                <Text style={styles.statsLabel}>Lượt nghe hôm nay</Text>
-                <Text style={styles.statsSecondaryValue}>12.5K</Text>
+                <Text style={styles.statsLabel}>Tổng số tập</Text>
+                <Text style={styles.statsSecondaryValue}>
+                  {podcasts.reduce((sum, p) => sum + p.episodes, 0)}
+                </Text>
               </View>
 
               <View style={styles.statsIconWrap}>
@@ -296,6 +363,7 @@ export default function PodcastScreen() {
           </LinearGradient>
         </View>
 
+        {/* Podcast List */}
         <View style={styles.listWrap}>
           <View style={styles.listHeaderRow}>
             <Text style={styles.listTitle}>{activeCategory === 'Tất cả' ? 'Tất cả Podcast' : activeCategory}</Text>
@@ -321,10 +389,34 @@ export default function PodcastScreen() {
   );
 }
 
+// ─── Styles ──────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: '#FAFAFA',
+  },
+  centerContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#64748B',
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#55C5F1',
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
   header: {
     height: 52,
