@@ -11,7 +11,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { showToast } from '../../../components/ui/Toast';
+import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { authService, UpdateProfileRequest } from '../../api';
+import { useTheme } from '../../context/ThemeContext';
 import { UserData, useUser } from '../../context/UserContext';
 
 interface EditProfileScreenProps {
@@ -34,6 +36,8 @@ interface ProfileData {
 
 export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
   const { user, refreshUser } = useUser();
+  const { isDarkMode } = useTheme();
+  const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
   const formatDateForInput = (value?: string) => {
     if (!value) return '';
     const parsed = new Date(value);
@@ -147,7 +151,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]} edges={['top']}>
       {/* Success Toast */}
       {showSavedToast && (
         <View style={styles.toastContainer}>
@@ -159,11 +163,11 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
       )}
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: palette.surface, borderBottomColor: palette.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.headerButton}>
-          <Ionicons name="arrow-back" size={22} color="#1E293B" />
+          <Ionicons name="arrow-back" size={22} color={palette.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chỉnh sửa hồ sơ</Text>
+        <Text style={[styles.headerTitle, { color: palette.textPrimary }]}>Chỉnh sửa hồ sơ</Text>
         {/* <TouchableOpacity
           onPress={handleSave}
           disabled={isSaving}
@@ -177,15 +181,15 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Form Section - Basic Info */}
         <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>THÔNG TIN CƠ BẢN</Text>
-          <View style={styles.card}>
+          <Text style={[styles.sectionTitle, { color: palette.textMuted }]}>THÔNG TIN CƠ BẢN</Text>
+          <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
             {/* Display Name */}
             <View style={styles.inputRow}>
               <View style={[styles.iconBox, { backgroundColor: '#55C5F1' + '1A' }]}>
                 <Ionicons name="person-outline" size={18} color="#55C5F1" />
               </View>
               <View style={styles.inputContent}>
-                <Text style={styles.inputLabel}>Họ và tên</Text>
+                <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Họ và tên</Text>
                 <View style={styles.nameRow}>
                   <TextInput
                     value={profileData.firstName}
@@ -193,9 +197,10 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                     onFocus={() => setEditingField('firstName')}
                     onBlur={() => setEditingField(null)}
                     placeholder="Họ"
-                    placeholderTextColor="#D1D5DB"
+                    placeholderTextColor={palette.textMuted}
                     style={[
                       styles.input,
+                      { color: palette.textPrimary },
                       styles.nameField,
                       editingField === 'firstName' && styles.inputFocused,
                     ]}
@@ -206,9 +211,10 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                     onFocus={() => setEditingField('lastName')}
                     onBlur={() => setEditingField(null)}
                     placeholder="Tên"
-                    placeholderTextColor="#D1D5DB"
+                    placeholderTextColor={palette.textMuted}
                     style={[
                       styles.input,
+                      { color: palette.textPrimary },
                       styles.nameField,
                       editingField === 'lastName' && styles.inputFocused,
                     ]}
@@ -217,7 +223,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
               </View>
             </View>
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: palette.border }]} />
 
             {/* Username */}
             <View style={styles.inputRow}>
@@ -225,7 +231,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                 <Ionicons name="at" size={18} color="#A78BFA" />
               </View>
               <View style={styles.inputContent}>
-                <Text style={styles.inputLabel}>Tên người dùng</Text>
+                <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Tên người dùng</Text>
                 <View style={styles.usernameRow}>
                   {/* <Text style={styles.atSymbol}>@</Text> */}
                   <TextInput
@@ -235,6 +241,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                     onBlur={() => setEditingField(null)}
                     style={[
                       styles.input,
+                      { color: palette.textPrimary },
                       styles.usernameInput,
                       editingField === 'username' && styles.inputFocused,
                     ]}
@@ -247,7 +254,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
               </View>
             </View>
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: palette.border }]} />
 
             {/* Bio */}
             <View style={styles.inputRow}>
@@ -256,8 +263,8 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
               </View>
               <View style={styles.inputContent}>
                 <View style={styles.bioHeader}>
-                  <Text style={styles.inputLabel}>Giới thiệu</Text>
-                  <Text style={styles.charCount}>
+                  <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Giới thiệu</Text>
+                  <Text style={[styles.charCount, { color: palette.textMuted }]}>
                     {profileData.bio.length}/150
                   </Text>
                 </View>
@@ -273,6 +280,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                   maxLength={150}
                   style={[
                     styles.input,
+                    { color: palette.textPrimary },
                     styles.bioInput,
                     editingField === 'bio' && styles.inputFocused,
                   ]}
@@ -284,15 +292,15 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
 
         {/* Form Section - Contact Info */}
         <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>THÔNG TIN LIÊN HỆ</Text>
-          <View style={styles.card}>
+          <Text style={[styles.sectionTitle, { color: palette.textMuted }]}>THÔNG TIN LIÊN HỆ</Text>
+          <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
             {/* Email */}
             <View style={styles.inputRow}>
               <View style={[styles.iconBox, { backgroundColor: '#3B82F6' + '1A' }]}>
                 <Ionicons name="mail-outline" size={18} color="#3B82F6" />
               </View>
               <View style={styles.inputContent}>
-                <Text style={styles.inputLabel}>Email</Text>
+                <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Email</Text>
                 <TextInput
                   value={profileData.email}
                   onChangeText={(value) => handleChange('email', value)}
@@ -302,6 +310,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                   autoCapitalize="none"
                   style={[
                     styles.input,
+                    { color: palette.textPrimary },
                     editingField === 'email' && styles.inputFocused,
                   ]}
                 />
@@ -312,7 +321,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
               </View>
             </View>
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: palette.border }]} />
 
             {/* Phone */}
             <View style={styles.inputRow}>
@@ -320,7 +329,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                 <Ionicons name="call-outline" size={18} color="#10B981" />
               </View>
               <View style={styles.inputContent}>
-                <Text style={styles.inputLabel}>Số điện thoại</Text>
+                <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Số điện thoại</Text>
                 <TextInput
                   value={profileData.phone}
                   onChangeText={(value) => handleChange('phone', value)}
@@ -329,13 +338,14 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                   keyboardType="phone-pad"
                   style={[
                     styles.input,
+                    { color: palette.textPrimary },
                     editingField === 'phone' && styles.inputFocused,
                   ]}
                 />
               </View>
             </View>
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: palette.border }]} />
 
             {/* Website */}
             <View style={styles.inputRow}>
@@ -343,7 +353,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                 <Ionicons name="link-outline" size={18} color="#6366F1" />
               </View>
               <View style={styles.inputContent}>
-                <Text style={styles.inputLabel}>Website</Text>
+                <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Website</Text>
                 <TextInput
                   value={profileData.website}
                   onChangeText={(value) => handleChange('website', value)}
@@ -353,6 +363,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                   autoCapitalize="none"
                   style={[
                     styles.input,
+                    { color: palette.textPrimary },
                     editingField === 'website' && styles.inputFocused,
                   ]}
                 />
@@ -363,8 +374,8 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
 
         {/* Form Section - Personal Details */}
         <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>THÔNG TIN CÁ NHÂN</Text>
-          <View style={styles.card}>
+          <Text style={[styles.sectionTitle, { color: palette.textMuted }]}>THÔNG TIN CÁ NHÂN</Text>
+          <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
             {/* Gender */}
             <View style={styles.inputRow}>
               <View style={[styles.iconBox, { backgroundColor: '#EC4899' + '1A' }]}>
@@ -374,16 +385,16 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                 style={styles.inputContent}
                 onPress={() => setShowGenderPicker(!showGenderPicker)}
               >
-                <Text style={styles.inputLabel}>Giới tính</Text>
+                <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Giới tính</Text>
                 <View style={styles.genderRow}>
-                  <Text style={styles.genderValue}>{profileData.gender}</Text>
-                  <Ionicons name="chevron-down" size={18} color="#9CA3AF" />
+                  <Text style={[styles.genderValue, { color: palette.textPrimary }]}>{profileData.gender}</Text>
+                  <Ionicons name="chevron-down" size={18} color={palette.textMuted} />
                 </View>
               </TouchableOpacity>
             </View>
 
             {showGenderPicker && (
-              <View style={styles.genderPicker}>
+              <View style={[styles.genderPicker, { backgroundColor: isDarkMode ? '#111827' : '#F9FAFB' }]}>
                 {genderOptions.map((option) => (
                   <TouchableOpacity
                     key={option}
@@ -399,6 +410,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                     <Text
                       style={[
                         styles.genderOptionText,
+                        { color: palette.textPrimary },
                         profileData.gender === option && styles.genderOptionTextSelected,
                       ]}
                     >
@@ -412,7 +424,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
               </View>
             )}
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: palette.border }]} />
 
             {/* Birthday */}
             <View style={styles.inputRow}>
@@ -420,18 +432,18 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                 <Ionicons name="calendar-outline" size={18} color="#F59E0B" />
               </View>
               <View style={styles.inputContent}>
-                <Text style={styles.inputLabel}>Ngày sinh</Text>
+                <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Ngày sinh</Text>
                 <TextInput
                   value={profileData.birthday}
                   onChangeText={(value) => handleChange('birthday', value)}
                   placeholder="DD/MM/YYYY"
-                  placeholderTextColor="#D1D5DB"
-                  style={styles.input}
+                  placeholderTextColor={palette.textMuted}
+                  style={[styles.input, { color: palette.textPrimary }]}
                 />
               </View>
             </View>
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: palette.border }]} />
 
             {/* Location */}
             <View style={styles.inputRow}>
@@ -439,7 +451,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                 <Ionicons name="location-outline" size={18} color="#EF4444" />
               </View>
               <View style={styles.inputContent}>
-                <Text style={styles.inputLabel}>Vị trí</Text>
+                <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Vị trí</Text>
                 <TextInput
                   value={profileData.location}
                   onChangeText={(value) => handleChange('location', value)}
@@ -447,13 +459,14 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                   onBlur={() => setEditingField(null)}
                   style={[
                     styles.input,
+                    { color: palette.textPrimary },
                     editingField === 'location' && styles.inputFocused,
                   ]}
                 />
               </View>
             </View>
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: palette.border }]} />
 
             {/* Favorite Genre */}
             <View style={styles.inputRow}>
@@ -461,16 +474,17 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                 <Ionicons name="musical-notes" size={18} color="#55C5F1" />
               </View>
               <View style={styles.inputContent}>
-                <Text style={styles.inputLabel}>Thể loại yêu thích</Text>
+                <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Thể loại yêu thích</Text>
                 <TextInput
                   value={profileData.favoriteGenre}
                   onChangeText={(value) => handleChange('favoriteGenre', value)}
                   onFocus={() => setEditingField('favoriteGenre')}
                   onBlur={() => setEditingField(null)}
                   placeholder="VD: Pop, Rock, Ballad..."
-                  placeholderTextColor="#D1D5DB"
+                  placeholderTextColor={palette.textMuted}
                   style={[
                     styles.input,
+                    { color: palette.textPrimary },
                     editingField === 'favoriteGenre' && styles.inputFocused,
                   ]}
                 />
@@ -481,26 +495,26 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
 
         {/* Social Links */}
         <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>LIÊN KẾT MẠNG XÃ HỘI</Text>
-          <View style={styles.card}>
+          <Text style={[styles.sectionTitle, { color: palette.textMuted }]}>LIÊN KẾT MẠNG XÃ HỘI</Text>
+          <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
             {/* Instagram */}
             <View style={styles.inputRow}>
               <View style={[styles.iconBox, { backgroundColor: '#E1306C' + '1A' }]}>
                 <Ionicons name="logo-instagram" size={18} color="#E1306C" />
               </View>
               <View style={styles.inputContent}>
-                <Text style={styles.inputLabel}>Instagram</Text>
+                <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Instagram</Text>
                 <TextInput
                   placeholder="@username"
-                  placeholderTextColor="#D1D5DB"
+                  placeholderTextColor={palette.textMuted}
                   defaultValue="@minhanh_music"
                   autoCapitalize="none"
-                  style={styles.input}
+                  style={[styles.input, { color: palette.textPrimary }]}
                 />
               </View>
             </View>
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: palette.border }]} />
 
             {/* Facebook */}
             <View style={styles.inputRow}>
@@ -508,34 +522,34 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                 <Ionicons name="logo-facebook" size={18} color="#1877F2" />
               </View>
               <View style={styles.inputContent}>
-                <Text style={styles.inputLabel}>Facebook</Text>
+                <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Facebook</Text>
                 <TextInput
                   placeholder="Tên hoặc link Facebook"
-                  placeholderTextColor="#D1D5DB"
+                  placeholderTextColor={palette.textMuted}
                   defaultValue="Minh Anh"
-                  style={styles.input}
+                  style={[styles.input, { color: palette.textPrimary }]}
                 />
               </View>
             </View>
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: palette.border }]} />
 
             {/* Add more link */}
             <TouchableOpacity style={styles.addLinkButton}>
-              <Text style={styles.addLinkText}>+ Thêm liên kết</Text>
+              <Text style={[styles.addLinkText, { color: palette.primary }]}>+ Thêm liên kết</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Privacy Note */}
         <View style={styles.formSection}>
-          <View style={styles.privacyNote}>
+          <View style={[styles.privacyNote, { backgroundColor: isDarkMode ? 'rgba(85, 197, 241, 0.14)' : '#55C5F10D', borderColor: isDarkMode ? 'rgba(85, 197, 241, 0.38)' : '#55C5F133' }]}>
             <View style={styles.privacyIconBox}>
               <Ionicons name="shield-checkmark" size={18} color="#55C5F1" />
             </View>
             <View style={styles.privacyContent}>
-              <Text style={styles.privacyTitle}>Quyền riêng tư</Text>
-              <Text style={styles.privacyText}>
+              <Text style={[styles.privacyTitle, { color: palette.textPrimary }]}>Quyền riêng tư</Text>
+              <Text style={[styles.privacyText, { color: palette.textSecondary }]}>
                 Email và số điện thoại của bạn sẽ không hiển thị công khai. Chỉ tên hiển thị, ảnh
                 đại diện và giới thiệu sẽ được hiển thị trên hồ sơ công khai.
               </Text>
@@ -546,7 +560,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
         {/* Bottom Action Buttons */}
         <View style={styles.bottomActions}>
           <TouchableOpacity onPress={onBack} style={styles.cancelButton}>
-            <Text style={styles.cancelButtonText}>Hủy bỏ</Text>
+            <Text style={[styles.cancelButtonText, { color: palette.textSecondary }]}>Hủy bỏ</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={handleSave}

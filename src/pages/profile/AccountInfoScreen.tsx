@@ -2,20 +2,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import {
-  Alert,
-  Clipboard,
-  Dimensions,
-  Image,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    Alert,
+    Clipboard,
+    Dimensions,
+    Image,
+    Platform,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showToast } from '../../../components/ui/Toast';
+import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
 
 const { width } = Dimensions.get('window');
@@ -88,6 +90,8 @@ interface InfoRowProps {
   copyable?: boolean;
   verified?: boolean;
   onPress?: () => void;
+  palette: typeof SoundMateLightColors | typeof SoundMateColors;
+  isDarkMode: boolean;
 }
 
 function InfoRow({
@@ -100,6 +104,8 @@ function InfoRow({
   copyable,
   verified,
   onPress,
+  palette,
+  isDarkMode,
 }: InfoRowProps) {
   const handleCopy = () => {
     Clipboard.setString(value);
@@ -117,9 +123,9 @@ function InfoRow({
         <Ionicons name={icon as any} size={17} color={iconColor} />
       </View>
       <View style={styles.infoContent}>
-        <Text style={styles.infoLabel}>{label}</Text>
+        <Text style={[styles.infoLabel, { color: palette.textMuted }]}>{label}</Text>
         <View style={styles.infoValueRow}>
-          <Text style={styles.infoValue} numberOfLines={1}>
+          <Text style={[styles.infoValue, { color: palette.textPrimary }]} numberOfLines={1}>
             {value}
           </Text>
           {verified !== undefined && (
@@ -138,19 +144,19 @@ function InfoRow({
         </View>
       )}
       {copyable && (
-        <TouchableOpacity onPress={handleCopy} style={styles.copyButton}>
-          <Ionicons name="copy-outline" size={14} color="#9CA3AF" />
+        <TouchableOpacity onPress={handleCopy} style={[styles.copyButton, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}> 
+          <Ionicons name="copy-outline" size={14} color={palette.textMuted} />
         </TouchableOpacity>
       )}
-      {onPress && <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />}
+      {onPress && <Ionicons name="chevron-forward" size={16} color={palette.textMuted} />}
     </TouchableOpacity>
   );
 }
 
-function SectionHeader({ title }: { title: string }) {
+function SectionHeader({ title, palette }: { title: string; palette: typeof SoundMateLightColors | typeof SoundMateColors }) {
   return (
     <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <Text style={[styles.sectionTitle, { color: palette.textMuted }]}>{title}</Text>
     </View>
   );
 }
@@ -158,6 +164,8 @@ function SectionHeader({ title }: { title: string }) {
 // ─── Main Component ─────────────────────────────────────
 
 export default function AccountInfoScreen({ onBack, onOpenSubscription }: AccountInfoScreenProps) {
+  const { isDarkMode } = useTheme();
+  const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
   const insets = useSafeAreaInsets();
   const { user } = useUser();
   console.log('User data in AccountInfoScreen:', user);
@@ -220,13 +228,13 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
   };
 
   return (
-    <SafeAreaView style={[styles.container, { paddingTop: topInset }]} edges={['left', 'right', 'bottom']}>
+    <SafeAreaView style={[styles.container, { paddingTop: topInset, backgroundColor: palette.background }]} edges={['left', 'right', 'bottom']}>
       {/* ── Header ── */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: palette.surface, borderBottomColor: palette.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={22} color="#1E293B" />
+          <Ionicons name="arrow-back" size={22} color={palette.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Thông tin tài khoản</Text>
+        <Text style={[styles.headerTitle, { color: palette.textPrimary }]}>Thông tin tài khoản</Text>
       </View>
 
       <ScrollView
@@ -236,7 +244,7 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
       >
         {/* ── Profile Header Card ── */}
         <View style={styles.profileCardContainer}>
-          <View style={styles.profileCard}>
+          <View style={[styles.profileCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
             <View style={styles.coverContainer}>
               {coverImageUrl ? (
                 <Image source={{ uri: coverImageUrl }} style={styles.coverImage} />
@@ -267,13 +275,13 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
                 </View>
                 <View style={styles.profileInfo}>
                   <View style={styles.profileNameRow}>
-                    <Text style={styles.profileName}>{displayName}</Text>
+                    <Text style={[styles.profileName, { color: palette.textPrimary }]}>{displayName}</Text>
                     <View style={styles.premiumBadge}>
                       <Ionicons name="star" size={10} color="white" />
                       <Text style={styles.premiumText}>{accountType}</Text>
                     </View>
                   </View>
-                  <Text style={styles.profileUsername}>@{username}</Text>
+                  <Text style={[styles.profileUsername, { color: palette.textSecondary }]}>@{username}</Text>
                 </View>
               </View>
             </View>
@@ -281,20 +289,22 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
         </View>
 
         {/* ── Account Details ── */}
-        <SectionHeader title="Chi tiết tài khoản" />
-        <View style={styles.section}>
+        <SectionHeader title="Chi tiết tài khoản" palette={palette} />
+        <View style={[styles.section, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           <InfoRow
             icon="finger-print-outline"
             iconColor="#6366F1"
             label="Mã tài khoản"
             value={accountId}
             copyable
+            palette={palette}
+            isDarkMode={isDarkMode}
           />
-          <View style={styles.divider} />
-          <InfoRow icon="at" iconColor="#55C5F1" label="Tên người dùng" value={`@${username}`} copyable />
-          <View style={styles.divider} />
-          <InfoRow icon="calendar-outline" iconColor="#10B981" label="Ngày tham gia" value={joinDate} />
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: palette.border }]} />
+          <InfoRow icon="at" iconColor="#55C5F1" label="Tên người dùng" value={`@${username}`} copyable palette={palette} isDarkMode={isDarkMode} />
+          <View style={[styles.divider, { backgroundColor: palette.border }]} />
+          <InfoRow icon="calendar-outline" iconColor="#10B981" label="Ngày tham gia" value={joinDate} palette={palette} isDarkMode={isDarkMode} />
+          <View style={[styles.divider, { backgroundColor: palette.border }]} />
           <InfoRow
             icon="star-outline"
             iconColor="#A78BFA"
@@ -303,12 +313,14 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
             badge="Đang hoạt động"
             badgeColor="#10B981"
             onPress={onOpenSubscription}
+            palette={palette}
+            isDarkMode={isDarkMode}
           />
         </View>
 
         {/* ── Contact Information ── */}
-        <SectionHeader title="Thông tin liên hệ" />
-        <View style={styles.section}>
+        <SectionHeader title="Thông tin liên hệ" palette={palette} />
+        <View style={[styles.section, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           <InfoRow
             icon="mail-outline"
             iconColor="#EF4444"
@@ -316,61 +328,67 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
             value={email}
             verified={isEmailVerified}
             copyable
+            palette={palette}
+            isDarkMode={isDarkMode}
           />
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: palette.border }]} />
           <InfoRow
             icon="call-outline"
             iconColor="#3B82F6"
             label="Số điện thoại"
             value={phone}
             verified={isPhoneVerified}
+            palette={palette}
+            isDarkMode={isDarkMode}
           />
-          <View style={styles.divider} />
-          <InfoRow icon="globe-outline" iconColor="#55C5F1" label="Website" value={website} copyable />
+          <View style={[styles.divider, { backgroundColor: palette.border }]} />
+          <InfoRow icon="globe-outline" iconColor="#55C5F1" label="Website" value={website} copyable palette={palette} isDarkMode={isDarkMode} />
         </View>
 
         {/* ── Personal Information ── */}
-        <SectionHeader title="Thông tin cá nhân" />
-        <View style={styles.section}>
-          <InfoRow icon="person-outline" iconColor="#55C5F1" label="Họ và tên" value={displayName} />
-          <View style={styles.divider} />
-          <InfoRow icon="calendar-outline" iconColor="#F59E0B" label="Ngày sinh" value={birthday} />
-          <View style={styles.divider} />
-          <InfoRow icon="person-outline" iconColor="#A78BFA" label="Giới tính" value={gender} />
-          <View style={styles.divider} />
-          <InfoRow icon="location-outline" iconColor="#EF4444" label="Vị trí" value={location} />
-          <View style={styles.divider} />
+        <SectionHeader title="Thông tin cá nhân" palette={palette} />
+        <View style={[styles.section, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+          <InfoRow icon="person-outline" iconColor="#55C5F1" label="Họ và tên" value={displayName} palette={palette} isDarkMode={isDarkMode} />
+          <View style={[styles.divider, { backgroundColor: palette.border }]} />
+          <InfoRow icon="calendar-outline" iconColor="#F59E0B" label="Ngày sinh" value={birthday} palette={palette} isDarkMode={isDarkMode} />
+          <View style={[styles.divider, { backgroundColor: palette.border }]} />
+          <InfoRow icon="person-outline" iconColor="#A78BFA" label="Giới tính" value={gender} palette={palette} isDarkMode={isDarkMode} />
+          <View style={[styles.divider, { backgroundColor: palette.border }]} />
+          <InfoRow icon="location-outline" iconColor="#EF4444" label="Vị trí" value={location} palette={palette} isDarkMode={isDarkMode} />
+          <View style={[styles.divider, { backgroundColor: palette.border }]} />
           <InfoRow
             icon="musical-notes-outline"
             iconColor="#10B981"
             label="Thể loại yêu thích"
             value={favoriteGenre}
+            palette={palette}
+            isDarkMode={isDarkMode}
           />
         </View>
 
         {/* ── Listening Stats ── */}
-        <SectionHeader title="Thống kê nghe nhạc" />
+        <SectionHeader title="Thống kê nghe nhạc" palette={palette} />
         <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
+          <View style={[styles.statCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
             <View style={[styles.statIcon, { backgroundColor: '#55C5F1' + '12' }]}>
               <Ionicons name="headset-outline" size={18} color="#55C5F1" />
             </View>
-            <Text style={styles.statValue}>{LISTENING_STATS.totalHours}h</Text>
-            <Text style={styles.statLabel}>Tổng giờ nghe</Text>
+            <Text style={[styles.statValue, { color: palette.textPrimary }]}>{LISTENING_STATS.totalHours}h</Text>
+            <Text style={[styles.statLabel, { color: palette.textSecondary }]}>Tổng giờ nghe</Text>
           </View>
-          <View style={styles.statCard}>
+          <View style={[styles.statCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
             <View style={[styles.statIcon, { backgroundColor: '#A78BFA' + '12' }]}>
               <Ionicons name="musical-notes-outline" size={18} color="#A78BFA" />
             </View>
-            <Text style={styles.statValue}>{LISTENING_STATS.totalSongs.toLocaleString()}</Text>
-            <Text style={styles.statLabel}>Bài hát</Text>
+            <Text style={[styles.statValue, { color: palette.textPrimary }]}>{LISTENING_STATS.totalSongs.toLocaleString()}</Text>
+            <Text style={[styles.statLabel, { color: palette.textSecondary }]}>Bài hát</Text>
           </View>
-          <View style={styles.statCard}>
+          <View style={[styles.statCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
             <View style={[styles.statIcon, { backgroundColor: '#EF4444' + '12' }]}>
               <Ionicons name="heart-outline" size={18} color="#EF4444" />
             </View>
-            <Text style={styles.statValue}>{LISTENING_STATS.totalArtists.toLocaleString()}</Text>
-            <Text style={styles.statLabel}>Nghệ sĩ</Text>
+            <Text style={[styles.statValue, { color: palette.textPrimary }]}>{LISTENING_STATS.totalArtists.toLocaleString()}</Text>
+            <Text style={[styles.statLabel, { color: palette.textSecondary }]}>Nghệ sĩ</Text>
           </View>
         </View>
 
@@ -407,29 +425,29 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
         </View>
 
         {/* ── Security ── */}
-        <SectionHeader title="Bảo mật" />
-        <View style={styles.section}>
+        <SectionHeader title="Bảo mật" palette={palette} />
+        <View style={[styles.section, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           <View style={styles.infoRow}>
             <View style={[styles.infoIcon, { backgroundColor: '#10B981' + '10' }]}>
               <Ionicons name="shield-checkmark-outline" size={17} color="#10B981" />
             </View>
             <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Xác minh tài khoản</Text>
-              <Text style={styles.infoValue}>Đã xác minh</Text>
+              <Text style={[styles.infoLabel, { color: palette.textMuted }]}>Xác minh tài khoản</Text>
+              <Text style={[styles.infoValue, { color: palette.textPrimary }]}>Đã xác minh</Text>
             </View>
             <View style={[styles.badge, { backgroundColor: '#10B981' + '10' }]}>
               <Ionicons name="checkmark-circle" size={10} color="#10B981" style={{ marginRight: 2 }} />
               <Text style={[styles.badgeText, { color: '#10B981' }]}>Verified</Text>
             </View>
           </View>
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: palette.border }]} />
           <View style={styles.infoRow}>
             <View style={[styles.infoIcon, { backgroundColor: '#F59E0B' + '10' }]}>
               <Ionicons name="finger-print-outline" size={17} color="#F59E0B" />
             </View>
             <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Xác thực 2 lớp</Text>
-              <Text style={styles.infoValue}>Chưa bật</Text>
+              <Text style={[styles.infoLabel, { color: palette.textMuted }]}>Xác thực 2 lớp</Text>
+              <Text style={[styles.infoValue, { color: palette.textPrimary }]}>Chưa bật</Text>
             </View>
             <TouchableOpacity style={styles.enable2FAButton} onPress={handleEnable2FA}>
               <Text style={styles.enable2FAText}>Bật ngay</Text>
@@ -439,11 +457,11 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
 
         {/* 2FA Warning */}
         {!twoFactorEnabled && (
-          <View style={styles.warningCard}>
+          <View style={[styles.warningCard, { backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.16)' : 'rgba(245, 158, 11, 0.08)', borderColor: isDarkMode ? 'rgba(245, 158, 11, 0.38)' : 'rgba(245, 158, 11, 0.2)' }]}>
             <Ionicons name="warning-outline" size={18} color="#F59E0B" style={styles.warningIcon} />
             <View style={styles.warningContent}>
-              <Text style={styles.warningTitle}>Tăng cường bảo mật</Text>
-              <Text style={styles.warningText}>
+              <Text style={[styles.warningTitle, { color: isDarkMode ? '#FCD34D' : '#92400E' }]}>Tăng cường bảo mật</Text>
+              <Text style={[styles.warningText, { color: isDarkMode ? '#FDE68A' : '#A16207' }]}> 
                 Bật xác thực 2 lớp để bảo vệ tài khoản khỏi truy cập trái phép. Bạn sẽ cần xác nhận đăng nhập
                 qua điện thoại.
               </Text>
@@ -452,18 +470,18 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
         )}
 
         {/* ── Login Sessions ── */}
-        <SectionHeader title="Phiên đăng nhập" />
-        <View style={styles.section}>
+        <SectionHeader title="Phiên đăng nhập" palette={palette} />
+        <View style={[styles.section, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           {(showAllSessions ? LOGIN_SESSIONS : LOGIN_SESSIONS.slice(0, 2)).map((session, index) => (
             <View key={session.id}>
-              {index > 0 && <View style={styles.divider} />}
+              {index > 0 && <View style={[styles.divider, { backgroundColor: palette.border }]} />}
               <View style={styles.sessionRow}>
-                <View style={styles.sessionIcon}>
-                  <Ionicons name={session.icon as any} size={18} color="#6B7280" />
+                <View style={[styles.sessionIcon, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}>
+                  <Ionicons name={session.icon as any} size={18} color={palette.textSecondary} />
                 </View>
                 <View style={styles.sessionContent}>
                   <View style={styles.sessionHeader}>
-                    <Text style={styles.sessionDevice} numberOfLines={1}>
+                    <Text style={[styles.sessionDevice, { color: palette.textPrimary }]} numberOfLines={1}>
                       {session.device}
                     </Text>
                     {session.isCurrent && (
@@ -472,13 +490,14 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
                       </View>
                     )}
                   </View>
-                  <Text style={styles.sessionInfo}>
+                  <Text style={[styles.sessionInfo, { color: palette.textSecondary }]}>
                     {session.os} · {session.location}
                   </Text>
                 </View>
                 <Text
                   style={[
                     styles.sessionTime,
+                    { color: palette.textSecondary },
                     session.isCurrent && { color: '#10B981', fontWeight: '500' },
                   ]}
                 >
@@ -490,7 +509,7 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
 
           {LOGIN_SESSIONS.length > 2 && (
             <>
-              <View style={styles.divider} />
+              <View style={[styles.divider, { backgroundColor: palette.border }]} />
               <TouchableOpacity
                 style={styles.showAllButton}
                 onPress={() => setShowAllSessions(!showAllSessions)}
@@ -504,13 +523,13 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
         </View>
 
         {/* ── Storage Usage ── */}
-        <SectionHeader title="Dung lượng & Lưu trữ" />
-        <View style={[styles.section, styles.storageSection]}>
+        <SectionHeader title="Dung lượng & Lưu trữ" palette={palette} />
+        <View style={[styles.section, styles.storageSection, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           {/* Total usage */}
           <View style={styles.storageHeader}>
             <View style={styles.storageHeaderLeft}>
-              <Ionicons name="server-outline" size={16} color="#6B7280" style={{ marginRight: 6 }} />
-              <Text style={styles.storageHeaderText}>Đã sử dụng</Text>
+              <Ionicons name="server-outline" size={16} color={palette.textSecondary} style={{ marginRight: 6 }} />
+              <Text style={[styles.storageHeaderText, { color: palette.textPrimary }]}>Đã sử dụng</Text>
             </View>
             <Text style={styles.storageHeaderValue}>
               {STORAGE_DATA.used} GB{' '}
@@ -519,7 +538,7 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
           </View>
 
           {/* Progress bar */}
-          <View style={styles.progressBar}>
+          <View style={[styles.progressBar, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}> 
             {STORAGE_DATA.breakdown.map((item, index) => (
               <View
                 key={item.label}
@@ -544,26 +563,26 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
               <View key={item.label} style={styles.storageItem}>
                 <View style={styles.storageItemLeft}>
                   <View style={[styles.storageItemDot, { backgroundColor: item.color }]} />
-                  <Text style={styles.storageItemLabel}>{item.label}</Text>
+                  <Text style={[styles.storageItemLabel, { color: palette.textSecondary }]}>{item.label}</Text>
                 </View>
-                <Text style={styles.storageItemSize}>{item.size}</Text>
+                <Text style={[styles.storageItemSize, { color: palette.textPrimary }]}>{item.size}</Text>
               </View>
             ))}
           </View>
 
           {/* Clear cache button */}
-          <TouchableOpacity style={styles.clearCacheButton} onPress={handleClearCache}>
-            <Text style={styles.clearCacheText}>Xóa bộ nhớ đệm</Text>
+          <TouchableOpacity style={[styles.clearCacheButton, { borderColor: palette.border }]} onPress={handleClearCache}>
+            <Text style={[styles.clearCacheText, { color: palette.textSecondary }]}>Xóa bộ nhớ đệm</Text>
           </TouchableOpacity>
         </View>
 
         {/* ── Footer Info ── */}
         <View style={styles.footer}>
           <View style={styles.footerRow}>
-            <Ionicons name="information-circle-outline" size={12} color="#D1D5DB" />
-            <Text style={styles.footerText}>Thông tin được cập nhật lần cuối: Hôm nay, 14:30</Text>
+            <Ionicons name="information-circle-outline" size={12} color={palette.textMuted} />
+            <Text style={[styles.footerText, { color: palette.textMuted }]}>Thông tin được cập nhật lần cuối: Hôm nay, 14:30</Text>
           </View>
-          <Text style={styles.footerText}>Mã tài khoản: {accountId}</Text>
+          <Text style={[styles.footerText, { color: palette.textMuted }]}>Mã tài khoản: {accountId}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

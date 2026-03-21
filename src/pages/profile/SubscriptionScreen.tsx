@@ -2,15 +2,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import {
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Platform,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 
 interface SubscriptionScreenProps {
   onBack: () => void;
@@ -146,11 +148,15 @@ function PlanCard({
   isSelected,
   onSelect,
   onPurchase,
+  palette,
+  isDarkMode,
 }: {
   plan: Plan;
   isSelected: boolean;
   onSelect: () => void;
   onPurchase: () => void;
+  palette: typeof SoundMateLightColors | typeof SoundMateColors;
+  isDarkMode: boolean;
 }) {
   const isPremium = plan.id === 'premium';
 
@@ -160,6 +166,7 @@ function PlanCard({
       onPress={onSelect}
       style={[
         styles.planCard,
+        { backgroundColor: palette.surface },
         isSelected
           ? isPremium
             ? styles.planCardPremiumSelected
@@ -185,7 +192,7 @@ function PlanCard({
         </View>
       )}
 
-      <View style={[styles.planHeader, isPremium ? styles.planHeaderPremium : styles.planHeaderDefault]}>
+      <View style={[styles.planHeader, isPremium ? styles.planHeaderPremium : [styles.planHeaderDefault, { backgroundColor: isDarkMode ? '#111827' : '#F8FAFC' }]]}>
         {isPremium && (
           <>
             <LinearGradient
@@ -211,7 +218,7 @@ function PlanCard({
             >
               <Ionicons name={plan.icon} size={22} color={isPremium ? 'white' : plan.color} />
             </View>
-            <Text style={[styles.planName, isPremium ? styles.planNamePremium : styles.planNameDefault]}>
+            <Text style={[styles.planName, isPremium ? styles.planNamePremium : [styles.planNameDefault, { color: palette.textPrimary }]]}>
               {plan.name}
             </Text>
           </View>
@@ -224,20 +231,20 @@ function PlanCard({
               {plan.priceLabel}
             </Text>
             {!!plan.period && (
-              <Text style={[styles.planPeriod, isPremium ? styles.planMutedPremium : styles.planMutedDefault]}>
+              <Text style={[styles.planPeriod, isPremium ? styles.planMutedPremium : [styles.planMutedDefault, { color: palette.textMuted }]]}>
                 {plan.period}
               </Text>
             )}
           </View>
 
-          <Text style={[styles.planDescription, isPremium ? styles.planDescriptionPremium : styles.planDescriptionDefault]}>
+          <Text style={[styles.planDescription, isPremium ? styles.planDescriptionPremium : [styles.planDescriptionDefault, { color: palette.textSecondary }]]}>
             {plan.description}
           </Text>
         </View>
       </View>
 
-      <View style={styles.planFeaturesSection}>
-        <Text style={styles.planFeatureTitle}>Đặc quyền:</Text>
+      <View style={[styles.planFeaturesSection, { backgroundColor: palette.surface }]}> 
+        <Text style={[styles.planFeatureTitle, { color: palette.textMuted }]}>Đặc quyền:</Text>
         <View style={styles.planFeatureList}>
           {plan.features.map((feature, i) => {
             const suffix =
@@ -259,9 +266,9 @@ function PlanCard({
                 >
                   <Ionicons name={featureIcon} size={12} color={plan.color} />
                 </View>
-                <Text style={styles.planFeatureText}>
+                <Text style={[styles.planFeatureText, { color: palette.textPrimary }]}>
                   {feature.text}
-                  {!!feature.bold && <Text style={styles.planFeatureBold}>{feature.bold}</Text>}
+                  {!!feature.bold && <Text style={[styles.planFeatureBold, { color: palette.textPrimary }]}>{feature.bold}</Text>}
                   {suffix}
                 </Text>
               </View>
@@ -270,7 +277,7 @@ function PlanCard({
         </View>
 
         {plan.includesFree && (
-          <View style={styles.includesFreeWrap}>
+          <View style={[styles.includesFreeWrap, { borderTopColor: palette.border }]}>
             <Text style={styles.includesFreeText}>
               <Ionicons name="gift-outline" size={13} color="#3C5F99" /> Đã bao gồm tất cả các tính năng miễn phí
             </Text>
@@ -278,7 +285,7 @@ function PlanCard({
         )}
       </View>
 
-      <View style={styles.planCtaWrap}>
+      <View style={[styles.planCtaWrap, { backgroundColor: palette.surface }]}>
         {plan.current ? (
           <View style={[styles.planCta, styles.planCtaCurrent]}>
             <Text style={[styles.planCtaText, styles.planCtaTextLight]}>Gói hiện tại của bạn</Text>
@@ -309,7 +316,13 @@ function PlanCard({
 
 // PaymentModal removed — payment flow now uses a dedicated PaymentCheckoutScreen
 
-function ComparisonSection() {
+function ComparisonSection({
+  palette,
+  isDarkMode,
+}: {
+  palette: typeof SoundMateLightColors | typeof SoundMateColors;
+  isDarkMode: boolean;
+}) {
   const features: {
     label: string;
     free: boolean | string;
@@ -329,13 +342,13 @@ function ComparisonSection() {
     <View style={styles.comparisonContainer}>
       <View style={styles.comparisonTitleRow}>
         <Ionicons name="shield-checkmark-outline" size={18} color="#55C5F1" />
-        <Text style={styles.comparisonTitle}>So sánh các gói</Text>
+        <Text style={[styles.comparisonTitle, { color: palette.textPrimary }]}>So sánh các gói</Text>
       </View>
 
-      <View style={styles.comparisonTable}>
-        <View style={styles.comparisonHeaderRow}>
+      <View style={[styles.comparisonTable, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+        <View style={[styles.comparisonHeaderRow, { borderBottomColor: palette.border, backgroundColor: isDarkMode ? '#111827' : '#F9FAFB' }]}>
           <View style={[styles.comparisonCell, styles.comparisonFeatureCell]}>
-            <Text style={styles.comparisonHeaderText}>Tính năng</Text>
+            <Text style={[styles.comparisonHeaderText, { color: palette.textMuted }]}>Tính năng</Text>
           </View>
           <View style={styles.comparisonCell}>
             <Text style={[styles.comparisonHeaderText, styles.comparisonHeaderFree]}>Miễn phí</Text>
@@ -353,20 +366,20 @@ function ComparisonSection() {
             key={feature.label}
             style={[
               styles.comparisonDataRow,
-              index < features.length - 1 ? styles.comparisonDataRowBorder : undefined,
+              index < features.length - 1 ? [styles.comparisonDataRowBorder, { borderBottomColor: palette.border }] : undefined,
             ]}
           >
             <View style={[styles.comparisonCell, styles.comparisonFeatureCell]}>
-              <Text style={styles.comparisonFeatureText}>{feature.label}</Text>
+              <Text style={[styles.comparisonFeatureText, { color: palette.textPrimary }]}>{feature.label}</Text>
             </View>
             {[feature.free, feature.standard, feature.premium].map((value, idx) => (
               <View key={`${feature.label}-${idx}`} style={styles.comparisonCell}>
                 {value === true ? (
                   <Ionicons name="checkmark" size={16} color="#10B981" />
                 ) : value === false ? (
-                  <Ionicons name="close" size={14} color="#D1D5DB" />
+                  <Ionicons name="close" size={14} color={palette.textMuted} />
                 ) : (
-                  <Text style={styles.comparisonTextValue}>{value}</Text>
+                  <Text style={[styles.comparisonTextValue, { color: palette.textPrimary }]}>{value}</Text>
                 )}
               </View>
             ))}
@@ -377,21 +390,31 @@ function ComparisonSection() {
   );
 }
 
-function FAQItem({ question, answer }: { question: string; answer: string }) {
+function FAQItem({
+  question,
+  answer,
+  palette,
+  isDarkMode,
+}: {
+  question: string;
+  answer: string;
+  palette: typeof SoundMateLightColors | typeof SoundMateColors;
+  isDarkMode: boolean;
+}) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <View style={styles.faqItemContainer}>
+    <View style={[styles.faqItemContainer, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
       <TouchableOpacity activeOpacity={0.9} onPress={() => setIsOpen((prev) => !prev)} style={styles.faqItemButton}>
-        <Text style={styles.faqQuestion}>{question}</Text>
+        <Text style={[styles.faqQuestion, { color: palette.textPrimary }]}>{question}</Text>
         <View style={[styles.faqChevronWrap, isOpen ? styles.faqChevronOpen : undefined]}>
-          <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+          <Ionicons name="chevron-forward" size={16} color={palette.textMuted} />
         </View>
       </TouchableOpacity>
 
       {isOpen && (
         <View style={styles.faqAnswerWrap}>
-          <Text style={styles.faqAnswer}>{answer}</Text>
+          <Text style={[styles.faqAnswer, { color: palette.textSecondary }]}>{answer}</Text>
         </View>
       )}
     </View>
@@ -399,6 +422,8 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 }
 
 export default function SubscriptionScreen({ onBack, onSelectPlan }: SubscriptionScreenProps) {
+  const { isDarkMode } = useTheme();
+  const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
   const insets = useSafeAreaInsets();
   const fallbackTopInset = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
   const topInset = Math.max(insets.top, fallbackTopInset);
@@ -429,12 +454,12 @@ export default function SubscriptionScreen({ onBack, onSelectPlan }: Subscriptio
   };
 
   return (
-    <SafeAreaView style={[styles.container]} edges={['left', 'right']}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]} edges={['left', 'right']}>
+      <View style={[styles.header, { backgroundColor: palette.surface, borderBottomColor: palette.border }]}>
         <TouchableOpacity activeOpacity={0.85} onPress={onBack} style={styles.headerBackButton}>
-          <Ionicons name="arrow-back" size={22} color="#1E293B" />
+          <Ionicons name="arrow-back" size={22} color={palette.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Gói đăng ký</Text>
+        <Text style={[styles.headerTitle, { color: palette.textPrimary }]}>Gói đăng ký</Text>
       </View>
 
       <ScrollView
@@ -451,8 +476,8 @@ export default function SubscriptionScreen({ onBack, onSelectPlan }: Subscriptio
           >
             <Ionicons name="diamond-outline" size={28} color="white" />
           </LinearGradient>
-          <Text style={styles.titleMain}>Nâng cấp trải nghiệm</Text>
-          <Text style={styles.titleDescription}>
+          <Text style={[styles.titleMain, { color: palette.textPrimary }]}>Nâng cấp trải nghiệm</Text>
+          <Text style={[styles.titleDescription, { color: palette.textSecondary }]}>
             Chọn gói phù hợp để mở khóa toàn bộ tính năng của SoundMates
           </Text>
         </View>
@@ -486,16 +511,18 @@ export default function SubscriptionScreen({ onBack, onSelectPlan }: Subscriptio
               isSelected={selectedPlan === plan.id}
               onSelect={() => handleHighlightPlan(plan.id)}
               onPurchase={() => handlePurchasePlan(plan)}
+              palette={palette}
+              isDarkMode={isDarkMode}
             />
           ))}
         </View>
 
-        <ComparisonSection />
+        <ComparisonSection palette={palette} isDarkMode={isDarkMode} />
 
         <View style={styles.faqSection}>
           <View style={styles.faqSectionTitleRow}>
             <Ionicons name="alert-circle-outline" size={18} color="#55C5F1" />
-            <Text style={styles.faqSectionTitle}>Câu hỏi thường gặp</Text>
+            <Text style={[styles.faqSectionTitle, { color: palette.textPrimary }]}>Câu hỏi thường gặp</Text>
           </View>
 
           <View style={styles.faqList}>
@@ -513,7 +540,7 @@ export default function SubscriptionScreen({ onBack, onSelectPlan }: Subscriptio
                 a: 'Có, bạn có thể nâng cấp hoặc hạ cấp gói bất kỳ lúc nào. Phần chênh lệch sẽ được tính theo ngày sử dụng.',
               },
             ].map((faq) => (
-              <FAQItem key={faq.q} question={faq.q} answer={faq.a} />
+              <FAQItem key={faq.q} question={faq.q} answer={faq.a} palette={palette} isDarkMode={isDarkMode} />
             ))}
           </View>
         </View>

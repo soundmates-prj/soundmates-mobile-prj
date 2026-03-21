@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { showToast } from '../../../components/ui/Toast';
+import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
@@ -59,6 +61,8 @@ const PASSWORD_RULES = [
 ];
 
 export default function ChangePasswordScreen({ onBack, onNavigateToForgotPassword, onLogout }: ChangePasswordScreenProps) {
+  const { isDarkMode } = useTheme();
+  const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -123,13 +127,13 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
   // Success overlay
   if (showSuccess) {
     return (
-      <SafeAreaView style={styles.successContainer} edges={['top']}>
+      <SafeAreaView style={[styles.successContainer, { backgroundColor: palette.background }]} edges={['top']}>
         <View style={styles.successContent}>
           <View style={styles.successIconContainer}>
             <Ionicons name="shield-checkmark" size={48} color="#10B981" />
           </View>
-          <Text style={styles.successTitle}>Đổi mật khẩu thành công!</Text>
-          <Text style={styles.successSubtitle}>
+          <Text style={[styles.successTitle, { color: palette.textPrimary }]}>Đổi mật khẩu thành công!</Text>
+          <Text style={[styles.successSubtitle, { color: palette.textSecondary }]}>
             Mật khẩu của bạn đã được cập nhật.{' \n'}Vui lòng đăng nhập lại để tiếp tục.
           </Text>
         </View>
@@ -138,13 +142,13 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]} edges={['top']}>
       {/* ── Header ── */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: palette.surface, borderBottomColor: palette.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={22} color="#1E293B" />
+          <Ionicons name="arrow-back" size={22} color={palette.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Đổi mật khẩu</Text>
+        <Text style={[styles.headerTitle, { color: palette.textPrimary }]}>Đổi mật khẩu</Text>
       </View>
 
       <KeyboardAvoidingView
@@ -160,14 +164,14 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
           showsVerticalScrollIndicator={false}
         >
         {/* ── Security notice ── */}
-        <View style={styles.noticeContainer}>
-          <View style={styles.notice}>
+          <View style={styles.noticeContainer}>
+          <View style={[styles.notice, { backgroundColor: isDarkMode ? 'rgba(85, 197, 241, 0.15)' : '#55C5F114', borderColor: isDarkMode ? 'rgba(85, 197, 241, 0.35)' : '#55C5F133' }]}>
             <View style={styles.noticeIcon}>
               <Ionicons name="information-circle" size={20} color="#55C5F1" />
             </View>
             <View style={styles.noticeTextContainer}>
-              <Text style={styles.noticeTitle}>Bảo mật tài khoản</Text>
-              <Text style={styles.noticeText}>
+              <Text style={[styles.noticeTitle, { color: palette.textPrimary }]}>Bảo mật tài khoản</Text>
+              <Text style={[styles.noticeText, { color: palette.textSecondary }]}>
                 Để bảo vệ tài khoản, hãy chọn mật khẩu mạnh và không chia sẻ với bất kỳ ai. Sau khi
                 đổi mật khẩu, bạn sẽ cần đăng nhập lại trên các thiết bị khác.
               </Text>
@@ -179,22 +183,23 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
         <View style={styles.formContainer}>
           {/* Current Password */}
           <View style={styles.fieldContainer}>
-            <Text style={styles.label}>MẬT KHẨU HIỆN TẠI</Text>
+            <Text style={[styles.label, { color: palette.textSecondary }]}>MẬT KHẨU HIỆN TẠI</Text>
             <View
               style={[
                 styles.inputContainer,
+                { backgroundColor: palette.surface, borderColor: palette.border },
                 errors.currentPassword && touched.currentPassword && styles.inputContainerError,
               ]}
             >
-              <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
+              <Ionicons name="lock-closed-outline" size={18} color={palette.textMuted} style={styles.inputIcon} />
               <TextInput
                 value={currentPassword}
                 onChangeText={setCurrentPassword}
                 onBlur={() => handleBlur('currentPassword')}
                 placeholder="Nhập mật khẩu hiện tại"
-                placeholderTextColor="#D1D5DB"
+                placeholderTextColor={palette.textMuted}
                 secureTextEntry={!showCurrentPassword}
-                style={styles.input}
+                style={[styles.input, { color: palette.textPrimary }]}
               />
               <TouchableOpacity
                 onPress={() => setShowCurrentPassword(!showCurrentPassword)}
@@ -203,7 +208,7 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
                 <Ionicons
                   name={showCurrentPassword ? 'eye-off-outline' : 'eye-outline'}
                   size={18}
-                  color="#9CA3AF"
+                  color={palette.textMuted}
                 />
               </TouchableOpacity>
             </View>
@@ -226,20 +231,20 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
           </View>
 
           {/* Divider */}
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: palette.border }]} />
 
           {/* New Password */}
           <View style={styles.fieldContainer}>
-            <Text style={styles.label}>MẬT KHẨU MỚI</Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
+            <Text style={[styles.label, { color: palette.textSecondary }]}>MẬT KHẨU MỚI</Text>
+            <View style={[styles.inputContainer, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+              <Ionicons name="lock-closed-outline" size={18} color={palette.textMuted} style={styles.inputIcon} />
               <TextInput
                 value={newPassword}
                 onChangeText={setNewPassword}
                 placeholder="Nhập mật khẩu mới"
-                placeholderTextColor="#D1D5DB"
+                placeholderTextColor={palette.textMuted}
                 secureTextEntry={!showNewPassword}
-                style={styles.input}
+                style={[styles.input, { color: palette.textPrimary }]}
               />
               <TouchableOpacity
                 onPress={() => setShowNewPassword(!showNewPassword)}
@@ -248,7 +253,7 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
                 <Ionicons
                   name={showNewPassword ? 'eye-off-outline' : 'eye-outline'}
                   size={18}
-                  color="#9CA3AF"
+                  color={palette.textMuted}
                 />
               </TouchableOpacity>
             </View>
@@ -285,7 +290,7 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
                           size={15}
                           color={passed ? '#10B981' : '#D1D5DB'}
                         />
-                        <Text style={[styles.ruleText, { color: passed ? '#10B981' : '#9CA3AF' }]}>
+                        <Text style={[styles.ruleText, { color: passed ? '#10B981' : palette.textMuted }]}>
                           {rule.label}
                         </Text>
                       </View>
@@ -298,23 +303,24 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
 
           {/* Confirm Password */}
           <View style={styles.fieldContainer}>
-            <Text style={styles.label}>XÁC NHẬN MẬT KHẨU MỚI</Text>
+            <Text style={[styles.label, { color: palette.textSecondary }]}>XÁC NHẬN MẬT KHẨU MỚI</Text>
             <View
               style={[
                 styles.inputContainer,
+                { backgroundColor: palette.surface, borderColor: palette.border },
                 errors.confirmPassword && touched.confirmPassword && styles.inputContainerError,
                 confirmPassword && passwordsMatch && styles.inputContainerSuccess,
               ]}
             >
-              <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
+              <Ionicons name="lock-closed-outline" size={18} color={palette.textMuted} style={styles.inputIcon} />
               <TextInput
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 onBlur={() => handleBlur('confirmPassword')}
                 placeholder="Nhập lại mật khẩu mới"
-                placeholderTextColor="#D1D5DB"
+                placeholderTextColor={palette.textMuted}
                 secureTextEntry={!showConfirmPassword}
-                style={styles.input}
+                style={[styles.input, { color: palette.textPrimary }]}
               />
               {confirmPassword.length > 0 && (
                 <View style={styles.matchIndicator}>
@@ -332,7 +338,7 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
                 <Ionicons
                   name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
                   size={18}
-                  color="#9CA3AF"
+                  color={palette.textMuted}
                 />
               </TouchableOpacity>
             </View>
@@ -356,7 +362,7 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
       </ScrollView>
 
       {/* ── Submit button ── */}
-      <View style={styles.submitContainer}>
+      <View style={[styles.submitContainer, { backgroundColor: palette.surface, borderTopColor: palette.border }]}>
         <TouchableOpacity
           onPress={handleSubmit}
           disabled={!isFormValid || isSubmitting}

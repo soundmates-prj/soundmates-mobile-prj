@@ -11,7 +11,9 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { PodcastResponse, podcastService } from '../../api';
+import { useTheme } from '../../context/ThemeContext';
 import { PodcastDetailScreen } from './PodcastDetailScreen';
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -169,6 +171,8 @@ function PodcastCard({ podcast, onPress }: { podcast: PodcastVM; onPress: () => 
 // ─── Main Screen ─────────────────────────────────────────────────
 
 export default function PodcastScreen() {
+  const { isDarkMode } = useTheme();
+  const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
   const [activeCategory, setActiveCategory] = useState('Tất cả');
   const [selectedPodcast, setSelectedPodcast] = useState<string | null>(null);
   const [podcasts, setPodcasts] = useState<PodcastVM[]>([]);
@@ -253,9 +257,9 @@ export default function PodcastScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.screen, styles.centerContent]}>
-        <ActivityIndicator size="large" color="#55C5F1" />
-        <Text style={styles.loadingText}>Đang tải podcast...</Text>
+      <View style={[styles.screen, styles.centerContent, { backgroundColor: palette.background }]}> 
+        <ActivityIndicator size="large" color={palette.primary} />
+        <Text style={[styles.loadingText, { color: palette.textSecondary }]}>Đang tải podcast...</Text>
       </View>
     );
   }
@@ -264,14 +268,14 @@ export default function PodcastScreen() {
 
   if (error && podcasts.length === 0) {
     return (
-      <View style={[styles.screen, styles.centerContent]}>
+      <View style={[styles.screen, styles.centerContent, { backgroundColor: palette.background }]}> 
         <View style={styles.emptyIconWrap}>
           <Ionicons name="cloud-offline-outline" size={32} color="#D1D5DB" />
         </View>
-        <Text style={styles.emptyTitle}>{error}</Text>
+        <Text style={[styles.emptyTitle, { color: palette.textPrimary }]}>{error}</Text>
         <TouchableOpacity
           activeOpacity={0.85}
-          style={styles.retryButton}
+          style={[styles.retryButton, { backgroundColor: palette.primary }]}
           onPress={() => fetchPodcasts()}
         >
           <Text style={styles.retryButtonText}>Thử lại</Text>
@@ -283,11 +287,11 @@ export default function PodcastScreen() {
   // ─── Render ───────────────────────────────────────────────────
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Podcast Letter</Text>
+    <View style={[styles.screen, { backgroundColor: palette.background }]}> 
+      <View style={[styles.header, { backgroundColor: palette.surface, borderBottomColor: palette.border }]}> 
+        <Text style={[styles.headerTitle, { color: palette.textPrimary }]}>Podcast Letter</Text>
         <TouchableOpacity activeOpacity={0.8} style={styles.headerSearchButton}>
-          <Ionicons name="search" size={20} color="#1E293B" />
+          <Ionicons name="search" size={20} color={palette.textPrimary} />
         </TouchableOpacity>
       </View>
 
@@ -295,7 +299,7 @@ export default function PodcastScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#55C5F1']} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[palette.primary]} tintColor={palette.primary} />
         }
       >
         {/* Featured */}

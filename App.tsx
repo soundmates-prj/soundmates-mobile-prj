@@ -5,8 +5,9 @@ import { StatusBar, StyleSheet } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { showToast, toastConfig } from './components/ui/Toast';
-import { SoundMateLightColors } from './constants/theme';
+import { SoundMateColors, SoundMateLightColors } from './constants/theme';
 import { authService, livestreamService, registerUnauthorizedHandler } from './src/api';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { UserProvider, useUser } from './src/context/UserContext';
 import {
     ForgotPasswordScreen,
@@ -52,6 +53,7 @@ type HomeEntryTab = Extract<TabName, 'home' | 'blog' | 'podcast'>;
 
 function AppContent() {
     const { clearUser, refreshUser } = useUser();
+    const { isDarkMode } = useTheme();
     const [currentScreen, setCurrentScreen] = useState<Screen>(Screen.LOGIN);
     const [userEmail, setUserEmail] = useState<string>('');
     const [pendingPassword, setPendingPassword] = useState<string>('');
@@ -61,6 +63,8 @@ function AppContent() {
     const [selectedPlan, setSelectedPlan] = useState<SelectedPlan | null>(null);
     const [paymentResultType, setPaymentResultType] = useState<'success' | 'failed'>('success');
     const [paymentResultMessage, setPaymentResultMessage] = useState<string>('');
+    const useDarkThemeShell = isDarkMode && currentScreen !== Screen.LIVE;
+    const appBackground = useDarkThemeShell ? SoundMateColors.background : SoundMateLightColors.background;
 
     // Check for saved tokens on app start
     useEffect(() => {
@@ -507,11 +511,11 @@ function AppContent() {
     return (
         <SafeAreaProvider>
             <StatusBar
-                barStyle="dark-content"
-                backgroundColor={SoundMateLightColors.background}
+                barStyle={useDarkThemeShell ? 'light-content' : 'dark-content'}
+                backgroundColor={appBackground}
                 translucent
             />
-            <SafeAreaView style={styles.container} edges={['top']}>
+            <SafeAreaView style={[styles.container, { backgroundColor: appBackground }]} edges={['top']}>
                 {renderScreen()}
             </SafeAreaView>
             {/* Toast notification component - must be at the end */}
@@ -523,7 +527,6 @@ function AppContent() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: SoundMateLightColors.background,
     },
     placeholder: {
         flex: 1,
@@ -534,9 +537,11 @@ const styles = StyleSheet.create({
 // Root App component with UserProvider
 function App() {
     return (
-        <UserProvider>
-            <AppContent />
-        </UserProvider>
+        <ThemeProvider>
+            <UserProvider>
+                <AppContent />
+            </UserProvider>
+        </ThemeProvider>
     );
 }
 
