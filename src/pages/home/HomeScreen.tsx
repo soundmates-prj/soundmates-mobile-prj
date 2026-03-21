@@ -2,8 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SoundMateLightColors } from '../../../constants/theme';
+import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { blogService, livestreamService, NowPlayingData, PopularPostResponse } from '../../api';
+import { useTheme } from '../../context/ThemeContext';
 import BlogScreen from '../blog/BlogScreen';
 import CreatePostScreen from '../blog/CreatePostScreen';
 import PostDetailScreen from '../blog/PostDetailScreen';
@@ -34,6 +35,8 @@ type ForumPostItem = {
     comments: number;
     time: string;
 };
+
+type AppPalette = typeof SoundMateLightColors | typeof SoundMateColors;
 
 const PLAYLISTS: PlaylistItem[] = [
     {
@@ -172,39 +175,53 @@ function PlaylistCard({ item }: { item: PlaylistItem }) {
     );
 }
 
-function PodcastCard({ item }: { item: PodcastItem }) {
+function PodcastCard({ item, palette }: { item: PodcastItem; palette: AppPalette }) {
     return (
         <TouchableOpacity style={styles.podcastCard} activeOpacity={0.9}>
-            <View style={styles.podcastImageFrame}>
+            <View style={[styles.podcastImageFrame, { borderColor: palette.surface, backgroundColor: palette.surfaceLight }]}>
                 <Image source={{ uri: item.image }} style={styles.podcastImage} />
             </View>
-            <Text style={styles.podcastTitle} numberOfLines={1}>
+            <Text style={[styles.podcastTitle, { color: palette.textPrimary }]} numberOfLines={1}>
                 {item.title}
             </Text>
-            <Text style={styles.podcastHost} numberOfLines={1}>
+            <Text style={[styles.podcastHost, { color: palette.textSecondary }]} numberOfLines={1}>
                 {item.host}
             </Text>
         </TouchableOpacity>
     );
 }
 
-function ForumPost({ post, onPress }: { post: ForumPostItem; onPress?: () => void }) {
+function ForumPost({
+    post,
+    onPress,
+    palette,
+    isDarkMode,
+}: {
+    post: ForumPostItem;
+    onPress?: () => void;
+    palette: AppPalette;
+    isDarkMode: boolean;
+}) {
     const badgeText = post.moodTag ? `#${post.moodTag}` : 'Popular';
 
     return (
-        <TouchableOpacity style={styles.forumCard} activeOpacity={0.9} onPress={onPress}>
+        <TouchableOpacity
+            style={[styles.forumCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
+            activeOpacity={0.9}
+            onPress={onPress}
+        >
             <View style={styles.forumAuthorRow}>
                 <Image
                     source={{ uri: `https://api.dicebear.com/7.x/initials/png?seed=${post.userId}&backgroundColor=55C5F1` }}
-                    style={styles.forumAvatar}
+                    style={[styles.forumAvatar, { borderColor: palette.primary }]}
                 />
                 <View style={styles.forumAuthorInfo}>
                     <View style={styles.forumAuthorNameRow}>
-                        <Text style={styles.forumAuthorName} numberOfLines={1}>
+                        <Text style={[styles.forumAuthorName, { color: palette.textPrimary }]} numberOfLines={1}>
                             {post.userId.substring(0, 8)}...
                         </Text>
                         <LinearGradient
-                            colors={[SoundMateLightColors.primary, SoundMateLightColors.primaryDark]}
+                            colors={[palette.primary, palette.primaryDark]}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                             style={styles.forumBadge}
@@ -212,22 +229,28 @@ function ForumPost({ post, onPress }: { post: ForumPostItem; onPress?: () => voi
                             <Text style={styles.forumBadgeText}>{badgeText}</Text>
                         </LinearGradient>
                     </View>
-                    <Text style={styles.forumTime}>{post.time} trước</Text>
+                    <Text style={[styles.forumTime, { color: palette.textMuted }]}>{post.time} trước</Text>
                 </View>
             </View>
 
-            <Text style={styles.forumPostTitle} numberOfLines={2}>
+            <Text style={[styles.forumPostTitle, { color: palette.textPrimary }]} numberOfLines={2}>
                 {post.title}
             </Text>
 
             <View style={styles.forumActionRow}>
-                <TouchableOpacity style={styles.forumActionButton} activeOpacity={0.8}>
-                    <Ionicons name="thumbs-up-outline" size={14} color={SoundMateLightColors.textSecondary} />
-                    <Text style={styles.forumActionText}>{post.likes}</Text>
+                <TouchableOpacity
+                    style={[styles.forumActionButton, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}
+                    activeOpacity={0.8}
+                >
+                    <Ionicons name="thumbs-up-outline" size={14} color={palette.textSecondary} />
+                    <Text style={[styles.forumActionText, { color: palette.textPrimary }]}>{post.likes}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.forumActionButton} activeOpacity={0.8}>
-                    <Ionicons name="chatbubble-ellipses-outline" size={14} color={SoundMateLightColors.textSecondary} />
-                    <Text style={styles.forumActionText}>{post.comments}</Text>
+                <TouchableOpacity
+                    style={[styles.forumActionButton, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}
+                    activeOpacity={0.8}
+                >
+                    <Ionicons name="chatbubble-ellipses-outline" size={14} color={palette.textSecondary} />
+                    <Text style={[styles.forumActionText, { color: palette.textPrimary }]}>{post.comments}</Text>
                 </TouchableOpacity>
             </View>
         </TouchableOpacity>
@@ -235,6 +258,8 @@ function ForumPost({ post, onPress }: { post: ForumPostItem; onPress?: () => voi
 }
 
 export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateToProfile, onNavigateToLive }: HomeScreenProps) {
+    const { isDarkMode } = useTheme();
+    const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
     const [activeTab, setActiveTab] = useState<TabName>(initialTab);
     const [showCreatePost, setShowCreatePost] = useState(false);
     const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -359,7 +384,7 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
         : true;
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: palette.background }]}>
             {selectedPostId ? (
                 <PostDetailScreen 
                     postId={selectedPostId} 
@@ -387,8 +412,8 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
                                 <RefreshControl
                                     refreshing={isRefreshing}
                                     onRefresh={() => void handleRefresh()}
-                                    colors={[SoundMateLightColors.primary]}
-                                    tintColor={SoundMateLightColors.primary}
+                                    colors={[palette.primary]}
+                                    tintColor={palette.primary}
                                 />
                             }
                         >
@@ -476,7 +501,7 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
                             </View>
 
                             <LinearGradient
-                                colors={['#E0F2FE', '#FAFAFA']}
+                                colors={isDarkMode ? ['#111827', '#0F172A'] : ['#E0F2FE', '#FAFAFA']}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 1 }}
                                 style={styles.podcastSection}
@@ -488,7 +513,7 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
                                     contentContainerStyle={styles.horizontalScrollContent}
                                 >
                                     {PODCASTS.map((item) => (
-                                        <PodcastCard key={item.id} item={item} />
+                                        <PodcastCard key={item.id} item={item} palette={palette} />
                                     ))}
                                 </ScrollView>
                             </LinearGradient>
@@ -496,13 +521,13 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
                             <View style={styles.communitySection}>
                                 <SectionHeader
                                     title="Cộng đồng"
-                                    titleColor="#1D4ED8"
+                                    titleColor={isDarkMode ? '#BFDBFE' : '#1D4ED8'}
                                     onPressSeeAll={() => setActiveTab('blog')}
                                 />
 
                                 {isCommunityLoading ? (
                                     <View style={styles.communityLoadingWrap}>
-                                        <ActivityIndicator size="small" color={SoundMateLightColors.primary} />
+                                        <ActivityIndicator size="small" color={palette.primary} />
                                         <Text style={styles.communityLoadingText}>Đang tải bài viết cộng đồng...</Text>
                                     </View>
                                 ) : communityPosts.length === 0 ? (
@@ -512,6 +537,8 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
                                         <ForumPost
                                             key={post.id}
                                             post={post}
+                                            palette={palette}
+                                            isDarkMode={isDarkMode}
                                             onPress={() => setSelectedPostId(post.id)}
                                         />
                                     ))

@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 
 export interface DisplayPost {
     id: string;
@@ -57,6 +59,8 @@ export interface BlogPostCardProps {
 }
 
 export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerActions = false, onEdit, onDelete }: BlogPostCardProps) {
+    const { isDarkMode } = useTheme();
+    const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
     const [showOwnerMenu, setShowOwnerMenu] = React.useState(false);
 
     const handleOpenOwnerMenu = () => {
@@ -85,20 +89,20 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
     };
 
     return (
-        <View style={styles.postCard}>
+        <View style={[styles.postCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
             {post.imageUrl ? (
                 <View style={styles.postImageWrap}>
                     <Image source={{ uri: post.imageUrl }} style={styles.postImage} />
                     {post.moodTag && (
                         <View style={styles.postTypeTagWrap}>
-                            <View style={[styles.postTypeTag, { backgroundColor: '#55C5F1' }]}>
+                            <View style={[styles.postTypeTag, { backgroundColor: palette.primary }]}>
                                 <Text style={styles.postTypeTagText}>#{post.moodTag}</Text>
                             </View>
                         </View>
                     )}
                     {post.audioUrl && (
                         <TouchableOpacity activeOpacity={0.8} style={styles.postPlayButton}>
-                            <Ionicons name="play" size={18} color="#1E293B" style={styles.postPlayIcon} />
+                            <Ionicons name="play" size={18} color={palette.textPrimary} style={styles.postPlayIcon} />
                         </TouchableOpacity>
                     )}
                 </View>
@@ -112,7 +116,7 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
                     />
                     <View style={styles.postAuthorInfo}>
                         <View style={styles.postAuthorNameRow}>
-                            <Text style={styles.postAuthorName} numberOfLines={1}>
+                            <Text style={[styles.postAuthorName, { color: palette.textPrimary }]} numberOfLines={1}>
                                 {post.userId.substring(0, 8)}...
                             </Text>
                         </View>
@@ -120,7 +124,7 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
 
                     <View style={styles.postHeaderRight}>
                         <View style={styles.postTimeRow}>
-                            <Ionicons name="time-outline" size={12} color="#9CA3AF" />
+                            <Ionicons name="time-outline" size={12} color={palette.textMuted} />
                             <Text style={styles.postTimeText}>
                                 {formatTimeAgo(post.publishedAt || post.createdAt)}
                             </Text>
@@ -133,14 +137,14 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
                                     onPress={handleOpenOwnerMenu}
                                     style={styles.ownerActionButton}
                                 >
-                                    <Ionicons name="ellipsis-horizontal" size={16} color="#64748B" />
+                                    <Ionicons name="ellipsis-horizontal" size={16} color={palette.textSecondary} />
                                 </TouchableOpacity>
 
                                 {showOwnerMenu && (
-                                    <View style={styles.ownerActionMenu}>
+                                    <View style={[styles.ownerActionMenu, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                                         <TouchableOpacity style={styles.ownerActionMenuItem} activeOpacity={0.75} onPress={handleEditPress}>
-                                            <Ionicons name="create-outline" size={14} color="#0F172A" />
-                                            <Text style={styles.ownerActionMenuText}>Cập nhật</Text>
+                                            <Ionicons name="create-outline" size={14} color={palette.textPrimary} />
+                                            <Text style={[styles.ownerActionMenuText, { color: palette.textPrimary }]}>Cập nhật</Text>
                                         </TouchableOpacity>
                                         <View style={styles.ownerActionDivider} />
                                         <TouchableOpacity style={styles.ownerActionMenuItem} activeOpacity={0.75} onPress={handleDeletePress}>
@@ -155,22 +159,22 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
                 </View>
 
                 <TouchableOpacity activeOpacity={0.8} onPress={handleNavigateDetail}>
-                    <Text style={styles.postTitle} numberOfLines={2}>
+                    <Text style={[styles.postTitle, { color: palette.textPrimary }]} numberOfLines={2}>
                         {post.title}
                     </Text>
 
-                    <Text style={styles.postExcerpt} numberOfLines={2}>
+                    <Text style={[styles.postExcerpt, { color: palette.textSecondary }]} numberOfLines={2}>
                         {post.contentText}
                     </Text>
                 </TouchableOpacity>
 
                 {post.moodTag && !post.imageUrl && (
-                    <View style={styles.postCategoryWrap}>
-                        <Text style={styles.postCategoryText}>#{post.moodTag}</Text>
+                    <View style={[styles.postCategoryWrap, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}>
+                        <Text style={[styles.postCategoryText, { color: palette.textSecondary }]}>#{post.moodTag}</Text>
                     </View>
                 )}
 
-                <View style={styles.postActionsRow}>
+                <View style={[styles.postActionsRow, { borderTopColor: palette.border }]}> 
                     <View style={styles.postStatsRow}>
                         <TouchableOpacity onPress={handleLikePress} activeOpacity={0.8} style={styles.statButton}>
                             <Ionicons
@@ -178,24 +182,24 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
                                 size={16}
                                 color={post.isLiked ? '#EF4444' : '#9CA3AF'}
                             />
-                            <Text style={[styles.statCountText, post.isLiked && styles.statCountTextLiked]}>
+                            <Text style={[styles.statCountText, { color: palette.textSecondary }, post.isLiked && styles.statCountTextLiked]}>
                                 {formatNumber(post.reactionCount)}
                             </Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity activeOpacity={0.8} onPress={handleNavigateDetail} style={styles.statInline}>
-                            <Ionicons name="chatbubble-ellipses-outline" size={16} color="#9CA3AF" />
-                            <Text style={styles.statCountText}>{formatNumber(post.commentCount)}</Text>
+                            <Ionicons name="chatbubble-ellipses-outline" size={16} color={palette.textMuted} />
+                            <Text style={[styles.statCountText, { color: palette.textSecondary }]}>{formatNumber(post.commentCount)}</Text>
                         </TouchableOpacity>
 
                         <View style={styles.statInline}>
-                            <Ionicons name="eye-outline" size={16} color="#9CA3AF" />
-                            <Text style={styles.statCountText}>{formatNumber(post.viewCount)}</Text>
+                            <Ionicons name="eye-outline" size={16} color={palette.textMuted} />
+                            <Text style={[styles.statCountText, { color: palette.textSecondary }]}>{formatNumber(post.viewCount)}</Text>
                         </View>
                     </View>
 
                     <TouchableOpacity activeOpacity={0.8} style={styles.shareButton}>
-                        <Ionicons name="share-social-outline" size={16} color="#55C5F1" />
+                        <Ionicons name="share-social-outline" size={16} color={palette.primary} />
                     </TouchableOpacity>
                 </View>
             </View>

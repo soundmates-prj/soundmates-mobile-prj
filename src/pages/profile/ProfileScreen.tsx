@@ -4,24 +4,25 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Image,
-    Linking,
-    Modal,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  Linking,
+  Modal,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { showToast } from '../../../components/ui/Toast';
-import { SoundMateLightColors } from '../../../constants/theme';
+import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { authService, BlogPostResponse, blogService, ReactionResponse, UpdateProfileRequest } from '../../api';
 import { BlogPostCard, DisplayPost } from '../../components/blog/BlogPostCard';
+import { ThemePreference, useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
 import BottomNavigation, { TabName } from '../BottomNavigation';
 import CreatePostScreen, { EditablePostDraft } from '../blog/CreatePostScreen';
@@ -175,13 +176,17 @@ function PostComposer({ onPress, avatarUrl }: { onPress: () => void; avatarUrl?:
 
 // ─── Settings Drawer ────────────────────────────────────
 
-function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountInfo, onOpenSubscription, onLogout }: { 
+function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountInfo, onOpenSubscription, onOpenThemeSettings, themeLabel, onLogout, palette, isDarkMode }: {
   isOpen: boolean; 
   onClose: () => void; 
   onOpenChangePassword?: () => void;
   onOpenAccountInfo?: () => void;
   onOpenSubscription?: () => void;
+  onOpenThemeSettings?: () => void;
+  themeLabel?: string;
   onLogout?: () => void;
+  palette: typeof SoundMateLightColors | typeof SoundMateColors;
+  isDarkMode: boolean;
 }) {
   const openAfterClose = (callback?: () => void) => {
     onClose();
@@ -197,6 +202,8 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
       openAfterClose(onOpenAccountInfo);
     } else if (label === 'Gói đăng ký' && onOpenSubscription) {
       openAfterClose(onOpenSubscription);
+    } else if (label === 'Giao diện' && onOpenThemeSettings) {
+      openAfterClose(onOpenThemeSettings);
     }
   };
 
@@ -204,17 +211,17 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
     <Modal visible={isOpen} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.settingsBackdrop}>
         <TouchableOpacity activeOpacity={1} onPress={onClose} style={styles.settingsBackdropTouchable} />
-        <View style={styles.settingsDrawer}>
+        <View style={[styles.settingsDrawer, { backgroundColor: palette.surface }]}> 
           {/* Handle */}
           <View style={styles.settingsHandle}>
-            <View style={styles.settingsHandleBar} />
+            <View style={[styles.settingsHandleBar, { backgroundColor: palette.border }]} />
           </View>
 
           {/* Header */}
-          <View style={styles.settingsHeader}>
-            <Text style={styles.settingsTitle}>Cài đặt & Tùy chỉnh</Text>
-            <TouchableOpacity onPress={onClose} style={styles.settingsCloseButton}>
-              <Ionicons name="close" size={16} color="#6B7280" />
+          <View style={[styles.settingsHeader, { borderBottomColor: palette.border }]}> 
+            <Text style={[styles.settingsTitle, { color: palette.textPrimary }]}>Cài đặt & Tùy chỉnh</Text>
+            <TouchableOpacity onPress={onClose} style={[styles.settingsCloseButton, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}> 
+              <Ionicons name="close" size={16} color={palette.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -222,35 +229,37 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
             {/* Menu sections */}
             {MENU_ITEMS.map((section) => (
               <View key={section.group} style={styles.settingsSection}>
-                <Text style={styles.settingsSectionTitle}>{section.group}</Text>
+                <Text style={[styles.settingsSectionTitle, { color: palette.textMuted }]}>{section.group}</Text>
                 {section.items.map((item) => (
                   <TouchableOpacity 
                     key={item.label} 
-                    style={styles.settingsMenuItem}
+                    style={[styles.settingsMenuItem, { borderBottomColor: palette.border }]}
                     onPress={() => handleMenuItemPress(item.label)}
                   >
                     <View style={[styles.settingsMenuIcon, { backgroundColor: item.color + '15' }]}>
                       <Ionicons name={item.icon as any} size={18} color={item.color} />
                     </View>
-                    <Text style={styles.settingsMenuLabel}>{item.label}</Text>
-                    {'subtitle' in item && item.subtitle && (
-                      <Text style={styles.settingsMenuSubtitle}>{item.subtitle}</Text>
-                    )}
+                    <Text style={[styles.settingsMenuLabel, { color: palette.textPrimary }]}>{item.label}</Text>
+                    {item.label === 'Giao diện' ? (
+                      <Text style={[styles.settingsMenuSubtitle, { color: palette.textSecondary }]}>{themeLabel || 'Sáng'}</Text>
+                    ) : ('subtitle' in item && item.subtitle ? (
+                      <Text style={[styles.settingsMenuSubtitle, { color: palette.textSecondary }]}>{item.subtitle}</Text>
+                    ) : null)}
                     {'badge' in item && item.badge && (
                       <View style={styles.settingsMenuBadge}>
                         <Text style={styles.settingsMenuBadgeText}>{item.badge}</Text>
                       </View>
                     )}
-                    <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
+                    <Ionicons name="chevron-forward" size={16} color={palette.textMuted} />
                   </TouchableOpacity>
                 ))}
               </View>
             ))}
 
             {/* Logout */}
-            <View style={styles.settingsLogoutContainer}>
+            <View style={[styles.settingsLogoutContainer, { borderTopColor: palette.border }]}> 
               <TouchableOpacity 
-                style={styles.settingsLogoutButton}
+                style={[styles.settingsLogoutButton, { borderColor: isDarkMode ? '#DC2626' : '#EF4444' }]}
                 onPress={() => {
                   Alert.alert(
                     'Đăng xuất',
@@ -281,7 +290,7 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
             </View>
 
             {/* App version */}
-            <Text style={styles.settingsVersion}>SoundMates v2.1.0</Text>
+            <Text style={[styles.settingsVersion, { color: palette.textMuted }]}>SoundMates v2.1.0</Text>
           </ScrollView>
         </View>
       </View>
@@ -300,6 +309,8 @@ interface ProfileScreenProps {
 
 export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword, onNavigateToSubscription, onLogout }: ProfileScreenProps) {
   const { user, refreshUser, saveUser } = useUser();
+  const { themePreference, effectiveTheme, isDarkMode, setThemePreference } = useTheme();
+  const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
   console.log('[ProfileScreen] Current user:', user);
   const joinedDateLabel = (() => {
     if (!user?.createdAt) return '';
@@ -335,6 +346,26 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
   const [showImagePreviewPopup, setShowImagePreviewPopup] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState('');
   const [previewImageTarget, setPreviewImageTarget] = useState<'avatar' | 'cover'>('avatar');
+  const [showThemePickerPopup, setShowThemePickerPopup] = useState(false);
+
+  const themeLabel = themePreference === 'system'
+    ? `Tự động (${effectiveTheme === 'dark' ? 'Tối' : 'Sáng'})`
+    : themePreference === 'dark'
+      ? 'Tối'
+      : 'Sáng';
+
+  const handleOpenThemeSettings = useCallback(() => {
+    setShowThemePickerPopup(true);
+  }, []);
+
+  const handleApplyThemePreference = useCallback(async (nextPreference: ThemePreference) => {
+    setShowThemePickerPopup(false);
+    await setThemePreference(nextPreference);
+    showToast.success(
+      'Đã cập nhật giao diện',
+      `Chế độ ${nextPreference === 'system' ? 'Tự động' : nextPreference === 'dark' ? 'Tối' : 'Sáng'}`,
+    );
+  }, [setThemePreference]);
 
   // Debug: Log user changes
   useEffect(() => {
@@ -753,20 +784,33 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: palette.background }]}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           activeTab === 'posts'
-            ? <RefreshControl refreshing={isPostsRefreshing} onRefresh={handlePostsRefresh} colors={['#55C5F1']} />
+            ? <RefreshControl refreshing={isPostsRefreshing} onRefresh={handlePostsRefresh} colors={[palette.primary]} tintColor={palette.primary} />
             : undefined
         }
       >
         {/* ── Profile Card ── */}
         <View style={styles.profileCardContainer}>
-          <View style={styles.profileCard}>
-            <View style={styles.profileCoverContainer}>
+          <View style={[styles.profileCard, { backgroundColor: palette.surface }]}> 
+            {/* ── Header ── */}
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>Trang cá nhân</Text>
+              <View style={styles.headerActions}>
+                <TouchableOpacity onPress={() => setShowEditProfile(true)} style={[styles.headerButton, { backgroundColor: isDarkMode ? 'rgba(15, 23, 42, 0.7)' : 'rgba(15, 23, 42, 0.35)' }]}>
+                  <Ionicons name="create-outline" size={20} color="white" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setShowSettings(true)} style={[styles.headerButton, { backgroundColor: isDarkMode ? 'rgba(15, 23, 42, 0.7)' : 'rgba(15, 23, 42, 0.35)' }]}>
+                  <Ionicons name="ellipsis-vertical" size={20} color="white" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={[styles.profileCoverContainer, { backgroundColor: isDarkMode ? '#111827' : '#E2E8F0' }]}> 
               <TouchableOpacity
                 disabled={isUpdatingProfileImage}
                 onPress={() => openImageOptionsPopup('cover')}
@@ -796,13 +840,13 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
                   onPress={() => openImageOptionsPopup('avatar')}
                   activeOpacity={0.85}
                 >
-                  <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+                  <Image source={{ uri: avatarUrl }} style={[styles.avatar, { borderColor: palette.surface }]} />
                 </TouchableOpacity>
                 <View style={styles.onlineIndicator} />
               </View>
               <View style={styles.profileDetails}>
                 <View style={styles.profileNameRow}>
-                  <Text style={styles.profileName}>
+                  <Text style={[styles.profileName, { color: palette.textPrimary }]}>
                     {user?.firstName && user?.lastName 
                       ? `${user.firstName} ${user.lastName}` 
                       : user?.username || 'User'}
@@ -811,37 +855,37 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
                     <Text style={styles.premiumBadgeText}>Premium</Text>
                   </View>
                 </View>
-                <Text style={styles.profileUsername}>{user?.username || 'username'}</Text>
+                <Text style={[styles.profileUsername, { color: palette.textSecondary }]}>{user?.username || 'username'}</Text>
               </View>
             </View>
 
             <View style={styles.profileMetaSection}>
               {user?.bio && user.bio.length > 0 && (
-                <Text style={styles.profileBio}>{user.bio}</Text>
+                <Text style={[styles.profileBio, { color: palette.textSecondary }]}>{user.bio}</Text>
               )}
               {!!joinedDateLabel && (
                 <View style={styles.joinedDateRow}>
-                  <Ionicons name="calendar-outline" size={13} color="#6B7280" />
-                  <Text style={styles.joinedDateText}>{joinedDateLabel}</Text>
+                  <Ionicons name="calendar-outline" size={13} color={palette.textSecondary} />
+                  <Text style={[styles.joinedDateText, { color: palette.textSecondary }]}>{joinedDateLabel}</Text>
                 </View>
               )}
             </View>
-            <View style={styles.profileStats}>
+            <View style={[styles.profileStats, { backgroundColor: palette.surface }]}> 
               <View style={styles.profileStatItem}>
-                <Text style={styles.profileStatValue}>{totalMyPosts}</Text>
-                <Text style={styles.profileStatLabel}>Bài viết</Text>
+                <Text style={[styles.profileStatValue, { color: palette.textPrimary }]}>{totalMyPosts}</Text>
+                <Text style={[styles.profileStatLabel, { color: palette.textSecondary }]}>Bài viết</Text>
               </View>
               <View style={styles.profileStatItem}>
-                <Text style={styles.profileStatValue}>128</Text>
-                <Text style={styles.profileStatLabel}>Playlist</Text>
+                <Text style={[styles.profileStatValue, { color: palette.textPrimary }]}>128</Text>
+                <Text style={[styles.profileStatLabel, { color: palette.textSecondary }]}>Playlist</Text>
               </View>
               <View style={styles.profileStatItem}>
-                <Text style={styles.profileStatValue}>1.2K</Text>
-                <Text style={styles.profileStatLabel}>Người theo dõi</Text>
+                <Text style={[styles.profileStatValue, { color: palette.textPrimary }]}>1.2K</Text>
+                <Text style={[styles.profileStatLabel, { color: palette.textSecondary }]}>Người theo dõi</Text>
               </View>
               <View style={styles.profileStatItem}>
-                <Text style={styles.profileStatValue}>856</Text>
-                <Text style={styles.profileStatLabel}>Đang theo dõi</Text>
+                <Text style={[styles.profileStatValue, { color: palette.textPrimary }]}>856</Text>
+                <Text style={[styles.profileStatLabel, { color: palette.textSecondary }]}>Đang theo dõi</Text>
               </View>
             </View>
           </View>
@@ -849,54 +893,54 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
 
         {/* ── Quick Stats Cards ── */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsContainer}>
-          <View style={styles.statsCard}>
+          <View style={[styles.statsCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
             <View style={[styles.statsIcon, { backgroundColor: '#55C5F1' + '1A' }]}>
               <Ionicons name="headset-outline" size={20} color="#55C5F1" />
             </View>
-            <Text style={styles.statsValue}>234</Text>
-            <Text style={styles.statsLabel}>Giờ nghe</Text>
+            <Text style={[styles.statsValue, { color: palette.textPrimary }]}>234</Text>
+            <Text style={[styles.statsLabel, { color: palette.textSecondary }]}>Giờ nghe</Text>
           </View>
 
-          <View style={styles.statsCard}>
+          <View style={[styles.statsCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
             <View style={[styles.statsIcon, { backgroundColor: '#10B981' + '1A' }]}>
               <Ionicons name="people-outline" size={20} color="#10B981" />
             </View>
-            <Text style={styles.statsValue}>56</Text>
-            <Text style={styles.statsLabel}>Phòng live</Text>
+            <Text style={[styles.statsValue, { color: palette.textPrimary }]}>56</Text>
+            <Text style={[styles.statsLabel, { color: palette.textSecondary }]}>Phòng live</Text>
           </View>
 
-          <View style={styles.statsCard}>
+          <View style={[styles.statsCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
             <View style={[styles.statsIcon, { backgroundColor: '#F59E0B' + '1A' }]}>
               <Ionicons name="trophy-outline" size={20} color="#F59E0B" />
             </View>
-            <Text style={styles.statsValue}>12</Text>
-            <Text style={styles.statsLabel}>Huy hiệu</Text>
+            <Text style={[styles.statsValue, { color: palette.textPrimary }]}>12</Text>
+            <Text style={[styles.statsLabel, { color: palette.textSecondary }]}>Huy hiệu</Text>
           </View>
 
-          <View style={styles.statsCard}>
+          <View style={[styles.statsCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
             <View style={[styles.statsIcon, { backgroundColor: '#A78BFA' + '1A' }]}>
               <Ionicons name="heart-outline" size={20} color="#A78BFA" />
             </View>
-            <Text style={styles.statsValue}>3.4K</Text>
-            <Text style={styles.statsLabel}>Lượt thích</Text>
+            <Text style={[styles.statsValue, { color: palette.textPrimary }]}>3.4K</Text>
+            <Text style={[styles.statsLabel, { color: palette.textSecondary }]}>Lượt thích</Text>
           </View>
         </ScrollView>
 
         {/* ── Tabs: Bài viết / Playlist yêu thích ── */}
-        <View style={styles.tabsContainer}>
+        <View style={[styles.tabsContainer, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
           <TouchableOpacity
             onPress={() => setActiveTab('posts')}
-            style={[styles.tabButton, activeTab === 'posts' && styles.tabButtonActive]}
+            style={[styles.tabButton, activeTab === 'posts' && [styles.tabButtonActive, { backgroundColor: palette.primary }]]}
           >
-            <Text style={[styles.tabButtonText, activeTab === 'posts' && styles.tabButtonTextActive]}>
+            <Text style={[styles.tabButtonText, { color: activeTab === 'posts' ? '#FFFFFF' : palette.textSecondary }, activeTab === 'posts' && styles.tabButtonTextActive]}>
               Bài viết
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setActiveTab('playlists')}
-            style={[styles.tabButton, activeTab === 'playlists' && styles.tabButtonActive]}
+            style={[styles.tabButton, activeTab === 'playlists' && [styles.tabButtonActive, { backgroundColor: palette.primary }]]}
           >
-            <Text style={[styles.tabButtonText, activeTab === 'playlists' && styles.tabButtonTextActive]}>
+            <Text style={[styles.tabButtonText, { color: activeTab === 'playlists' ? '#FFFFFF' : palette.textSecondary }, activeTab === 'playlists' && styles.tabButtonTextActive]}>
               Playlist yêu thích
             </Text>
           </TouchableOpacity>
@@ -909,8 +953,8 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
 
             {isPostsLoading ? (
               <View style={styles.postsLoadingContainer}>
-                <ActivityIndicator size="large" color="#55C5F1" />
-                <Text style={styles.postsLoadingText}>Đang tải bài viết của bạn...</Text>
+                <ActivityIndicator size="large" color={palette.primary} />
+                <Text style={[styles.postsLoadingText, { color: palette.textSecondary }]}>Đang tải bài viết của bạn...</Text>
               </View>
             ) : myPosts.length === 0 ? (
               <View style={styles.emptyState}>
@@ -974,39 +1018,72 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
         <View style={styles.popupOverlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowImageOptionsPopup(false)} />
 
-          <View style={styles.popupCard}>
-            <View style={styles.popupHeader}>
-              <Text style={styles.popupTitle}>
+          <View style={[styles.popupCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+            <View style={[styles.popupHeader, { borderBottomColor: palette.border }]}>
+              <Text style={[styles.popupTitle, { color: palette.textPrimary }]}>
                 Cập nhật {activeImageTarget === 'avatar' ? 'ảnh đại diện' : 'ảnh bìa'}
               </Text>
               <TouchableOpacity onPress={() => setShowImageOptionsPopup(false)}>
-                <Ionicons name="close" size={18} color="#6B7280" />
+                <Ionicons name="close" size={18} color={palette.textSecondary} />
               </TouchableOpacity>
             </View>
 
             {((activeImageTarget === 'avatar' && !!avatarUrl) ||
               (activeImageTarget === 'cover' && !!coverImageUrl)) && (
-              <TouchableOpacity disabled={isUpdatingProfileImage} style={styles.popupOption} onPress={handleViewImage}>
+              <TouchableOpacity disabled={isUpdatingProfileImage} style={[styles.popupOption, { borderBottomColor: palette.border }]} onPress={handleViewImage}>
                 <Ionicons name="eye-outline" size={18} color="#0EA5E9" />
-                <Text style={styles.popupOptionText}>Xem ảnh hiện tại</Text>
+                <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>Xem ảnh hiện tại</Text>
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity disabled={isUpdatingProfileImage} style={styles.popupOption} onPress={handlePickImageFromLibrary}>
+            <TouchableOpacity disabled={isUpdatingProfileImage} style={[styles.popupOption, { borderBottomColor: palette.border }]} onPress={handlePickImageFromLibrary}>
               <Ionicons name="images-outline" size={18} color="#55C5F1" />
-              <Text style={styles.popupOptionText}>Chọn từ album / thư viện</Text>
+              <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>Chọn từ album / thư viện</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity disabled={isUpdatingProfileImage} style={styles.popupOption} onPress={handleTakePhoto}>
+            <TouchableOpacity disabled={isUpdatingProfileImage} style={[styles.popupOption, { borderBottomColor: palette.border }]} onPress={handleTakePhoto}>
               <Ionicons name="camera-outline" size={18} color="#A78BFA" />
-              <Text style={styles.popupOptionText}>Chụp ảnh mới</Text>
+              <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>Chụp ảnh mới</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity disabled={isUpdatingProfileImage} style={styles.popupOption} onPress={handleRemoveImage}>
+            <TouchableOpacity disabled={isUpdatingProfileImage} style={[styles.popupOption, { borderBottomColor: palette.border }]} onPress={handleRemoveImage}>
               <Ionicons name="trash-outline" size={18} color="#EF4444" />
               <Text style={[styles.popupOptionText, styles.popupOptionDangerText]}>
                 Xóa {activeImageTarget === 'avatar' ? 'ảnh đại diện' : 'ảnh bìa'}
               </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {showThemePickerPopup && (
+        <View style={styles.popupOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowThemePickerPopup(false)} />
+
+          <View style={[styles.popupCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+            <View style={[styles.popupHeader, { borderBottomColor: palette.border }]}>
+              <Text style={[styles.popupTitle, { color: palette.textPrimary }]}>Chọn giao diện</Text>
+              <TouchableOpacity onPress={() => setShowThemePickerPopup(false)}>
+                <Ionicons name="close" size={18} color={palette.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={[styles.popupOption, { borderBottomColor: palette.border }]} onPress={() => void handleApplyThemePreference('light')}>
+              <Ionicons name="sunny-outline" size={18} color="#F59E0B" />
+              <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>Sáng</Text>
+              {themePreference === 'light' && <Ionicons name="checkmark" size={18} color="#10B981" />}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.popupOption, { borderBottomColor: palette.border }]} onPress={() => void handleApplyThemePreference('dark')}>
+              <Ionicons name="moon-outline" size={18} color="#6366F1" />
+              <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>Tối</Text>
+              {themePreference === 'dark' && <Ionicons name="checkmark" size={18} color="#10B981" />}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.popupOption, { borderBottomColor: palette.border }]} onPress={() => void handleApplyThemePreference('system')}>
+              <Ionicons name="phone-portrait-outline" size={18} color="#3B82F6" />
+              <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>Tự động theo hệ thống</Text>
+              {themePreference === 'system' && <Ionicons name="checkmark" size={18} color="#10B981" />}
             </TouchableOpacity>
           </View>
         </View>
@@ -1036,19 +1113,6 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
         </View>
       </Modal>
 
-      {/* ── Header ── */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Trang cá nhân</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity onPress={() => setShowEditProfile(true)} style={styles.headerButton}>
-            <Ionicons name="create-outline" size={20} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowSettings(true)} style={styles.headerButton}>
-            <Ionicons name="ellipsis-vertical" size={20} color="white" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
       {/* Bottom Navigation */}
       <BottomNavigation activeTab={activeBottomTab} onTabPress={handleTabPress} />
 
@@ -1077,7 +1141,11 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
             onNavigateToSubscription();
           }
         }}
+        onOpenThemeSettings={handleOpenThemeSettings}
+        themeLabel={themeLabel}
         onLogout={onLogout}
+        palette={palette}
+        isDarkMode={isDarkMode}
       />
 
       {/* ── Change Password Modal ── */}
@@ -1983,6 +2051,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#F3F4F6',
   },
   settingsMenuIcon: {
     width: 36,

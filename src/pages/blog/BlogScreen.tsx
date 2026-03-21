@@ -10,12 +10,14 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import {
     BlogPostResponse,
     blogService,
     PopularPostResponse,
     TrendingPostResponse
 } from '../../api';
+import { useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
 
 import { BlogPostCard, DisplayPost } from '../../components/blog/BlogPostCard';
@@ -55,6 +57,8 @@ interface BlogScreenProps {
 
 export default function BlogScreen({ onNavigateToCreatePost, onNavigateToPostDetail }: BlogScreenProps) {
     const { user } = useUser();
+    const { isDarkMode } = useTheme();
+    const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
     const [activeTab, setActiveTab] = useState<BlogTab>('all');
     const [posts, setPosts] = useState<DisplayPost[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -262,11 +266,11 @@ export default function BlogScreen({ onNavigateToCreatePost, onNavigateToPostDet
     // ───── Render ─────
 
     return (
-        <View style={styles.screen}>
-            <View style={styles.header}>
-                <Text style={styles.headerTitle}>Diễn đàn SoundMates</Text>
+        <View style={[styles.screen, { backgroundColor: palette.background }]}> 
+            <View style={[styles.header, { backgroundColor: palette.surface, borderBottomColor: palette.border }]}> 
+                <Text style={[styles.headerTitle, { color: palette.textPrimary }]}>Diễn đàn SoundMates</Text>
                 <TouchableOpacity activeOpacity={0.8} style={styles.headerSearchButton}>
-                    <Ionicons name="search" size={20} color="#1E293B" />
+                    <Ionicons name="search" size={20} color={palette.textPrimary} />
                 </TouchableOpacity>
             </View>
 
@@ -275,7 +279,7 @@ export default function BlogScreen({ onNavigateToCreatePost, onNavigateToPostDet
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
-                    <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={['#55C5F1']} />
+                    <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={[palette.primary]} tintColor={palette.primary} />
                 }
             >
                 {/* Featured banner */}
@@ -337,8 +341,8 @@ export default function BlogScreen({ onNavigateToCreatePost, onNavigateToPostDet
                 {/* Loading state */}
                 {isLoading && (
                     <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color="#55C5F1" />
-                        <Text style={styles.loadingText}>Đang tải bài viết...</Text>
+                        <ActivityIndicator size="large" color={palette.primary} />
+                        <Text style={[styles.loadingText, { color: palette.textSecondary }]}>Đang tải bài viết...</Text>
                     </View>
                 )}
 
@@ -359,8 +363,8 @@ export default function BlogScreen({ onNavigateToCreatePost, onNavigateToPostDet
                         activeOpacity={0.8}
                         onPress={() => fetchPosts(activeTab, page + 1)}
                     >
-                        <Text style={styles.loadMoreText}>Tải thêm bài viết</Text>
-                        <Ionicons name="chevron-down" size={16} color="#55C5F1" />
+                        <Text style={[styles.loadMoreText, { color: palette.primary }]}>Tải thêm bài viết</Text>
+                        <Ionicons name="chevron-down" size={16} color={palette.primary} />
                     </TouchableOpacity>
                 )}
 
@@ -370,8 +374,8 @@ export default function BlogScreen({ onNavigateToCreatePost, onNavigateToPostDet
                         <View style={styles.emptyIconWrap}>
                             <Ionicons name="newspaper-outline" size={32} color="#D1D5DB" />
                         </View>
-                        <Text style={styles.emptyTitle}>Chưa có bài viết</Text>
-                        <Text style={styles.emptyDescription}>
+                        <Text style={[styles.emptyTitle, { color: palette.textPrimary }]}>Chưa có bài viết</Text>
+                        <Text style={[styles.emptyDescription, { color: palette.textSecondary }]}> 
                             Chưa có bài viết nào trong danh mục này. Hãy là người đầu tiên chia sẻ!
                         </Text>
                     </View>
