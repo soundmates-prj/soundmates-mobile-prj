@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SoundMateLightColors } from '../../../constants/theme';
-import { blogService, PopularPostResponse } from '../../api';
+import { blogService, livestreamService, NowPlayingData, PopularPostResponse } from '../../api';
 import BlogScreen from '../blog/BlogScreen';
 import CreatePostScreen from '../blog/CreatePostScreen';
 import PostDetailScreen from '../blog/PostDetailScreen';
@@ -240,6 +240,8 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
     const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
     const [communityPosts, setCommunityPosts] = useState<ForumPostItem[]>([]);
     const [isCommunityLoading, setIsCommunityLoading] = useState(false);
+    const [liveBannerData, setLiveBannerData] = useState<NowPlayingData | null>(null);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const pulseAnim = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
@@ -315,11 +317,46 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
         }
     }, []);
 
+    const fetchLiveBannerData = useCallback(async () => {
+        try {
+            const data = await livestreamService.getNowPlaying();
+            setLiveBannerData(data);
+        } catch (error) {
+            console.log('[HomeScreen] fetchLiveBannerData error:', error);
+            setLiveBannerData(null);
+        }
+    }, []);
+
+    const handleRefresh = useCallback(async () => {
+        setIsRefreshing(true);
+        try {
+            await Promise.all([fetchCommunityPosts(), fetchLiveBannerData()]);
+        } finally {
+            setIsRefreshing(false);
+        }
+    }, [fetchCommunityPosts, fetchLiveBannerData]);
+
     useEffect(() => {
         if (activeTab === 'home') {
             fetchCommunityPosts();
+            fetchLiveBannerData();
         }
-    }, [activeTab, fetchCommunityPosts]);
+
+        const intervalId = setInterval(() => {
+            if (activeTab === 'home') {
+                fetchLiveBannerData();
+            }
+        }, 10000);
+
+        return () => clearInterval(intervalId);
+    }, [activeTab, fetchCommunityPosts, fetchLiveBannerData]);
+
+    const liveBannerTitle = liveBannerData?.stationName || 'Đêm nhạc bolero học';
+    const liveBannerHost = liveBannerData?.streamerName || 'Emily_vui';
+    const liveBannerListeners = liveBannerData?.totalListeners ?? 256;
+    const isLiveNow = liveBannerData
+        ? liveBannerData.isLive || liveBannerData.isOnline
+        : true;
 
     return (
         <View style={styles.container}>
@@ -346,6 +383,14 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
                         <ScrollView
                             showsVerticalScrollIndicator={false}
                             contentContainerStyle={styles.scrollContent}
+                            refreshControl={
+                                <RefreshControl
+                                    refreshing={isRefreshing}
+                                    onRefresh={() => void handleRefresh()}
+                                    colors={[SoundMateLightColors.primary]}
+                                    tintColor={SoundMateLightColors.primary}
+                                />
+                            }
                         >
                             <LinearGradient
                                 colors={['#3C5F99', '#2D4A7A']}
@@ -389,15 +434,15 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
                                 >
                                     <Animated.View style={[styles.livePill, { transform: [{ scale: pulseAnim }] }]}>
                                         <View style={styles.livePillDot} />
-                                        <Text style={styles.livePillText}>ĐANG LIVE</Text>
+                                        <Text style={styles.livePillText}>{isLiveNow ? 'ĐANG LIVE' : 'OFFLINE'}</Text>
                                     </Animated.View>
 
-                                    <Text style={styles.liveBannerTitle}>Đêm nhạc bolero học</Text>
-                                    <Text style={styles.liveBannerHost}>Emily_vui</Text>
+                                    <Text style={styles.liveBannerTitle}>{liveBannerTitle}</Text>
+                                    <Text style={styles.liveBannerHost}>{liveBannerHost}</Text>
 
                                     <View style={styles.liveBannerMeta}>
                                         <Ionicons name="radio" size={14} color="rgba(255,255,255,0.92)" />
-                                        <Text style={styles.liveBannerMetaText}>256 người</Text>
+                                        <Text style={styles.liveBannerMetaText}>{liveBannerListeners} người</Text>
                                     </View>
 
                                     <View style={styles.liveBannerOverlay} />

@@ -6,7 +6,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { showToast, toastConfig } from './components/ui/Toast';
 import { SoundMateLightColors } from './constants/theme';
-import { authService, registerUnauthorizedHandler } from './src/api';
+import { authService, livestreamService, registerUnauthorizedHandler } from './src/api';
 import { UserProvider, useUser } from './src/context/UserContext';
 import {
     ForgotPasswordScreen,
@@ -76,6 +76,10 @@ function AppContent() {
             }
         };
         checkAuth();
+    }, []);
+
+    useEffect(() => {
+        void livestreamService.initializeStationContext();
     }, []);
 
     // Save authentication tokens only

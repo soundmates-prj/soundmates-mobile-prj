@@ -44,6 +44,8 @@ interface ApiResponse<T> {
 interface StationSummary {
   id: string;
   externalStationId?: number;
+  stationShortcode?: string;
+  streamUrl?: string;
   isEnabled?: boolean;
 }
 
@@ -62,6 +64,7 @@ const api = axios.create({
 });
 
 const FALLBACK_STATION_UUID = 'e1cd49c9-c82f-4eec-8e9b-67b80a5ba0dc';
+const DEFAULT_STATION_SHORTCODE = 'duc_phan';
 const DEFAULT_STATION_ID = 1;
 
 const normalizeAzuraCastBase = (rawBase: string): string => {
@@ -87,6 +90,8 @@ const MAIN_API_HOST = (() => {
 
 let cachedStationUuid: string | null = null;
 let cachedExternalStationId: number | null = null;
+let cachedStationShortcode: string | null = null;
+let stationBootstrapPromise: Promise<void> | null = null;
 
 const normalizeNetworkUrl = (url?: string): string => {
   if (!url) return '';
@@ -103,34 +108,80 @@ const normalizeTrackInfo = (track: TrackInfo): TrackInfo => ({
   artUrl: normalizeNetworkUrl(track.artUrl),
 });
 
-const resolveStationUuid = async (): Promise<string> => {
-  if (cachedStationUuid) {
-    return cachedStationUuid;
+const extractShortcodeFromStreamUrl = (streamUrl?: string): string | null => {
+  if (!streamUrl) return null;
+  const match = streamUrl.match(/\/listen\/([^/]+)\/radio\./i);
+  return match?.[1] || null;
+};
+
+const applyStationSummary = (station: StationSummary): void => {
+  cachedStationUuid = station.id;
+
+  if (typeof station.externalStationId === 'number') {
+    cachedExternalStationId = station.externalStationId;
   }
+
+  const shortcode = station.stationShortcode || extractShortcodeFromStreamUrl(station.streamUrl);
+  if (shortcode) {
+    cachedStationShortcode = shortcode;
+  }
+};
+
+const bootstrapStationContext = async (): Promise<void> => {
+  if (cachedStationUuid && cachedStationShortcode) {
+    return;
+  }
+
+  if (stationBootstrapPromise) {
+    return stationBootstrapPromise;
+  }
+
+  stationBootstrapPromise = (async () => {
+    try {
+      const response = await api.get<ApiResponse<StationSummary[]>>('station');
+      const stations = response.data.data || [];
+      const activeStation = stations.find((station) => station.isEnabled) || stations[0];
+
+      if (activeStation?.id) {
+        applyStationSummary(activeStation);
+        return;
+      }
+    } catch {
+      // Keep legacy fallback values if station discovery fails.
+    }
+
+    if (!cachedStationUuid) {
+      cachedStationUuid = FALLBACK_STATION_UUID;
+    }
+
+    if (!cachedStationShortcode) {
+      cachedStationShortcode = DEFAULT_STATION_SHORTCODE;
+    }
+  })();
 
   try {
-    const response = await api.get<ApiResponse<StationSummary[]>>('station');
-    const stations = response.data.data || [];
-    const activeStation = stations.find((station) => station.isEnabled) || stations[0];
-
-    if (activeStation?.id) {
-      cachedStationUuid = activeStation.id;
-      if (typeof activeStation.externalStationId === 'number') {
-        cachedExternalStationId = activeStation.externalStationId;
-      }
-      return cachedStationUuid;
-    }
-  } catch {
-    // Fallback to known station UUID if station discovery fails.
+    await stationBootstrapPromise;
+  } finally {
+    stationBootstrapPromise = null;
   }
+};
 
-  cachedStationUuid = FALLBACK_STATION_UUID;
+const resolveStationUuid = async (): Promise<string> => {
+  await bootstrapStationContext();
+  if (!cachedStationUuid) {
+    cachedStationUuid = FALLBACK_STATION_UUID;
+  }
   return cachedStationUuid;
 };
 
 const resolveStationId = (): number => cachedExternalStationId || DEFAULT_STATION_ID;
+const resolveStationShortcode = (): string => cachedStationShortcode || DEFAULT_STATION_SHORTCODE;
 
 export const livestreamService = {
+  async initializeStationContext(): Promise<void> {
+    await bootstrapStationContext();
+  },
+
   async getNowPlaying(): Promise<NowPlayingData> {
     const stationUuid = await resolveStationUuid();
     const response = await api.get<ApiResponse<NowPlayingData>>(
@@ -149,6 +200,10 @@ export const livestreamService = {
 
     if (typeof normalizedData.externalStationId === 'number') {
       cachedExternalStationId = normalizedData.externalStationId;
+    }
+
+    if (normalizedData.stationShortcode) {
+      cachedStationShortcode = normalizedData.stationShortcode;
     }
 
     return normalizedData;
@@ -185,7 +240,9 @@ export const livestreamService = {
   },
 
   getListenUrl(listenUrl?: string): string {
-    const fallbackUrl = normalizeNetworkUrl(`http://${API_HOST}:5000/listen/duc_phan/radio.mp3`);
+    const fallbackUrl = normalizeNetworkUrl(
+      `http://${API_HOST}:5000/listen/${resolveStationShortcode()}/radio.mp3`,
+    );
     return normalizeNetworkUrl(listenUrl) || fallbackUrl;
   },
 };
