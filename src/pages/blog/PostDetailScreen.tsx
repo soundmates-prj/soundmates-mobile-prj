@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     Image,
     Keyboard,
     KeyboardAvoidingView,
@@ -13,17 +14,16 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View,
-    Alert
+    View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useUser } from '../../context/UserContext';
 import {
     BlogPostResponse,
     blogService,
     CommentResponse,
     PostStatsResponse
 } from '../../api';
+import { useUser } from '../../context/UserContext';
 
 interface PostDetailScreenProps {
     postId: string;
@@ -88,7 +88,7 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                 setComments(commentsResult.data.items || []);
             }
         } catch (error) {
-            console.error('[PostDetailScreen] error fetching data:', error);
+            console.log('[PostDetailScreen] error fetching data:', error);
         } finally {
             setIsLoading(false);
             setIsRefreshing(false);
@@ -144,7 +144,7 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                 fetchData(true);
             }
         } catch (error) {
-            console.error('[PostDetailScreen] error commenting:', error);
+            console.log('[PostDetailScreen] error commenting:', error);
         } finally {
             setIsSubmitting(false);
         }
@@ -176,7 +176,7 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                             fetchData(true);
                         }
                     } catch (e) {
-                        console.error('[PostDetailScreen] error deleting comment:', e);
+                        console.log('[PostDetailScreen] error deleting comment:', e);
                     }
                 }
             }

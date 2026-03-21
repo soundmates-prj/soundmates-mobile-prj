@@ -2,16 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Image,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Image,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { podcastService, PodcastResponse } from '../../api';
+import { PodcastResponse, podcastService } from '../../api';
 import { PodcastDetailScreen } from './PodcastDetailScreen';
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -195,7 +195,7 @@ export default function PodcastScreen() {
 
       setPodcasts(mapped);
     } catch (err: any) {
-      console.error('[PodcastScreen] fetchPodcasts error:', err);
+      console.log('[PodcastScreen] fetchPodcasts error:', err);
       setError('Không thể tải danh sách podcast. Vui lòng thử lại.');
     } finally {
       setLoading(false);

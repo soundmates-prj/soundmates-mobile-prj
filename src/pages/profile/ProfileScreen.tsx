@@ -4,19 +4,19 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Image,
-  Linking,
-  Modal,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    Image,
+    Linking,
+    Modal,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { showToast } from '../../../components/ui/Toast';
 import { SoundMateLightColors } from '../../../constants/theme';
@@ -542,6 +542,18 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
   };
 
   const fetchMyPosts = useCallback(async (pageNum = 1, refresh = false) => {
+    if (!user?.userId) {
+      if (pageNum === 1) {
+        setMyPosts([]);
+        setTotalMyPosts(0);
+        setPostsPage(1);
+        setPostsTotalPages(1);
+      }
+      setIsPostsLoading(false);
+      setIsPostsRefreshing(false);
+      return;
+    }
+
     if (refresh) {
       setIsPostsRefreshing(true);
     } else if (pageNum === 1) {
@@ -597,7 +609,7 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
         setPostsTotalPages(1);
       }
     } catch (error) {
-      console.error('[ProfileScreen] fetchMyPosts error:', error);
+      console.log('[ProfileScreen] fetchMyPosts error:', error);
       if (pageNum === 1) {
         setMyPosts([]);
         setTotalMyPosts(0);
@@ -609,10 +621,15 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
   }, [user]);
 
   useEffect(() => {
-    if (activeTab === 'posts') {
+    if (activeTab === 'posts' && user?.userId) {
       fetchMyPosts(1);
+    } else if (!user?.userId) {
+      setMyPosts([]);
+      setTotalMyPosts(0);
+      setPostsPage(1);
+      setPostsTotalPages(1);
     }
-  }, [activeTab, fetchMyPosts]);
+  }, [activeTab, fetchMyPosts, user?.userId]);
 
   const handlePostsRefresh = useCallback(() => {
     fetchMyPosts(1, true);
@@ -654,7 +671,7 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
             : post,
         ),
       );
-      console.error('[ProfileScreen] handleLikePost error:', error);
+      console.log('[ProfileScreen] handleLikePost error:', error);
     }
   }, [myPosts]);
 
@@ -696,7 +713,7 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
                 showToast.error('Xóa thất bại', result.message || 'Vui lòng thử lại sau');
               }
             } catch (error) {
-              console.error('[ProfileScreen] handleDeletePost error:', error);
+              console.log('[ProfileScreen] handleDeletePost error:', error);
               showToast.error('Xóa thất bại', 'Vui lòng thử lại sau');
             }
           },

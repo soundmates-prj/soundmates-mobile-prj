@@ -1009,7 +1009,9 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
           setIsPaused(true);
           dragX.setValue(0);
         },
-        onPanResponderMove: Animated.event([null, { dx: dragX }], { useNativeDriver: true }),
+        onPanResponderMove: (_, gesture) => {
+          dragX.setValue(gesture.dx);
+        },
         onPanResponderRelease: (_, gesture) => {
           const threshold = 60;
 

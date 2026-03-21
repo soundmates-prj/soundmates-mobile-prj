@@ -28,7 +28,7 @@ export { livestreamService } from './livestreamService';
 export type { NowPlayingData, SongRequestItem, TrackInfo } from './livestreamService';
 export { paymentService } from './paymentService';
 export type {
-    CreatePaymentRequest, CreatePaymentResponse,
+    CreatePaymentRequest, CreatePaymentResponse, PaymentCallbackVerificationResponse,
     SubscriptionHistoryPaginationResponse, SubscriptionPlanResponse,
     SubscriptionResponse
 } from './paymentService';

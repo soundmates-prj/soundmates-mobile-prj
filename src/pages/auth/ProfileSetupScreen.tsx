@@ -137,7 +137,7 @@ export default function ProfileSetupScreen({
                 showToast.error('Cập nhật thất bại', response.message || 'Vui lòng thử lại sau');
             }
         } catch (error: any) {
-            console.error('Profile update error:', error);
+            console.log('Profile update error:', error);
             showToast.error('Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.');
         } finally {
             setIsLoading(false);

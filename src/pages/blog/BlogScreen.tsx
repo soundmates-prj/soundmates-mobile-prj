@@ -3,20 +3,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    Image,
     RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 import {
-    blogService,
     BlogPostResponse,
-    TrendingPostResponse,
+    blogService,
     PopularPostResponse,
-    PostStatsResponse,
+    TrendingPostResponse
 } from '../../api';
 import { useUser } from '../../context/UserContext';
 
@@ -187,7 +185,7 @@ export default function BlogScreen({ onNavigateToCreatePost, onNavigateToPostDet
             }
             setPage(pageNum);
         } catch (error) {
-            console.error('[BlogScreen] fetchPosts error:', error);
+            console.log('[BlogScreen] fetchPosts error:', error);
         } finally {
             setIsLoading(false);
             setIsRefreshing(false);
@@ -252,7 +250,7 @@ export default function BlogScreen({ onNavigateToCreatePost, onNavigateToPostDet
                         : p,
                 ),
             );
-            console.error('[BlogScreen] handleLike error:', error);
+            console.log('[BlogScreen] handleLike error:', error);
         }
     }, [posts]);
 

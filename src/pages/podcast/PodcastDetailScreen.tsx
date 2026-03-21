@@ -2,13 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { podcastService } from '../../api';
 
@@ -70,7 +70,7 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
 
       setEpisodes(episodeList);
     } catch (err) {
-      console.error('[PodcastDetail] fetch error:', err);
+      console.log('[PodcastDetail] fetch error:', err);
       // Fallback to generated episodes
       const count = podcast.episodes || 6;
       setEpisodes(

@@ -99,7 +99,7 @@ const notifyUnauthorized = async (errorInfo: UnauthorizedErrorInfo): Promise<voi
     try {
         await unauthorizedHandler(errorInfo);
     } catch (handlerError) {
-        console.error('[Unauthorized Handler Error]', handlerError);
+        console.log('[Unauthorized Handler Error]', handlerError);
     } finally {
         isHandlingUnauthorized = false;
     }
@@ -125,7 +125,7 @@ authApiClient.interceptors.request.use(
         return config;
     },
     (error: AxiosError) => {
-        console.error('[API Request Error]', error);
+        console.log('[API Request Error]', error);
         return Promise.reject(error);
     }
 );
@@ -137,7 +137,13 @@ authApiClient.interceptors.response.use(
         return response;
     },
     async (error: AxiosError) => {
-        console.error('[API Response Error]', error.response?.status, error.response?.data);
+        const statusCode = error.response?.status;
+        if (statusCode && statusCode < 500) {
+            // Expected client-side API failures (401/403/404/...) should not surface as red runtime errors in app UI.
+            console.log('[API Response Error]', statusCode, error.response?.data);
+        } else {
+            console.log('[API Response Error]', statusCode, error.response?.data);
+        }
 
         // Handle common error cases
         if (error.response) {

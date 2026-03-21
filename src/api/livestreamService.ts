@@ -61,7 +61,7 @@ const api = axios.create({
   headers: API_CONFIG.HEADERS,
 });
 
-const FALLBACK_STATION_UUID = '143a299c-9d19-47ac-9988-828528004771';
+const FALLBACK_STATION_UUID = 'e1cd49c9-c82f-4eec-8e9b-67b80a5ba0dc';
 const DEFAULT_STATION_ID = 1;
 
 const normalizeAzuraCastBase = (rawBase: string): string => {

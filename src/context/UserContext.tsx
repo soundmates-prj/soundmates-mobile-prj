@@ -72,7 +72,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 await refreshUser();
             }
         } catch (error) {
-            console.error('Error loading user data:', error);
+            console.log('Error loading user data:', error);
         } finally {
             setIsLoading(false);
         }
@@ -89,7 +89,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             setUserState(userData);
             console.log('[UserContext] User saved successfully, new state:', userData);
         } catch (error) {
-            console.error('Error saving user data:', error);
+            console.log('Error saving user data:', error);
             throw error;
         }
     }, []);
@@ -99,7 +99,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             await AsyncStorage.removeItem(USER_STORAGE_KEY);
             setUserState(null);
         } catch (error) {
-            console.error('Error clearing user data:', error);
+            console.log('Error clearing user data:', error);
             throw error;
         }
     }, []);

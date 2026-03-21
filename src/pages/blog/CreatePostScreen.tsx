@@ -117,7 +117,7 @@ export default function CreatePostScreen({ onBack, onPostCreated, editingPost = 
                 setSelectedImage(result.assets[0].uri);
             }
         } catch (error) {
-            console.error('[CreatePost] Image pick error:', error);
+            console.log('[CreatePost] Image pick error:', error);
         }
     };
 
@@ -166,7 +166,7 @@ export default function CreatePostScreen({ onBack, onPostCreated, editingPost = 
                 }
             }
         } catch (error) {
-            console.error('[CreatePost] Error:', error);
+            console.log('[CreatePost] Error:', error);
             showToast.error(isEditMode ? 'Cập nhật thất bại' : 'Đăng bài thất bại', 'Vui lòng thử lại sau');
         } finally {
             setIsSubmitting(false);

@@ -4,7 +4,7 @@
  */
 
 import { ApiResponse, authApiClient } from './apiClient';
-import { SUBSCRIPTION_ENDPOINTS, PAYMENT_ENDPOINTS } from './config';
+import { API_CONFIG, PAYMENT_ENDPOINTS, SUBSCRIPTION_ENDPOINTS } from './config';
 
 // =====================================================
 // TYPES
@@ -44,6 +44,18 @@ export interface CreatePaymentResponse {
     paymentUrl: string;
 }
 
+export interface PaymentCallbackVerificationResponse {
+    id: string;
+    paymentId: string;
+    paymentProvider: string;
+    paymentMethod: string;
+    amount: number;
+    paymentAt: string;
+    transactionStatus: string;
+    createdAt: string;
+    userProfile?: unknown;
+}
+
 export interface SubscriptionHistoryPaginationResponse {
     items: SubscriptionResponse[];
     page: number;
@@ -51,6 +63,35 @@ export interface SubscriptionHistoryPaginationResponse {
     totalCount: number;
     totalPages: number;
 }
+
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+
+const resolveApiHost = () => {
+    try {
+        return new URL(API_CONFIG.AUTH_BASE_URL).hostname;
+    } catch {
+        return '';
+    }
+};
+
+const replaceLocalhostWithApiHost = (rawUrl: string): string => {
+    const apiHost = resolveApiHost();
+    if (!rawUrl || !apiHost) {
+        return rawUrl;
+    }
+
+    try {
+        const parsedUrl = new URL(rawUrl);
+        if (LOCAL_HOSTS.has(parsedUrl.hostname.toLowerCase())) {
+            parsedUrl.hostname = apiHost;
+        }
+        return parsedUrl.toString();
+    } catch {
+        return rawUrl
+            .replace('://localhost', `://${apiHost}`)
+            .replace('://127.0.0.1', `://${apiHost}`);
+    }
+};
 
 // =====================================================
 // SERVICE
@@ -79,7 +120,7 @@ export const paymentService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[PaymentService] getSubscriptionPlans error:', error);
+            console.log('[PaymentService] getSubscriptionPlans error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể tải danh sách gói đăng ký',
@@ -105,7 +146,7 @@ export const paymentService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[PaymentService] getSubscriptionPlanById error:', error);
+            console.log('[PaymentService] getSubscriptionPlanById error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không tìm thấy gói đăng ký',
@@ -136,7 +177,7 @@ export const paymentService = {
                 message: 'Payment URL created successfully',
             };
         } catch (error: any) {
-            console.error('[PaymentService] createPayment error:', error);
+            console.log('[PaymentService] createPayment error:', error);
             const errorMsg = error.response?.data?.message
                 || error.response?.data?.Message
                 || (typeof error.response?.data === 'string' ? error.response.data : null)
@@ -145,6 +186,61 @@ export const paymentService = {
                 success: false,
                 message: errorMsg,
             };
+        }
+    },
+
+    /**
+     * Verify VNPay callback URL and return transaction result.
+        * Callback from VNPay may contain localhost host; this rewrites it to the env-configured API host.
+     */
+    async verifyVnpayCallback(callbackUrl: string): Promise<{
+        success: boolean;
+        data?: PaymentCallbackVerificationResponse;
+        message?: string;
+        callbackUrl?: string;
+    }> {
+        const resolvedCallbackUrl = replaceLocalhostWithApiHost(callbackUrl);
+
+        try {
+            const response = await authApiClient.get<ApiResponse<PaymentCallbackVerificationResponse>>(
+                resolvedCallbackUrl
+            );
+
+            return {
+                success: response.data.success,
+                data: response.data.data,
+                message: response.data.message,
+                callbackUrl: resolvedCallbackUrl,
+            };
+        } catch (error: any) {
+            console.log('[PaymentService] verifyVnpayCallback direct URL error:', error);
+
+            // Fallback: call callback endpoint via gateway base URL using the same query params.
+            try {
+                const parsedUrl = new URL(resolvedCallbackUrl);
+                const params = Object.fromEntries(parsedUrl.searchParams.entries());
+
+                const fallbackResponse = await authApiClient.get<ApiResponse<PaymentCallbackVerificationResponse>>(
+                    PAYMENT_ENDPOINTS.VNPAY_CALLBACK,
+                    { params }
+                );
+
+                return {
+                    success: fallbackResponse.data.success,
+                    data: fallbackResponse.data.data,
+                    message: fallbackResponse.data.message,
+                    callbackUrl: resolvedCallbackUrl,
+                };
+            } catch (fallbackError: any) {
+                console.log('[PaymentService] verifyVnpayCallback fallback error:', fallbackError);
+                return {
+                    success: false,
+                    message: fallbackError.response?.data?.message
+                        || fallbackError.response?.data?.Message
+                        || 'Không thể xác thực kết quả thanh toán từ VNPay',
+                    callbackUrl: resolvedCallbackUrl,
+                };
+            }
         }
     },
 
@@ -170,7 +266,7 @@ export const paymentService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[PaymentService] getMySubscription error:', error);
+            console.log('[PaymentService] getMySubscription error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không tìm thấy subscription',
@@ -197,7 +293,7 @@ export const paymentService = {
                 message: response.data.message,
             };
         } catch (error: any) {
-            console.error('[PaymentService] getMySubscriptionHistory error:', error);
+            console.log('[PaymentService] getMySubscriptionHistory error:', error);
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể tải lịch sử đăng ký',

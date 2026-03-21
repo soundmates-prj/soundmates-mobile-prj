@@ -308,7 +308,7 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
                 setCommunityPosts([]);
             }
         } catch (error) {
-            console.error('[HomeScreen] fetchCommunityPosts error:', error);
+            console.log('[HomeScreen] fetchCommunityPosts error:', error);
             setCommunityPosts([]);
         } finally {
             setIsCommunityLoading(false);
