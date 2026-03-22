@@ -19,6 +19,7 @@ export { default as PostDetailScreen } from './blog/PostDetailScreen';
 export { default as AccountInfoScreen } from './profile/AccountInfoScreen';
 export { default as EditProfileScreen } from './profile/EditProfileScreen';
 export { default as ProfileScreen } from './profile/ProfileScreen';
+export { default as SubscriptionDetailsScreen } from './profile/SubscriptionDetailsScreen';
 export { default as SubscriptionScreen } from './profile/SubscriptionScreen';
 
 // Payment / Subscription screens

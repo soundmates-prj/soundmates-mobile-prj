@@ -2,17 +2,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import {
-    Alert,
-    Clipboard,
-    Dimensions,
-    Image,
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Alert,
+  Clipboard,
+  Dimensions,
+  Image,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showToast } from '../../../components/ui/Toast';
@@ -22,9 +22,21 @@ import { useUser } from '../../context/UserContext';
 
 const { width } = Dimensions.get('window');
 
+const mapServerGenderToLabel = (value?: string): string => {
+  const normalized = (value || '').trim().toLowerCase();
+
+  if (normalized === 'male' || normalized === 'nam') return 'Nam';
+  if (normalized === 'female' || normalized === 'nu' || normalized === 'nữ') return 'Nữ';
+  if (normalized === 'other' || normalized === 'khac' || normalized === 'khác') return 'Khác';
+
+  return 'Chưa cập nhật';
+};
+
 interface AccountInfoScreenProps {
   onBack: () => void;
   onOpenSubscription?: () => void;
+  subscriptionPlanName?: string;
+  subscriptionEndDate?: string | null;
 }
 
 // ─── Data ───────────────────────────────────────────────
@@ -85,6 +97,7 @@ interface InfoRowProps {
   iconColor: string;
   label: string;
   value: string;
+  subtext?: string;
   badge?: string;
   badgeColor?: string;
   copyable?: boolean;
@@ -99,6 +112,7 @@ function InfoRow({
   iconColor,
   label,
   value,
+  subtext,
   badge,
   badgeColor,
   copyable,
@@ -137,6 +151,11 @@ function InfoRow({
             />
           )}
         </View>
+        {!!subtext && (
+          <Text style={[styles.infoSubtext, { color: palette.textSecondary }]} numberOfLines={1}>
+            {subtext}
+          </Text>
+        )}
       </View>
       {badge && (
         <View style={[styles.badge, { backgroundColor: (badgeColor || '#55C5F1') + '15' }]}>
@@ -163,7 +182,7 @@ function SectionHeader({ title, palette }: { title: string; palette: typeof Soun
 
 // ─── Main Component ─────────────────────────────────────
 
-export default function AccountInfoScreen({ onBack, onOpenSubscription }: AccountInfoScreenProps) {
+export default function AccountInfoScreen({ onBack, onOpenSubscription, subscriptionPlanName, subscriptionEndDate }: AccountInfoScreenProps) {
   const { isDarkMode } = useTheme();
   const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
   const insets = useSafeAreaInsets();
@@ -190,20 +209,19 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
   const email = user?.email || 'user@soundmates.vn';
   const accountId = user?.userId || 'SM-2024-00128';
   const joinDate = formatDate(user?.createdAt) || '12/01/2024';
-  const accountType = user?.roleName || 'Premium';
+  const accountType = subscriptionPlanName?.trim() || user?.roleName || 'Premium';
   const isVerified = user?.isActive ?? true;
+  const subscriptionEndDateLabel = subscriptionEndDate ? formatDate(subscriptionEndDate) : null;
 
-  // Sample data for fields not in UserData
-  const phone = '0912 345 678';
+  const phone = user?.phone?.trim() || 'Chưa cập nhật';
   const location = 'Hồ Chí Minh, Việt Nam';
-  const birthday = '15/05/1998';
-  const gender = 'Nữ';
+  const birthday = user?.dateOfBirth ? formatDate(user.dateOfBirth) : 'Chưa cập nhật';
+  const gender = mapServerGenderToLabel(user?.gender);
   const bio = 'Yêu nhạc, yêu cuộc sống 🎵';
-  const website = 'soundmates.vn/' + username;
+  const website = user?.website?.trim() || 'Chưa cập nhật';
   const favoriteGenre = 'Acoustic, Lofi, Ballad';
-  const premiumExpiry = '12/01/2027';
   const isEmailVerified = true;
-  const isPhoneVerified = false;
+  const isPhoneVerified = !!user?.phone;
   const twoFactorEnabled = false;
 
   const handleClearCache = () => {
@@ -309,7 +327,8 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
             icon="star-outline"
             iconColor="#A78BFA"
             label="Gói đăng ký"
-            value={`${accountType} — đến ${premiumExpiry}`}
+            value={accountType}
+            subtext={subscriptionEndDateLabel ? `Đến ngày ${subscriptionEndDateLabel}` : 'Đang hoạt động'}
             badge="Đang hoạt động"
             badgeColor="#10B981"
             onPress={onOpenSubscription}
@@ -342,7 +361,15 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription }: Accoun
             isDarkMode={isDarkMode}
           />
           <View style={[styles.divider, { backgroundColor: palette.border }]} />
-          <InfoRow icon="globe-outline" iconColor="#55C5F1" label="Website" value={website} copyable palette={palette} isDarkMode={isDarkMode} />
+          <InfoRow
+            icon="globe-outline"
+            iconColor="#55C5F1"
+            label="Website"
+            value={website}
+            copyable={website !== 'Chưa cập nhật'}
+            palette={palette}
+            isDarkMode={isDarkMode}
+          />
         </View>
 
         {/* ── Personal Information ── */}
@@ -806,6 +833,10 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: 15,
     color: '#1E293B',
+  },
+  infoSubtext: {
+    fontSize: 12,
+    marginTop: 2,
   },
   verifiedIcon: {
     flexShrink: 0,

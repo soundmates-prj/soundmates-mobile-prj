@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import {
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -34,6 +36,28 @@ interface ProfileData {
   favoriteGenre: string;
 }
 
+const mapServerGenderToUi = (value?: string): string => {
+  const normalized = (value || '').trim().toLowerCase();
+
+  if (normalized === 'male') return 'Nam';
+  if (normalized === 'female') return 'Nữ';
+  if (normalized === 'other') return 'Khác';
+  if (normalized === 'nam') return 'Nam';
+  if (normalized === 'nu' || normalized === 'nữ') return 'Nữ';
+  if (normalized === 'khac' || normalized === 'khác') return 'Khác';
+
+  return 'Không muốn tiết lộ';
+};
+
+const mapUiGenderToServer = (value?: string): string | undefined => {
+  const normalized = (value || '').trim().toLowerCase();
+
+  if (normalized === 'nam' || normalized === 'male') return 'Male';
+  if (normalized === 'nu' || normalized === 'nữ' || normalized === 'female') return 'Female';
+
+  return undefined;
+};
+
 export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
   const { user, refreshUser } = useUser();
   const { isDarkMode } = useTheme();
@@ -57,7 +81,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
       phone: userData?.phone || '',
       location: userData?.location || '',
       birthday: formatDateForInput(userData?.dateOfBirth),
-      gender: userData?.gender || 'Không muốn tiết lộ',
+      gender: mapServerGenderToUi(userData?.gender),
       website: userData?.website || '',
       favoriteGenre: 'Acoustic, Lofi, Ballad',
     };
@@ -69,6 +93,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
   const [showSavedToast, setShowSavedToast] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [hasRequestedProfile, setHasRequestedProfile] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const genderOptions = ['Nam', 'Nữ', 'Khác', 'Không muốn tiết lộ'];
 
@@ -102,6 +127,51 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
     return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
   };
 
+  const formatDateDisplay = (value?: string) => {
+    if (!value) return 'Chọn ngày sinh';
+
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
+      return value;
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return 'Chọn ngày sinh';
+    }
+
+    const day = `${parsed.getDate()}`.padStart(2, '0');
+    const month = `${parsed.getMonth() + 1}`.padStart(2, '0');
+    const year = parsed.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  const getPickerDateValue = () => {
+    const normalized = normalizeDateOfBirth(profileData.birthday);
+    if (normalized) {
+      const parsed = new Date(normalized);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+
+    return new Date(2000, 0, 1);
+  };
+
+  const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+
+    if (event.type !== 'set' || !selectedDate) {
+      return;
+    }
+
+    const day = `${selectedDate.getDate()}`.padStart(2, '0');
+    const month = `${selectedDate.getMonth() + 1}`.padStart(2, '0');
+    const year = selectedDate.getFullYear();
+    handleChange('birthday', `${day}/${month}/${year}`);
+  };
+
   const handleChange = (field: keyof ProfileData, value: string) => {
     setProfileData((prev) => ({ ...prev, [field]: value }));
   };
@@ -120,7 +190,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
         lastName,
         bio: profileData.bio.trim() || undefined,
         phone: profileData.phone.trim() || undefined,
-        gender: profileData.gender.trim() || undefined,
+        gender: mapUiGenderToServer(profileData.gender),
         dateOfBirth: normalizeDateOfBirth(profileData.birthday),
         location: profileData.location.trim() || undefined,
         website: profileData.website.trim() || undefined,
@@ -375,72 +445,98 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
         {/* Form Section - Personal Details */}
         <View style={styles.formSection}>
           <Text style={[styles.sectionTitle, { color: palette.textMuted }]}>THÔNG TIN CÁ NHÂN</Text>
-          <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+          <View style={[styles.card, styles.popupHostCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
             {/* Gender */}
-            <View style={styles.inputRow}>
-              <View style={[styles.iconBox, { backgroundColor: '#EC4899' + '1A' }]}>
-                <Ionicons name="male-female-outline" size={18} color="#EC4899" />
-              </View>
-              <TouchableOpacity
-                style={styles.inputContent}
-                onPress={() => setShowGenderPicker(!showGenderPicker)}
-              >
-                <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Giới tính</Text>
-                <View style={styles.genderRow}>
-                  <Text style={[styles.genderValue, { color: palette.textPrimary }]}>{profileData.gender}</Text>
-                  <Ionicons name="chevron-down" size={18} color={palette.textMuted} />
+            <View style={styles.genderFieldWrap}>
+              <View style={styles.inputRow}>
+                <View style={[styles.iconBox, { backgroundColor: '#EC4899' + '1A' }]}>
+                  <Ionicons name="male-female-outline" size={18} color="#EC4899" />
                 </View>
-              </TouchableOpacity>
-            </View>
-
-            {showGenderPicker && (
-              <View style={[styles.genderPicker, { backgroundColor: isDarkMode ? '#111827' : '#F9FAFB' }]}>
-                {genderOptions.map((option) => (
-                  <TouchableOpacity
-                    key={option}
-                    style={[
-                      styles.genderOption,
-                      profileData.gender === option && styles.genderOptionSelected,
-                    ]}
-                    onPress={() => {
-                      handleChange('gender', option);
-                      setShowGenderPicker(false);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.genderOptionText,
-                        { color: palette.textPrimary },
-                        profileData.gender === option && styles.genderOptionTextSelected,
-                      ]}
-                    >
-                      {option}
-                    </Text>
-                    {profileData.gender === option && (
-                      <Ionicons name="checkmark" size={16} color="#55C5F1" />
-                    )}
-                  </TouchableOpacity>
-                ))}
+                <TouchableOpacity
+                  style={styles.inputContent}
+                  onPress={() => {
+                    setShowDatePicker(false);
+                    setShowGenderPicker(!showGenderPicker);
+                  }}
+                >
+                  <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Giới tính</Text>
+                  <View style={styles.genderRow}>
+                    <Text style={[styles.genderValue, { color: palette.textPrimary }]}>{profileData.gender}</Text>
+                    <Ionicons name={showGenderPicker ? 'chevron-up' : 'chevron-down'} size={18} color={palette.textMuted} />
+                  </View>
+                </TouchableOpacity>
               </View>
-            )}
+
+              {showGenderPicker && (
+                <View style={[styles.genderPicker, { backgroundColor: isDarkMode ? '#111827' : '#F9FAFB', borderColor: palette.border }]}>
+                  {genderOptions.map((option) => (
+                    <TouchableOpacity
+                      key={option}
+                      style={[
+                        styles.genderOption,
+                        profileData.gender === option && styles.genderOptionSelected,
+                      ]}
+                      onPress={() => {
+                        handleChange('gender', option);
+                        setShowGenderPicker(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.genderOptionText,
+                          { color: palette.textPrimary },
+                          profileData.gender === option && styles.genderOptionTextSelected,
+                        ]}
+                      >
+                        {option}
+                      </Text>
+                      {profileData.gender === option && (
+                        <Ionicons name="checkmark" size={16} color="#55C5F1" />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
 
             <View style={[styles.divider, { backgroundColor: palette.border }]} />
 
             {/* Birthday */}
-            <View style={styles.inputRow}>
-              <View style={[styles.iconBox, { backgroundColor: '#F59E0B' + '1A' }]}>
-                <Ionicons name="calendar-outline" size={18} color="#F59E0B" />
+            <View style={styles.birthdayFieldWrap}>
+              <View style={styles.inputRow}>
+                <View style={[styles.iconBox, { backgroundColor: '#F59E0B' + '1A' }]}>
+                  <Ionicons name="calendar-outline" size={18} color="#F59E0B" />
+                </View>
+                <TouchableOpacity
+                  style={styles.inputContent}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    setShowGenderPicker(false);
+                    setShowDatePicker(!showDatePicker);
+                  }}
+                >
+                  <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Ngày sinh</Text>
+                  <View style={styles.datePickerRow}>
+                    <Text style={[styles.input, { color: profileData.birthday ? palette.textPrimary : palette.textMuted }]}>
+                      {formatDateDisplay(profileData.birthday)}
+                    </Text>
+                    <Ionicons name={showDatePicker ? 'chevron-up' : 'chevron-down'} size={18} color={palette.textMuted} />
+                  </View>
+                </TouchableOpacity>
               </View>
-              <View style={styles.inputContent}>
-                <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Ngày sinh</Text>
-                <TextInput
-                  value={profileData.birthday}
-                  onChangeText={(value) => handleChange('birthday', value)}
-                  placeholder="DD/MM/YYYY"
-                  placeholderTextColor={palette.textMuted}
-                  style={[styles.input, { color: palette.textPrimary }]}
-                />
-              </View>
+
+              {showDatePicker && (
+                <View style={[styles.datePickerPopup, { backgroundColor: isDarkMode ? '#111827' : '#F9FAFB', borderColor: palette.border }]}>
+                  <DateTimePicker
+                    value={getPickerDateValue()}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={handleDateChange}
+                    maximumDate={new Date()}
+                    minimumDate={new Date(1920, 0, 1)}
+                  />
+                </View>
+              )}
             </View>
 
             <View style={[styles.divider, { backgroundColor: palette.border }]} />
@@ -634,6 +730,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+    marginBottom: 12,
   },
   headerButton: {
     padding: 4,
@@ -682,6 +779,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
     overflow: 'hidden',
+  },
+  popupHostCard: {
+    overflow: 'visible',
   },
 
   // Input Row
@@ -776,21 +876,60 @@ const styles = StyleSheet.create({
   },
 
   // Gender
+  genderFieldWrap: {
+    position: 'relative',
+    zIndex: 20,
+  },
+  birthdayFieldWrap: {
+    position: 'relative',
+    zIndex: 19,
+  },
   genderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  datePickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  datePickerPopup: {
+    position: 'absolute',
+    left: 64,
+    right: 16,
+    top: 62,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    zIndex: 28,
+    elevation: 9,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
+    overflow: 'hidden',
   },
   genderValue: {
     fontSize: 15,
     color: '#1E293B',
   },
   genderPicker: {
+    position: 'absolute',
+    left: 64,
+    right: 16,
+    top: 62,
     backgroundColor: '#F9FAFB',
-    marginHorizontal: 16,
-    marginBottom: 12,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     overflow: 'hidden',
+    zIndex: 30,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
   },
   genderOption: {
     flexDirection: 'row',

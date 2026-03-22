@@ -121,7 +121,8 @@ authApiClient.interceptors.request.use(
             config.headers.Authorization = `Bearer ${token}`;
         }
 
-        console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, config.data);
+        const payload = config.method?.toUpperCase() === 'GET' ? config.params : config.data;
+        console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, payload);
         return config;
     },
     (error: AxiosError) => {

@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { showToast } from '../../../components/ui/Toast';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
-import { authService, BlogPostResponse, blogService, ReactionResponse, UpdateProfileRequest } from '../../api';
+import { authService, BlogPostResponse, blogService, paymentService, ReactionResponse, UpdateProfileRequest } from '../../api';
 import { BlogPostCard, DisplayPost } from '../../components/blog/BlogPostCard';
 import { ThemePreference, useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
@@ -30,6 +30,7 @@ import PostDetailScreen from '../blog/PostDetailScreen';
 import AccountInfoScreen from './AccountInfoScreen';
 import ChangePasswordScreen from './ChangePasswordScreen';
 import EditProfileScreen from './EditProfileScreen';
+import SubscriptionDetailsScreen from './SubscriptionDetailsScreen';
 
 const { width } = Dimensions.get('window');
 
@@ -176,7 +177,7 @@ function PostComposer({ onPress, avatarUrl }: { onPress: () => void; avatarUrl?:
 
 // ─── Settings Drawer ────────────────────────────────────
 
-function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountInfo, onOpenSubscription, onOpenThemeSettings, themeLabel, onLogout, palette, isDarkMode }: {
+function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountInfo, onOpenSubscription, onOpenThemeSettings, themeLabel, subscriptionPlanLabel, onLogout, palette, isDarkMode }: {
   isOpen: boolean; 
   onClose: () => void; 
   onOpenChangePassword?: () => void;
@@ -184,6 +185,7 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
   onOpenSubscription?: () => void;
   onOpenThemeSettings?: () => void;
   themeLabel?: string;
+  subscriptionPlanLabel?: string;
   onLogout?: () => void;
   palette: typeof SoundMateLightColors | typeof SoundMateColors;
   isDarkMode: boolean;
@@ -231,6 +233,12 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
               <View key={section.group} style={styles.settingsSection}>
                 <Text style={[styles.settingsSectionTitle, { color: palette.textMuted }]}>{section.group}</Text>
                 {section.items.map((item) => (
+                  (() => {
+                    const itemBadge = item.label === 'Gói đăng ký'
+                      ? subscriptionPlanLabel
+                      : ('badge' in item ? item.badge : undefined);
+
+                    return (
                   <TouchableOpacity 
                     key={item.label} 
                     style={[styles.settingsMenuItem, { borderBottomColor: palette.border }]}
@@ -245,13 +253,15 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
                     ) : ('subtitle' in item && item.subtitle ? (
                       <Text style={[styles.settingsMenuSubtitle, { color: palette.textSecondary }]}>{item.subtitle}</Text>
                     ) : null)}
-                    {'badge' in item && item.badge && (
+                    {!!itemBadge && (
                       <View style={styles.settingsMenuBadge}>
-                        <Text style={styles.settingsMenuBadgeText}>{item.badge}</Text>
+                        <Text style={styles.settingsMenuBadgeText}>{itemBadge}</Text>
                       </View>
                     )}
                     <Ionicons name="chevron-forward" size={16} color={palette.textMuted} />
                   </TouchableOpacity>
+                    );
+                  })()
                 ))}
               </View>
             ))}
@@ -327,6 +337,7 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
   const [showSettings, setShowSettings] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showAccountInfo, setShowAccountInfo] = useState(false);
+  const [showSubscriptionDetails, setShowSubscriptionDetails] = useState(false);
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [editingPost, setEditingPost] = useState<EditablePostDraft | null>(null);
   const [activeTab, setActiveTab] = useState<'posts' | 'playlists'>('posts');
@@ -347,6 +358,8 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
   const [previewImageUrl, setPreviewImageUrl] = useState('');
   const [previewImageTarget, setPreviewImageTarget] = useState<'avatar' | 'cover'>('avatar');
   const [showThemePickerPopup, setShowThemePickerPopup] = useState(false);
+  const [subscriptionPlanName, setSubscriptionPlanName] = useState('Premium');
+  const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null);
 
   const themeLabel = themePreference === 'system'
     ? `Tự động (${effectiveTheme === 'dark' ? 'Tối' : 'Sáng'})`
@@ -376,6 +389,40 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
     setAvatarUrl(user?.profileImageUrl || defaultAvatarUrl);
     setCoverImageUrl(user?.backgroundImageUrl || '');
   }, [user?.backgroundImageUrl, user?.profileImageUrl]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchMySubscription = async () => {
+      try {
+        const result = await paymentService.getMySubscription();
+        if (!isMounted) return;
+
+        const planName = result.data?.planName?.trim();
+        const endDate = result.data?.endDate || null;
+        setSubscriptionEndDate(endDate);
+
+        if (planName) {
+          setSubscriptionPlanName(planName);
+          return;
+        }
+
+        setSubscriptionPlanName(user?.roleName || 'Premium');
+      } catch (error) {
+        if (isMounted) {
+          setSubscriptionPlanName(user?.roleName || 'Premium');
+          setSubscriptionEndDate(null);
+        }
+        console.log('[ProfileScreen] fetchMySubscription error:', error);
+      }
+    };
+
+    void fetchMySubscription();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.roleName]);
 
   const handleTabPress = (tab: TabName) => {
     setActiveBottomTab(tab);
@@ -852,7 +899,7 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
                       : user?.username || 'User'}
                   </Text>
                   <View style={styles.premiumBadge}>
-                    <Text style={styles.premiumBadgeText}>Premium</Text>
+                    <Text style={styles.premiumBadgeText}>{subscriptionPlanName}</Text>
                   </View>
                 </View>
                 <Text style={[styles.profileUsername, { color: palette.textSecondary }]}>{user?.username || 'username'}</Text>
@@ -1143,6 +1190,7 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
         }}
         onOpenThemeSettings={handleOpenThemeSettings}
         themeLabel={themeLabel}
+        subscriptionPlanLabel={subscriptionPlanName}
         onLogout={onLogout}
         palette={palette}
         isDarkMode={isDarkMode}
@@ -1181,13 +1229,23 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
       >
         <AccountInfoScreen
           onBack={() => setShowAccountInfo(false)}
+          subscriptionPlanName={subscriptionPlanName}
+          subscriptionEndDate={subscriptionEndDate}
           onOpenSubscription={() => {
             setShowAccountInfo(false);
-            if (onNavigateToSubscription) {
-              setTimeout(() => onNavigateToSubscription(), 220);
-            }
+            setTimeout(() => setShowSubscriptionDetails(true), 220);
           }}
         />
+      </Modal>
+
+      {/* ── Subscription Details Modal ── */}
+      <Modal
+        visible={showSubscriptionDetails}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setShowSubscriptionDetails(false)}
+      >
+        <SubscriptionDetailsScreen onBack={() => setShowSubscriptionDetails(false)} />
       </Modal>
     </View>
   );

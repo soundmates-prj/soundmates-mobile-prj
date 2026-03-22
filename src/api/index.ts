@@ -4,7 +4,7 @@
  */
 
 // Config
-export { API_CONFIG, AUTH_ENDPOINTS, BLOG_ENDPOINTS, PAYMENT_ENDPOINTS, PODCAST_ENDPOINTS, SUBSCRIPTION_ENDPOINTS, USER_ENDPOINTS } from './config';
+export { API_CONFIG, AUTH_ENDPOINTS, BLOG_ENDPOINTS, FAVORITE_ENDPOINTS, PAYMENT_ENDPOINTS, PODCAST_ENDPOINTS, SPOTIFY_ENDPOINTS, SUBSCRIPTION_ENDPOINTS, TRANSACTION_ENDPOINTS, USER_ENDPOINTS } from './config';
 
 // API Client
 export { authApiClient, handleApiError, registerUnauthorizedHandler } from './apiClient';
@@ -24,14 +24,17 @@ export type {
     BlogPostResponse, CommentResponse, CreatePostRequest, PaginationParams, PaginationResponse, PopularPostResponse,
     PostStatsResponse, ReactionResponse, TrendingPostResponse, UpdatePostRequest
 } from './blogService';
+export { favoriteService } from './favoriteService';
+export type { AddFavoriteRequest } from './favoriteService';
 export { livestreamService } from './livestreamService';
 export type { NowPlayingData, SongRequestItem, TrackInfo } from './livestreamService';
 export { paymentService } from './paymentService';
 export type {
     CreatePaymentRequest, CreatePaymentResponse, PaymentCallbackVerificationResponse,
-    SubscriptionHistoryPaginationResponse, SubscriptionPlanResponse,
-    SubscriptionResponse
+    SubscriptionHistoryPaginationResponse, SubscriptionPlanResponse, SubscriptionResponse, TransactionHistoryPaginationResponse, TransactionResponse
 } from './paymentService';
 export { podcastService } from './podcastService';
 export type { PodcastResponse } from './podcastService';
+export { spotifyService } from './spotifyService';
+export type { SpotifyAlbum, SpotifyArtist, SpotifySearchResult, SpotifyTrack } from './spotifyService';
 

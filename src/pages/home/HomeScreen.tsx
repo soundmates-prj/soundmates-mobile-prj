@@ -1,15 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Image, Linking, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
-import { blogService, livestreamService, NowPlayingData, PopularPostResponse } from '../../api';
+import {
+    blogService,
+    favoriteService,
+    livestreamService,
+    NowPlayingData,
+    PopularPostResponse,
+    spotifyService,
+    SpotifyTrack
+} from '../../api';
 import { useTheme } from '../../context/ThemeContext';
 import BlogScreen from '../blog/BlogScreen';
 import CreatePostScreen from '../blog/CreatePostScreen';
 import PostDetailScreen from '../blog/PostDetailScreen';
 import BottomNavigation, { TabName } from '../BottomNavigation';
 import PodcastScreen from '../podcast/PodcastScreen';
+import SearchResultsScreen, { SearchResultBundle } from '../search/SearchResultsScreen';
 
 type PlaylistItem = {
     id: string;
@@ -37,6 +46,17 @@ type ForumPostItem = {
 };
 
 type AppPalette = typeof SoundMateLightColors | typeof SoundMateColors;
+
+interface SearchSuggestionItem {
+    id: string;
+    source: 'spotify';
+    category: 'track';
+    title: string;
+    subtitle: string;
+    imageUrl?: string;
+}
+
+const SEARCH_MIN_CHARS = 2;
 
 const PLAYLISTS: PlaylistItem[] = [
     {
@@ -267,7 +287,123 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
     const [isCommunityLoading, setIsCommunityLoading] = useState(false);
     const [liveBannerData, setLiveBannerData] = useState<NowPlayingData | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [showSearchScreen, setShowSearchScreen] = useState(false);
+    const [showSearchResults, setShowSearchResults] = useState(false);
+    const [searchInput, setSearchInput] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchSuggestions, setSearchSuggestions] = useState<SearchSuggestionItem[]>([]);
+    const [searchResultBundle, setSearchResultBundle] = useState<SearchResultBundle | null>(null);
+    const [isSearchingSuggestions, setIsSearchingSuggestions] = useState(false);
+    const [isSearchingResults, setIsSearchingResults] = useState(false);
     const pulseAnim = useRef(new Animated.Value(1)).current;
+    const suggestionRequestIdRef = useRef(0);
+
+    const handleOpenSpotifyLink = useCallback(async (url: string) => {
+        try {
+            const canOpen = await Linking.canOpenURL(url);
+            if (!canOpen) {
+                Alert.alert('Khong mo duoc link', 'Thiet bi khong ho tro mo lien ket Spotify nay.');
+                return;
+            }
+
+            await Linking.openURL(url);
+        } catch (error) {
+            console.log('[HomeScreen] handleOpenSpotifyLink error:', error);
+            Alert.alert('Khong mo duoc link', 'Vui long thu lai sau.');
+        }
+    }, []);
+
+    const fetchSearchBundle = useCallback(async (keyword: string, limit: number): Promise<SearchResultBundle> => {
+        const spotifyRes = await spotifyService.search({ q: keyword, type: 'track', limit });
+
+        return {
+            tracks: spotifyRes.data?.tracks?.items || [],
+        };
+    }, []);
+
+    const makeSuggestions = useCallback((bundle: SearchResultBundle): SearchSuggestionItem[] => {
+        const fromTracks: SearchSuggestionItem[] = bundle.tracks.slice(0, 3).map((track) => ({
+            id: `track-${track.id}`,
+            source: 'spotify',
+            category: 'track',
+            title: track.name,
+            subtitle: track.artists?.map((artist) => artist.name).join(', ') || 'Spotify Track',
+            imageUrl: track.album?.images?.[0]?.url,
+        }));
+
+        return fromTracks.slice(0, 10);
+    }, []);
+
+    const executeSearch = useCallback(async (keyword: string) => {
+        const normalized = keyword.trim();
+        if (normalized.length < SEARCH_MIN_CHARS) {
+            return;
+        }
+
+        setIsSearchingResults(true);
+        setSearchQuery(normalized);
+        setShowSearchResults(true);
+
+        try {
+            const bundle = await fetchSearchBundle(normalized, 10);
+            setSearchResultBundle(bundle);
+        } catch (error) {
+            console.log('[HomeScreen] executeSearch error:', error);
+            setSearchResultBundle({
+                tracks: [],
+            });
+        } finally {
+            setIsSearchingResults(false);
+        }
+    }, [fetchSearchBundle]);
+
+    const openSearch = useCallback(() => {
+        setShowSearchScreen(true);
+        setShowSearchResults(false);
+        setSearchInput('');
+        setSearchQuery('');
+        setSearchSuggestions([]);
+        setSearchResultBundle(null);
+    }, []);
+
+    const closeSearch = useCallback(() => {
+        setShowSearchScreen(false);
+        setShowSearchResults(false);
+        setSearchInput('');
+        setSearchQuery('');
+        setSearchSuggestions([]);
+        setSearchResultBundle(null);
+    }, []);
+
+    const handleAddFavoriteTrack = useCallback(async (track: SpotifyTrack) => {
+        try {
+            const result = await favoriteService.addFavorite({
+                itemType: 'track',
+                itemId: track.id,
+                source: 'spotify',
+                name: track.name,
+                artistName: track.artists?.map((artist) => artist.name).join(', ') || '',
+                albumName: track.album?.name || '',
+                imgUrl: track.album?.images?.[0]?.url,
+                previewUrl: track.preview_url || undefined,
+                rawJson: JSON.stringify(track),
+            });
+
+            Alert.alert('Da them ua thich', result.message || 'Ban da them bai hat vao muc ua thich.');
+        } catch (error: any) {
+            console.log('[HomeScreen] handleAddFavoriteTrack error:', error);
+            Alert.alert('Khong the them ua thich', error?.response?.data?.message || 'Vui long thu lai sau.');
+        }
+    }, []);
+
+    const handleSubmitSearch = useCallback(() => {
+        void executeSearch(searchInput);
+    }, [executeSearch, searchInput]);
+
+    const handleSuggestionPress = useCallback((item: SearchSuggestionItem) => {
+        setSearchInput(item.title);
+        void executeSearch(item.title);
+    }, [executeSearch]);
 
     useEffect(() => {
         const loop = Animated.loop(
@@ -297,6 +433,51 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
             setActiveTab(initialTab);
         }
     }, [initialTab]);
+
+    useEffect(() => {
+        if (!showSearchScreen || showSearchResults) {
+            return;
+        }
+
+        const keyword = searchInput.trim();
+        if (keyword.length < SEARCH_MIN_CHARS) {
+            setSearchSuggestions([]);
+            setIsSearchingSuggestions(false);
+            return;
+        }
+
+        const requestId = suggestionRequestIdRef.current + 1;
+        suggestionRequestIdRef.current = requestId;
+        setIsSearchingSuggestions(true);
+
+        const timer = setTimeout(() => {
+            void (async () => {
+                try {
+                    const bundle = await fetchSearchBundle(keyword, 6);
+                    if (suggestionRequestIdRef.current !== requestId) {
+                        return;
+                    }
+
+                    setSearchSuggestions(makeSuggestions(bundle));
+                } catch (error) {
+                    if (suggestionRequestIdRef.current !== requestId) {
+                        return;
+                    }
+
+                    console.log('[HomeScreen] suggestion search error:', error);
+                    setSearchSuggestions([]);
+                } finally {
+                    if (suggestionRequestIdRef.current === requestId) {
+                        setIsSearchingSuggestions(false);
+                    }
+                }
+            })();
+        }, 350);
+
+        return () => {
+            clearTimeout(timer);
+        };
+    }, [fetchSearchBundle, makeSuggestions, searchInput, showSearchResults, showSearchScreen]);
 
     const handleTabPress = (tab: TabName) => {
         setActiveTab(tab);
@@ -385,7 +566,109 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
 
     return (
         <View style={[styles.container, { backgroundColor: palette.background }]}>
-            {selectedPostId ? (
+            {showSearchScreen ? (
+                <View style={[styles.searchScreen, { backgroundColor: palette.background }]}>
+                    <View style={[styles.searchHeader, { borderBottomColor: palette.border, backgroundColor: palette.surface }]}>
+                        <TouchableOpacity activeOpacity={0.8} style={styles.searchBackButton} onPress={closeSearch}>
+                            <Ionicons name="arrow-back" size={20} color={palette.textPrimary} />
+                        </TouchableOpacity>
+
+                        <View style={[styles.searchInputWrap, { borderColor: palette.border, backgroundColor: isDarkMode ? '#111827' : '#F8FAFC' }]}>
+                            <Ionicons name="search" size={16} color={palette.textSecondary} />
+                            <TextInput
+                                value={searchInput}
+                                onChangeText={setSearchInput}
+                                style={[styles.searchInput, { color: palette.textPrimary }]}
+                                placeholder="Tim Spotify, podcast, blog..."
+                                placeholderTextColor={palette.textMuted}
+                                autoFocus
+                                returnKeyType="search"
+                                onSubmitEditing={handleSubmitSearch}
+                            />
+                            {!!searchInput && (
+                                <TouchableOpacity
+                                    activeOpacity={0.8}
+                                    onPress={() => {
+                                        setSearchInput('');
+                                        setSearchSuggestions([]);
+                                    }}
+                                >
+                                    <Ionicons name="close-circle" size={18} color={palette.textMuted} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
+                        <TouchableOpacity
+                            activeOpacity={0.8}
+                            style={[styles.searchGoButton, { backgroundColor: palette.primary }]}
+                            onPress={handleSubmitSearch}
+                        >
+                            <Text style={styles.searchGoText}>Tim</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {!showSearchResults ? (
+                        <ScrollView contentContainerStyle={styles.searchBodyContent} keyboardShouldPersistTaps="handled">
+                            {/* <Text style={[styles.searchSectionTitle, { color: palette.textPrimary }]}>Goi y ket qua</Text> */}
+
+                            {isSearchingSuggestions ? (
+                                <View style={styles.searchLoadingBlock}>
+                                    <ActivityIndicator size="small" color={palette.primary} />
+                                    <Text style={[styles.searchHintText, { color: palette.textSecondary }]}>Đang tìm kiếm...</Text>
+                                </View>
+                            // ) : searchInput.trim().length < SEARCH_MIN_CHARS ? (
+                            //     <Text style={[styles.searchHintText, { color: palette.textSecondary }]}>Nhap it nhat 2 ky tu de bat dau tim kiem.</Text>
+                            // ) : searchSuggestions.length === 0 ? (
+                            //     <Text style={[styles.searchHintText, { color: palette.textSecondary }]}>Chua co goi y phu hop. Bam Tim de xem ket qua day du.</Text>
+                            ) : (
+                                searchSuggestions.map((item) => (
+                                    <TouchableOpacity
+                                        key={item.id}
+                                        activeOpacity={0.85}
+                                        style={[styles.suggestionCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
+                                        onPress={() => handleSuggestionPress(item)}
+                                    >
+                                        {item.imageUrl ? (
+                                            <Image source={{ uri: item.imageUrl }} style={styles.suggestionImage} />
+                                        ) : (
+                                            <View style={[styles.suggestionImageFallback, { backgroundColor: isDarkMode ? '#1F2937' : '#E2E8F0' }]}>
+                                                <Ionicons name="musical-notes-outline" size={16} color={palette.textSecondary} />
+                                            </View>
+                                        )}
+
+                                        <View style={styles.suggestionInfo}>
+                                            <Text numberOfLines={1} style={[styles.suggestionTitle, { color: palette.textPrimary }]}>{item.title}</Text>
+                                            <Text numberOfLines={1} style={[styles.suggestionSubtitle, { color: palette.textSecondary }]}>{item.subtitle}</Text>
+                                        </View>
+
+                                        <View style={[styles.suggestionTag, { backgroundColor: isDarkMode ? '#1E3A8A' : '#DBEAFE' }]}>
+                                            <Text style={[styles.suggestionTagText, { color: isDarkMode ? '#BFDBFE' : '#1D4ED8' }]}>{item.source}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                ))
+                            )}
+
+                            {/* <TouchableOpacity
+                                activeOpacity={0.85}
+                                style={[styles.searchFallbackButton, { borderColor: palette.primary }]}
+                                onPress={handleSubmitSearch}
+                            >
+                                <Ionicons name="open-outline" size={15} color={palette.primary} />
+                                <Text style={[styles.searchFallbackText, { color: palette.primary }]}>Khong chon goi y? Xem ket qua day du</Text>
+                            </TouchableOpacity> */}
+                        </ScrollView>
+                    ) : (
+                        <SearchResultsScreen
+                            query={searchQuery}
+                            data={searchResultBundle}
+                            isLoading={isSearchingResults}
+                            onBackToSuggestions={() => setShowSearchResults(false)}
+                            onOpenSpotifyLink={handleOpenSpotifyLink}
+                                onAddFavoriteTrack={handleAddFavoriteTrack}
+                        />
+                    )}
+                </View>
+            ) : selectedPostId ? (
                 <PostDetailScreen 
                     postId={selectedPostId} 
                     onBack={() => setSelectedPostId(null)} 
@@ -436,7 +719,7 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
                                     </View>
 
                                     <View style={styles.headerIcons}>
-                                        <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8}>
+                                        <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8} onPress={openSearch}>
                                             <Ionicons name="search" size={18} color="#FFFFFF" />
                                         </TouchableOpacity>
                                         <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8}>
@@ -558,6 +841,170 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: SoundMateLightColors.background,
+    },
+    searchScreen: {
+        flex: 1,
+    },
+    searchHeader: {
+        paddingHorizontal: 14,
+        paddingTop: 12,
+        paddingBottom: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderBottomWidth: 1,
+    },
+    searchBackButton: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    searchInputWrap: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 14,
+        borderWidth: 1,
+        paddingHorizontal: 10,
+        marginHorizontal: 8,
+        minHeight: 42,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 14,
+        marginLeft: 8,
+        marginRight: 8,
+    },
+    searchGoButton: {
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+    },
+    searchGoText: {
+        color: '#FFFFFF',
+        fontWeight: '700',
+        fontSize: 12,
+    },
+    searchBodyContent: {
+        paddingHorizontal: 16,
+        paddingTop: 14,
+        paddingBottom: 120,
+    },
+    searchSectionTitle: {
+        fontSize: 18,
+        fontWeight: '800',
+        marginBottom: 12,
+    },
+    searchSubTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        marginBottom: 8,
+    },
+    searchHintText: {
+        fontSize: 13,
+        lineHeight: 18,
+    },
+    searchLoadingBlock: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 20,
+        gap: 8,
+    },
+    suggestionCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 14,
+        borderWidth: 1,
+        padding: 10,
+        marginBottom: 8,
+    },
+    suggestionImage: {
+        width: 42,
+        height: 42,
+        borderRadius: 10,
+        marginRight: 10,
+    },
+    suggestionImageFallback: {
+        width: 42,
+        height: 42,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 10,
+    },
+    suggestionInfo: {
+        flex: 1,
+    },
+    suggestionTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        marginBottom: 2,
+    },
+    suggestionSubtitle: {
+        fontSize: 12,
+    },
+    suggestionTag: {
+        borderRadius: 999,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+    },
+    suggestionTagText: {
+        fontSize: 10,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+    },
+    searchFallbackButton: {
+        marginTop: 12,
+        borderWidth: 1,
+        borderRadius: 12,
+        paddingVertical: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'row',
+        gap: 6,
+    },
+    searchFallbackText: {
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    searchResultHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 4,
+    },
+    searchBackToSuggestText: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    searchSectionWrap: {
+        marginTop: 14,
+    },
+    resultRowCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 12,
+        borderWidth: 1,
+        padding: 10,
+        marginBottom: 8,
+    },
+    resultRowImage: {
+        width: 44,
+        height: 44,
+        borderRadius: 10,
+        marginRight: 10,
+    },
+    resultRowInfo: {
+        flex: 1,
+    },
+    resultRowTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        marginBottom: 2,
+    },
+    resultRowSubtitle: {
+        fontSize: 12,
     },
     scrollContent: {
         paddingBottom: 114,

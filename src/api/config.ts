@@ -99,6 +99,10 @@ export const SUBSCRIPTION_ENDPOINTS = {
     MY_SUBSCRIPTION_HISTORY: '/me/subscriptions/history',
 };
 
+export const TRANSACTION_ENDPOINTS = {
+    MY_TRANSACTION_HISTORY: '/me/transaction/history',
+};
+
 // Payment Endpoints
 export const PAYMENT_ENDPOINTS = {
     CREATE: '/payments',
@@ -107,8 +111,16 @@ export const PAYMENT_ENDPOINTS = {
 
 // Podcast Endpoints (routed through API Gateway → live-session-service)
 export const PODCAST_ENDPOINTS = {
-    LIST: '/live-session/podcast',
-    DETAIL: (id: string) => `/live-session/podcast/${id}`,
+    LIST: '/podcast',
+    DETAIL: (id: string) => `/podcast/${id}`,
+};
+
+export const SPOTIFY_ENDPOINTS = {
+    SEARCH: '/spotify/search',
+};
+
+export const FAVORITE_ENDPOINTS = {
+    ME_FAVORITES: '/me/favorites',
 };
 
 export default API_CONFIG;

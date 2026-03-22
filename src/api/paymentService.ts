@@ -4,7 +4,7 @@
  */
 
 import { ApiResponse, authApiClient } from './apiClient';
-import { API_CONFIG, PAYMENT_ENDPOINTS, SUBSCRIPTION_ENDPOINTS } from './config';
+import { API_CONFIG, PAYMENT_ENDPOINTS, SUBSCRIPTION_ENDPOINTS, TRANSACTION_ENDPOINTS } from './config';
 
 // =====================================================
 // TYPES
@@ -31,6 +31,19 @@ export interface SubscriptionResponse {
     endDate: string;
     subscribeAt: string;
     status: string;
+    userProfile?: unknown;
+}
+
+export interface TransactionResponse {
+    id: string;
+    paymentId: string;
+    paymentProvider: string;
+    paymentMethod: string;
+    amount: number;
+    paymentAt: string;
+    transactionStatus: string;
+    createdAt: string;
+    userProfile?: unknown;
 }
 
 export interface CreatePaymentRequest {
@@ -58,6 +71,14 @@ export interface PaymentCallbackVerificationResponse {
 
 export interface SubscriptionHistoryPaginationResponse {
     items: SubscriptionResponse[];
+    page: number;
+    pageSize: number;
+    totalCount: number;
+    totalPages: number;
+}
+
+export interface TransactionHistoryPaginationResponse {
+    items: TransactionResponse[];
     page: number;
     pageSize: number;
     totalCount: number;
@@ -297,6 +318,33 @@ export const paymentService = {
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể tải lịch sử đăng ký',
+            };
+        }
+    },
+
+    /**
+     * Get current user's transaction history (paginated)
+     */
+    async getMyTransactionHistory(params?: { page?: number; pageSize?: number }): Promise<{
+        success: boolean;
+        data?: TransactionHistoryPaginationResponse;
+        message?: string;
+    }> {
+        try {
+            const response = await authApiClient.get<ApiResponse<TransactionHistoryPaginationResponse>>(
+                TRANSACTION_ENDPOINTS.MY_TRANSACTION_HISTORY,
+                { params }
+            );
+            return {
+                success: response.data.success,
+                data: response.data.data,
+                message: response.data.message,
+            };
+        } catch (error: any) {
+            console.log('[PaymentService] getMyTransactionHistory error:', error);
+            return {
+                success: false,
+                message: error.response?.data?.message || 'Không thể tải lịch sử giao dịch',
             };
         }
     },
