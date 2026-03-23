@@ -269,6 +269,22 @@ export default function PaymentCheckoutScreen({
         onPaymentFailed('Bạn đã đóng cổng thanh toán trước khi hoàn tất giao dịch.');
     };
 
+    const handlePaymentWebViewError = (errorEvent: any) => {
+        if (isVerifyingCallback || callbackHandledRef.current) {
+            return;
+        }
+
+        const failingUrl = errorEvent?.nativeEvent?.url as string | undefined;
+        if (failingUrl && tryHandleCallbackUrl(failingUrl)) {
+            return;
+        }
+
+        callbackHandledRef.current = true;
+        setPaymentUrl(null);
+        setIsProcessing(false);
+        onPaymentFailed('Bạn đã hủy hoặc thoát khỏi cổng thanh toán VNPay.');
+    };
+
     return (
         <SafeAreaView style={[styles.container]} edges={['left', 'right', 'bottom']}>
             {/* Header */}
@@ -429,11 +445,14 @@ export default function PaymentCheckoutScreen({
                     {paymentUrl && (
                         <WebView
                             source={{ uri: paymentUrl }}
+                            style={styles.webViewBody}
                             startInLoadingState
                             onShouldStartLoadWithRequest={(request) => !tryHandleCallbackUrl(request.url)}
                             onNavigationStateChange={(navigationState) => {
                                 tryHandleCallbackUrl(navigationState.url);
                             }}
+                            onError={handlePaymentWebViewError}
+                            onHttpError={handlePaymentWebViewError}
                             renderLoading={() => (
                                 <View style={styles.webViewLoadingWrap}>
                                     <ActivityIndicator size="large" color="#55C5F1" />
@@ -744,6 +763,9 @@ const styles = StyleSheet.create({
     webViewScreen: {
         flex: 1,
         backgroundColor: '#FFFFFF',
+    },
+    webViewBody: {
+        flex: 1,
     },
     webViewHeader: {
         height: 56,
