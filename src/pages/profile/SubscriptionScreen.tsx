@@ -1,17 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
+import { paymentService, type SubscriptionPlanResponse } from '../../api/paymentService';
 import { useTheme } from '../../context/ThemeContext';
 
 interface SubscriptionScreenProps {
@@ -27,6 +27,7 @@ interface SubscriptionScreenProps {
     gradientFrom: string;
     gradientTo: string;
     icon: IconName;
+    durationDays?: number;
   }) => void;
 }
 
@@ -50,81 +51,131 @@ interface Plan {
   gradientFrom: string;
   gradientTo: string;
   icon: IconName;
+  tier: 'free' | 'standard' | 'premium' | 'other';
+  durationDays: number;
+  requestLimit: number;
   popular?: boolean;
   current?: boolean;
   includesFree?: boolean;
 }
 
-const PLANS: Plan[] = [
-  {
-    id: 'free',
-    name: 'Miễn Phí',
-    price: 0,
-    priceLabel: '0',
-    period: '',
-    description: 'Trải nghiệm, khám phá với nền tảng nghe nhạc hiện đại',
-    features: [
-      { text: 'Nghe podcast/music không giới hạn' },
-      { text: 'Tham gia phiên live trực tuyến' },
-      { text: 'Gửi request phát nhạc miễn phí ', bold: '3 request/ngày' },
-      { text: 'Chất lượng âm thanh tiêu chuẩn' },
-    ],
-    color: '#6B7280',
-    gradientFrom: '#F3F4F6',
-    gradientTo: '#E5E7EB',
-    icon: 'headset-outline',
-    current: true,
-  },
-  {
-    id: 'premium',
-    name: 'Hội viên SoundMates',
-    price: 159000,
-    priceLabel: '159.000',
-    period: '/Tháng',
-    description: 'Nâng cao trải nghiệm, cá nhân hóa tính cách thông qua nền tảng',
-    features: [
-      { text: 'Tạo giọng đọc AI dựa trên giọng thật của bạn ', bold: '5 request/tuần', highlight: true },
-      { text: 'Request nhạc ', bold: 'không giới hạn', highlight: true },
-      { text: 'Ưu tiên request khi tham gia phòng live' },
-      { text: 'Áp dụng các ', bold: 'Theme', highlight: true },
-      { text: 'Gửi thư podcast trực tuyến trong livestream' },
-    ],
-    color: '#55C5F1',
-    gradientFrom: '#55C5F1',
-    gradientTo: '#3B82F6',
-    icon: 'diamond-outline',
-    popular: true,
-    includesFree: true,
-  },
-  {
-    id: 'standard',
-    name: 'Tiêu chuẩn',
-    price: 59000,
-    priceLabel: '59.000',
-    period: '/Tháng',
-    description: 'Thể hiện cá nhân, gu âm nhạc của bản thân',
-    features: [
-      { text: 'Tạo giọng đọc AI dựa trên giọng thật của bạn ', bold: '1 giọng giới hạn' },
-      { text: '', bold: '10 request', highlight: true },
-      { text: 'Trải nghiệm podcast AI bằng giọng thật của bạn' },
-      { text: 'Áp dụng ', bold: 'Themes', highlight: true },
-      { text: 'Gửi thư podcast trực tuyến trong livestream' },
-    ],
-    color: '#A78BFA',
-    gradientFrom: '#A78BFA',
-    gradientTo: '#7C3AED',
-    icon: 'star-outline',
-    includesFree: true,
-  },
-];
+const DEFAULT_FREE_PLAN_NAME = 'Miễn Phí';
 
-const STANDARD_FEATURE_SUFFIX: Record<number, string> = {
-  1: ' phát nhạc mỗi ngày',
-  3: ' trong hệ thống',
+const normalizeText = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+const detectPlanTier = (plan: SubscriptionPlanResponse): Plan['tier'] => {
+  if (plan.price === 0) return 'free';
+
+  const name = normalizeText(plan.planName || '');
+  if (name.includes('premium') || name.includes('elite') || name.includes('hoi vien')) {
+    return 'premium';
+  }
+  if (name.includes('standard') || name.includes('tieu chuan')) {
+    return 'standard';
+  }
+
+  return 'other';
 };
 
-const PREMIUM_FEATURE_SUFFIX: Record<number, string> = {
-  3: ' mới nhất của nền tảng',
+const getTierOrder = (tier: Plan['tier']) => {
+  switch (tier) {
+    case 'free':
+      return 0;
+    case 'standard':
+      return 1;
+    case 'premium':
+      return 2;
+    default:
+      return 3;
+  }
+};
+
+const getPlanFeatures = (plan: SubscriptionPlanResponse, tier: Plan['tier']): PlanFeature[] => {
+  const features: PlanFeature[] = [
+    { text: 'Nghe podcast/music không giới hạn' },
+    { text: 'Tham gia phiên live trực tuyến' },
+    { text: 'Gửi request phát nhạc ', bold: `${plan.requestLimit} request/ngày` },
+  ];
+
+  if (tier === 'free') {
+    features.push({ text: 'Chất lượng âm thanh tiêu chuẩn' });
+    return features;
+  }
+
+  if (tier === 'premium') {
+    features.push({ text: 'Tạo giọng đọc AI dựa trên giọng thật của bạn ', bold: '(Nâng cao)' });
+    features.push({ text: 'Ưu tiên request khi tham gia phòng live' });
+    features.push({ text: 'Áp dụng các ', bold: 'Theme mới nhất của nền tảng' });
+    features.push({ text: 'Gửi thư podcast trực tuyến trong livestream' });
+    return features;
+  }
+
+  features.push({ text: 'Tạo giọng đọc AI dựa trên giọng thật của bạn ', bold: '(Giới hạn)' });
+  features.push({ text: 'Áp dụng các ', bold: 'Theme cơ bản' });
+  features.push({ text: 'Gửi thư podcast trực tuyến trong livestream' });
+  return features;
+};
+
+const mapPlanTheme = (tier: Plan['tier']) => {
+  switch (tier) {
+    case 'free':
+      return {
+        color: '#6B7280',
+        gradientFrom: '#F3F4F6',
+        gradientTo: '#E5E7EB',
+        icon: 'headset-outline' as IconName,
+      };
+    case 'standard':
+      return {
+        color: '#A78BFA',
+        gradientFrom: '#A78BFA',
+        gradientTo: '#7C3AED',
+        icon: 'star-outline' as IconName,
+      };
+    case 'premium':
+      return {
+        color: '#55C5F1',
+        gradientFrom: '#55C5F1',
+        gradientTo: '#3B82F6',
+        icon: 'diamond-outline' as IconName,
+      };
+    default:
+      return {
+        color: '#3C5F99',
+        gradientFrom: '#3C5F99',
+        gradientTo: '#55C5F1',
+        icon: 'shield-checkmark-outline' as IconName,
+      };
+  }
+};
+
+const toDisplayPlan = (plan: SubscriptionPlanResponse): Plan => {
+  const tier = detectPlanTier(plan);
+  const theme = mapPlanTheme(tier);
+
+  return {
+    id: plan.id,
+    name: plan.planName,
+    price: Number(plan.price || 0),
+    priceLabel: Number(plan.price || 0).toLocaleString('vi-VN'),
+    period: Number(plan.price || 0) > 0 ? `/${plan.durationDays} Ngày` : '',
+    description: plan.description || 'Nâng cao trải nghiệm âm nhạc cùng SoundMates',
+    features: getPlanFeatures(plan, tier),
+    color: theme.color,
+    gradientFrom: theme.gradientFrom,
+    gradientTo: theme.gradientTo,
+    icon: theme.icon,
+    tier,
+    durationDays: Number(plan.durationDays || 0),
+    requestLimit: Number(plan.requestLimit || 0),
+    popular: tier === 'premium',
+    includesFree: Number(plan.price || 0) > 0,
+  };
 };
 
 const FEATURE_ICONS: IconName[] = [
@@ -158,7 +209,7 @@ function PlanCard({
   palette: typeof SoundMateLightColors | typeof SoundMateColors;
   isDarkMode: boolean;
 }) {
-  const isPremium = plan.id === 'premium';
+  const isPremium = plan.tier === 'premium';
 
   return (
     <TouchableOpacity
@@ -247,13 +298,6 @@ function PlanCard({
         <Text style={[styles.planFeatureTitle, { color: palette.textMuted }]}>Đặc quyền:</Text>
         <View style={styles.planFeatureList}>
           {plan.features.map((feature, i) => {
-            const suffix =
-              plan.id === 'standard'
-                ? STANDARD_FEATURE_SUFFIX[i] || ''
-                : plan.id === 'premium'
-                  ? PREMIUM_FEATURE_SUFFIX[i] || ''
-                  : '';
-
             const featureIcon = FEATURE_ICONS[i % FEATURE_ICONS.length];
 
             return (
@@ -269,7 +313,6 @@ function PlanCard({
                 <Text style={[styles.planFeatureText, { color: palette.textPrimary }]}>
                   {feature.text}
                   {!!feature.bold && <Text style={[styles.planFeatureBold, { color: palette.textPrimary }]}>{feature.bold}</Text>}
-                  {suffix}
                 </Text>
               </View>
             );
@@ -424,11 +467,85 @@ function FAQItem({
 export default function SubscriptionScreen({ onBack, onSelectPlan }: SubscriptionScreenProps) {
   const { isDarkMode } = useTheme();
   const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
-  const insets = useSafeAreaInsets();
-  const fallbackTopInset = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
-  const topInset = Math.max(insets.top, fallbackTopInset);
 
-  const [selectedPlan, setSelectedPlan] = useState<string>('premium');
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState<string>('');
+  const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
+  const [loadingPlans, setLoadingPlans] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const loadPlans = useCallback(async () => {
+    setLoadingPlans(true);
+    setLoadError(null);
+
+    try {
+      const [plansResult, mySubscriptionResult] = await Promise.all([
+        paymentService.getSubscriptionPlans(),
+        paymentService.getMySubscription(),
+      ]);
+
+      if (!plansResult.success || !plansResult.data?.length) {
+        setLoadError(plansResult.message || 'Không thể tải danh sách gói đăng ký');
+        setPlans([]);
+        return;
+      }
+
+      const activePlans = plansResult.data
+        .filter((plan) => plan.isActive)
+        .sort((a, b) => {
+          const tierOrder = getTierOrder(detectPlanTier(a)) - getTierOrder(detectPlanTier(b));
+          if (tierOrder !== 0) return tierOrder;
+          return a.price - b.price;
+        });
+
+      if (!activePlans.length) {
+        setLoadError('Hiện chưa có gói đăng ký khả dụng. Vui lòng thử lại sau.');
+        setPlans([]);
+        return;
+      }
+
+      const mappedPlans = activePlans.map(toDisplayPlan);
+
+      const activeMySubscription =
+        mySubscriptionResult.success
+          && mySubscriptionResult.data
+          && mySubscriptionResult.data.status?.toLowerCase() === 'active'
+          ? mySubscriptionResult.data
+          : null;
+
+      const resolvedCurrentPlanId =
+        activeMySubscription?.planId
+        || mappedPlans.find((plan) => plan.price === 0)?.id
+        || null;
+
+      setCurrentPlanId(resolvedCurrentPlanId);
+
+      const nextPlans = mappedPlans.map((plan) => ({
+        ...plan,
+        current: resolvedCurrentPlanId === plan.id,
+      }));
+
+      setPlans(nextPlans);
+
+      const preferredSelectedPlan =
+        nextPlans.find((plan) => plan.id === resolvedCurrentPlanId)?.id
+        || nextPlans.find((plan) => plan.price > 0)?.id
+        || nextPlans[0]?.id
+        || '';
+
+      setSelectedPlan(preferredSelectedPlan);
+    } catch (error) {
+      console.log('[SubscriptionScreen] loadPlans error:', error);
+      setLoadError('Không thể tải danh sách gói đăng ký. Vui lòng thử lại.');
+      setPlans([]);
+    } finally {
+      setLoadingPlans(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadPlans();
+  }, [loadPlans]);
 
   // Tap card → chỉ highlight gói, KHÔNG chuyển trang
   const handleHighlightPlan = (planId: string) => {
@@ -449,9 +566,12 @@ export default function SubscriptionScreen({ onBack, onSelectPlan }: Subscriptio
         gradientFrom: plan.gradientFrom,
         gradientTo: plan.gradientTo,
         icon: plan.icon,
+        durationDays: plan.durationDays,
       });
     }
   };
+
+  const currentPlan = plans.find((plan) => plan.id === currentPlanId) || null;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]} edges={['left', 'right']}>
@@ -494,30 +614,48 @@ export default function SubscriptionScreen({ onBack, onSelectPlan }: Subscriptio
             </View>
             <View style={styles.currentPlanTextWrap}>
               <Text style={styles.currentPlanCaption}>Gói hiện tại của bạn</Text>
-              <Text style={styles.currentPlanName}>Miễn Phí</Text>
+              <Text style={styles.currentPlanName}>{currentPlan?.name || DEFAULT_FREE_PLAN_NAME}</Text>
             </View>
             <View style={styles.currentPlanForeverTag}>
               <Ionicons name="time-outline" size={12} color="white" />
-              <Text style={styles.currentPlanForeverText}>Vĩnh viễn</Text>
+              <Text style={styles.currentPlanForeverText}>
+                {currentPlan?.price === 0
+                  ? 'Vĩnh viễn'
+                  : `${currentPlan?.durationDays || 0} ngày`}
+              </Text>
             </View>
           </LinearGradient>
         </View>
 
         <View style={styles.planListContainer}>
-          {PLANS.map((plan) => (
-            <PlanCard
-              key={plan.id}
-              plan={plan}
-              isSelected={selectedPlan === plan.id}
-              onSelect={() => handleHighlightPlan(plan.id)}
-              onPurchase={() => handlePurchasePlan(plan)}
-              palette={palette}
-              isDarkMode={isDarkMode}
-            />
-          ))}
+          {loadingPlans ? (
+            <View style={styles.loadStateWrap}>
+              <ActivityIndicator size="small" color="#55C5F1" />
+              <Text style={[styles.loadStateText, { color: palette.textSecondary }]}>Đang tải danh sách gói...</Text>
+            </View>
+          ) : loadError ? (
+            <View style={styles.loadStateWrap}>
+              <Text style={[styles.loadStateText, { color: palette.textSecondary, textAlign: 'center' }]}>{loadError}</Text>
+              <TouchableOpacity activeOpacity={0.85} style={styles.retryButton} onPress={() => void loadPlans()}>
+                <Text style={styles.retryButtonText}>Thử lại</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            plans.map((plan) => (
+              <PlanCard
+                key={plan.id}
+                plan={plan}
+                isSelected={selectedPlan === plan.id}
+                onSelect={() => handleHighlightPlan(plan.id)}
+                onPurchase={() => handlePurchasePlan(plan)}
+                palette={palette}
+                isDarkMode={isDarkMode}
+              />
+            ))
+          )}
         </View>
 
-        <ComparisonSection palette={palette} isDarkMode={isDarkMode} />
+        {/* <ComparisonSection palette={palette} isDarkMode={isDarkMode} /> */}
 
         <View style={styles.faqSection}>
           <View style={styles.faqSectionTitleRow}>
@@ -668,6 +806,32 @@ const styles = StyleSheet.create({
   planListContainer: {
     paddingHorizontal: 20,
     gap: 16,
+  },
+  loadStateWrap: {
+    minHeight: 120,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+  },
+  loadStateText: {
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  retryButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#55C5F1',
+  },
+  retryButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '700',
   },
   planCard: {
     borderWidth: 2,
@@ -988,7 +1152,7 @@ const styles = StyleSheet.create({
 
   faqSection: {
     marginHorizontal: 20,
-    marginBottom: 24,
+    marginVertical: 24,
   },
   faqSectionTitleRow: {
     flexDirection: 'row',

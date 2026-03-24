@@ -1,15 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo, useState } from 'react';
 import {
-    Dimensions,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { showToast } from '../../../components/ui/Toast';
@@ -127,7 +127,7 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
   // Success overlay
   if (showSuccess) {
     return (
-      <SafeAreaView style={[styles.successContainer, { backgroundColor: palette.background }]} edges={['top']}>
+      <SafeAreaView style={[styles.successContainer, { backgroundColor: palette.background }]} edges={['top', 'left', 'right', 'bottom']}>
         <View style={styles.successContent}>
           <View style={styles.successIconContainer}>
             <Ionicons name="shield-checkmark" size={48} color="#10B981" />
@@ -142,7 +142,7 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]} edges={['top', 'left', 'right', 'bottom']}>
       {/* ── Header ── */}
       <View style={[styles.header, { backgroundColor: palette.surface, borderBottomColor: palette.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -399,7 +399,6 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 20,
     flex: 1,
     backgroundColor: '#FAFAFA',
   },

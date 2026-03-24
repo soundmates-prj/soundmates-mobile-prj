@@ -282,6 +282,7 @@ export default function PaymentCheckoutScreen({
         callbackHandledRef.current = true;
         setPaymentUrl(null);
         setIsProcessing(false);
+        console.log('[PaymentCheckout] WebView error:', errorEvent);
         onPaymentFailed('Bạn đã hủy hoặc thoát khỏi cổng thanh toán VNPay.');
     };
 
