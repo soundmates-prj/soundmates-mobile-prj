@@ -115,6 +115,13 @@ export const PODCAST_ENDPOINTS = {
     DETAIL: (id: string) => `/podcast/${id}`,
 };
 
+// Livestream / Live Session Endpoints
+export const LIVESTREAM_ENDPOINTS = {
+    LIVE_SESSIONS: '/livesession',
+    ACTIVE_SESSIONS: '/livesession/active',
+    LIVE_SESSION_DETAIL: (sessionId: string) => `/livesession/${sessionId}`,
+};
+
 export const SPOTIFY_ENDPOINTS = {
     SEARCH: '/spotify/search',
 };

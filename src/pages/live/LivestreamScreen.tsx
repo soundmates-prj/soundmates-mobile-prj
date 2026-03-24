@@ -22,7 +22,6 @@ import {
   livestreamService,
   type LiveSessionResult,
   type NowPlayingData,
-  type SongRequestItem,
   type TrackInfo,
 } from '../../api/livestreamService';
 
@@ -445,15 +444,6 @@ const buildFallbackCandidates = (songHistory: TrackInfo[]): RequestSongCandidate
   return candidates;
 };
 
-const mapRequestableSongs = (songs: SongRequestItem[]): RequestSongCandidate[] =>
-  songs.map((song) => ({
-    id: `remote-${song.song_id}`,
-    requestId: song.song_id,
-    title: song.title || 'Unknown',
-    artist: song.artist || 'Unknown',
-    album: song.album || '',
-  }));
-
 function RequestSongModal({
   isOpen,
   onClose,
@@ -473,19 +463,9 @@ function RequestSongModal({
 
   const loadCandidates = useCallback(async () => {
     setIsLoading(true);
-    try {
-      const requestableSongs = await livestreamService.getRequestableSongs();
-      if (requestableSongs.length > 0) {
-        setCandidates(mapRequestableSongs(requestableSongs));
-        return;
-      }
-    } catch {
-      // Fallback to song history when requestable API is unavailable.
-    } finally {
-      setIsLoading(false);
-    }
-
+    // Live join flow no longer depends on station APIs, only keep local fallback list.
     setCandidates(buildFallbackCandidates(songHistory));
+    setIsLoading(false);
   }, [songHistory]);
 
   useEffect(() => {
@@ -509,12 +489,6 @@ function RequestSongModal({
 
     setIsSubmittingId(candidate.id);
     try {
-      const isSuccess = await livestreamService.requestSong(candidate.requestId);
-      if (!isSuccess) {
-        showToast.error('Request thất bại', 'Không thể gửi yêu cầu bài hát lúc này');
-        return;
-      }
-
       setRequestedIds((prev) => {
         const next = new Set(prev);
         next.add(candidate.id);
@@ -522,7 +496,7 @@ function RequestSongModal({
       });
 
       onRequestSuccess(candidate.title);
-      showToast.success('Đã gửi request', `Bài "${candidate.title}" đã được gửi`);
+      showToast.success('Đã ghi nhận', `Bài "${candidate.title}" đã được ghi nhận`);
       onClose();
     } catch {
       showToast.error('Request thất bại', 'Vui lòng thử lại sau');
@@ -786,7 +760,7 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
   const isLiveSession = activeSessions.length > 0;
   const hasLiveStream = streamAvailability === 'ready';
   const currentStreamUrl = useMemo(
-    () => livestreamService.getListenUrl(currentLiveSession?.streamUrl || undefined),
+    () => livestreamService.normalizeStreamUrl(currentLiveSession?.streamUrl || undefined),
     [currentLiveSession?.streamUrl],
   );
   const elapsedToRender = nowPlaying?.currentTrack

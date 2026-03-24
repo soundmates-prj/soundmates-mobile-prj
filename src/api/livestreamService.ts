@@ -1,6 +1,6 @@
 import { API_HOST } from '@env';
 import authApiClient from './apiClient';
-import { API_CONFIG } from './config';
+import { API_CONFIG, LIVESTREAM_ENDPOINTS } from './config';
 
 export interface TrackInfo {
   shId: number;
@@ -220,19 +220,23 @@ export const livestreamService = {
     pageSize?: number;
   }): Promise<PagedResult<LiveSessionResult>> {
     const response = await api.get<ApiGatewayResponse<PagedResult<LiveSessionResult>>>(
-      '/livesession',
+      LIVESTREAM_ENDPOINTS.LIVE_SESSIONS,
       { params },
     );
     return response.data.data;
   },
 
   async getActiveSessions(): Promise<LiveSessionResult[]> {
-    const response = await api.get<ApiGatewayResponse<LiveSessionResult[]>>('/livesession/active');
+    const response = await api.get<ApiGatewayResponse<LiveSessionResult[]>>(
+      LIVESTREAM_ENDPOINTS.ACTIVE_SESSIONS,
+    );
     return response.data.data || [];
   },
 
   async getLiveSession(sessionId: string): Promise<LiveSessionResult> {
-    const response = await api.get<ApiGatewayResponse<LiveSessionResult>>(`/livesession/${sessionId}`);
+    const response = await api.get<ApiGatewayResponse<LiveSessionResult>>(
+      LIVESTREAM_ENDPOINTS.LIVE_SESSION_DETAIL(sessionId),
+    );
     return response.data.data;
   },
 
@@ -298,6 +302,11 @@ export const livestreamService = {
       `http://${API_HOST}:5000/listen/${resolveStationShortcode()}/radio.mp3`,
     );
     return normalizeNetworkUrl(listenUrl) || fallbackUrl;
+  },
+
+  // Live session stream URLs can contain host.docker.internal in dev environments.
+  normalizeStreamUrl(streamUrl?: string): string {
+    return normalizeNetworkUrl(streamUrl);
   },
 };
 
