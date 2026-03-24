@@ -18,7 +18,13 @@ import {
   View,
 } from 'react-native';
 import { showToast } from '../../../components/ui/Toast';
-import { livestreamService, type NowPlayingData, type SongRequestItem, type TrackInfo } from '../../api/livestreamService';
+import {
+  livestreamService,
+  type LiveSessionResult,
+  type NowPlayingData,
+  type SongRequestItem,
+  type TrackInfo,
+} from '../../api/livestreamService';
 
 interface ChatMessage {
   id: string;
@@ -234,7 +240,7 @@ function ChatOverlay({ messages }: { messages: ChatMessage[] }) {
                 {msg.isRequest && msg.requestSong && (
                   <View style={styles.chatRequestRow}>
                     <Ionicons name="sparkles" size={10} color="#FFFFFF" />
-                    <Text style={styles.chatRequestText}>Requested "{msg.requestSong}"</Text>
+                    <Text style={styles.chatRequestText}>{`Requested: ${msg.requestSong}`}</Text>
                   </View>
                 )}
                 <Text style={styles.chatMessageText}>{msg.message}</Text>
@@ -281,7 +287,7 @@ function ChatPanel({ messages }: { messages: ChatMessage[] }) {
               {msg.isRequest && msg.requestSong && (
                 <View style={styles.chatRequestRow}>
                   <Ionicons name="sparkles" size={10} color="#FFFFFF" />
-                  <Text style={styles.chatRequestText}>Requested "{msg.requestSong}"</Text>
+                  <Text style={styles.chatRequestText}>{`Requested: ${msg.requestSong}`}</Text>
                 </View>
               )}
               <Text style={styles.chatMessageText}>{msg.message}</Text>
@@ -669,6 +675,9 @@ function ReactionPicker({ isOpen, onClose, onSelect }: { isOpen: boolean; onClos
 
 export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
   const [nowPlaying, setNowPlaying] = useState<NowPlayingData | null>(null);
+  const [activeSessions, setActiveSessions] = useState<LiveSessionResult[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [isSessionsLoading, setIsSessionsLoading] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [inputMessage, setInputMessage] = useState('');
   const [showReactions, setShowReactions] = useState(false);
@@ -699,21 +708,64 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
     [dragX, storyTranslateX]
   );
 
-  const fetchNowPlaying = useCallback(async () => {
+  const currentLiveSession = useMemo(
+    () => activeSessions.find((session) => session.id === selectedSessionId) || activeSessions[0] || null,
+    [activeSessions, selectedSessionId],
+  );
+
+  const fetchActiveSessions = useCallback(async () => {
     try {
-      const data = await livestreamService.getNowPlaying();
-      // console.log('Fetched now playing data:', data);
-      setNowPlaying(data);
+      const allSessions: LiveSessionResult[] = [];
+      let pageNumber = 1;
+      let totalPages = 1;
+
+      do {
+        const paged = await livestreamService.getLiveSessions({
+          pageNumber,
+          pageSize: 50,
+        });
+
+        allSessions.push(...(paged.items || []));
+        totalPages = paged.totalPages || 1;
+        pageNumber += 1;
+      } while (pageNumber <= totalPages);
+
+      const liveSessions = allSessions.filter(
+        (session) => session.status?.toLowerCase() === 'live',
+      );
+
+      const detailedLiveSessions = await Promise.all(
+        liveSessions.map(async (session) => {
+          try {
+            return await livestreamService.getLiveSession(session.id);
+          } catch {
+            return session;
+          }
+        }),
+      );
+
+      setActiveSessions(detailedLiveSessions);
+      setSelectedSessionId((prev) => {
+        if (!detailedLiveSessions.length) return null;
+        if (prev && detailedLiveSessions.some((session) => session.id === prev)) return prev;
+        return detailedLiveSessions[0].id;
+      });
+      setNowPlaying(null);
     } catch (error) {
-      console.log('Failed to fetch now playing', error);
+      console.log('Failed to fetch live sessions', error);
+      setActiveSessions([]);
+      setSelectedSessionId(null);
+      setNowPlaying(null);
+    } finally {
+      setIsSessionsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchNowPlaying();
-    const interval = setInterval(fetchNowPlaying, 10000);
+    fetchActiveSessions();
+    const interval = setInterval(fetchActiveSessions, 15000);
     return () => clearInterval(interval);
-  }, [fetchNowPlaying]);
+  }, [fetchActiveSessions]);
 
   useEffect(() => {
     Audio.setAudioModeAsync({
@@ -727,17 +779,15 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
     });
   }, []);
 
-  const liveTitle = nowPlaying?.stationName || LIVE_SESSION.title;
-  const liveHost = nowPlaying?.streamerName || LIVE_SESSION.host;
-  const liveCategory = nowPlaying?.currentTrack?.genre || LIVE_SESSION.category;
-  const liveListeners = nowPlaying?.totalListeners ?? LIVE_SESSION.listeners;
-  const isLiveSession = nowPlaying
-    ? nowPlaying.isLive || nowPlaying.isOnline
-    : LIVE_SESSION.isLive;
+  const liveTitle = currentLiveSession?.sessionName || LIVE_SESSION.title;
+  const liveHost = currentLiveSession?.stationName || LIVE_SESSION.host;
+  const liveCategory = currentLiveSession?.genre || LIVE_SESSION.category;
+  const liveListeners = currentLiveSession?.listenersCount ?? LIVE_SESSION.listeners;
+  const isLiveSession = activeSessions.length > 0;
   const hasLiveStream = streamAvailability === 'ready';
   const currentStreamUrl = useMemo(
-    () => livestreamService.getListenUrl(nowPlaying?.listenUrl),
-    [nowPlaying?.listenUrl],
+    () => livestreamService.getListenUrl(currentLiveSession?.streamUrl || undefined),
+    [currentLiveSession?.streamUrl],
   );
   const elapsedToRender = nowPlaying?.currentTrack
     ? displayElapsed
@@ -1178,6 +1228,46 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
             </View>
           </View>
 
+          {isSessionsLoading ? (
+            <View style={styles.sessionListLoadingRow}>
+              <ActivityIndicator size="small" color="#7DD3FC" />
+              <Text style={styles.sessionListLoadingText}>Đang tải danh sách phiên live...</Text>
+            </View>
+          ) : activeSessions.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.sessionList}
+            >
+              {activeSessions.map((session) => {
+                const isSelected = session.id === currentLiveSession?.id;
+
+                return (
+                  <TouchableOpacity
+                    key={session.id}
+                    style={[styles.sessionChip, isSelected && styles.sessionChipActive]}
+                    onPress={() => setSelectedSessionId(session.id)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.sessionChipTitle, isSelected && styles.sessionChipTitleActive]} numberOfLines={1}>
+                      {session.sessionName}
+                    </Text>
+                    <View style={styles.sessionChipMeta}>
+                      <Ionicons
+                        name="people"
+                        size={11}
+                        color={isSelected ? '#E0F2FE' : 'rgba(255,255,255,0.72)'}
+                      />
+                      <Text style={[styles.sessionChipMetaText, isSelected && styles.sessionChipMetaTextActive]}>
+                        {session.listenersCount}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          ) : null}
+
           {nowPlaying?.currentTrack && (
             <View style={styles.currentTrackCard}>
               <View style={styles.currentTrackBadge}>
@@ -1210,7 +1300,7 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
               <TouchableOpacity
                 style={styles.retryButton}
                 onPress={() => {
-                  void fetchNowPlaying();
+                  void fetchActiveSessions();
                   setRetryProbeTick((prev) => prev + 1);
                 }}
               >
@@ -1441,6 +1531,58 @@ const styles = StyleSheet.create({
   },
   titleSection: {
     marginBottom: 12,
+  },
+  sessionListLoadingRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sessionListLoadingText: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  sessionList: {
+    gap: 8,
+    paddingTop: 10,
+    paddingBottom: 2,
+  },
+  sessionChip: {
+    minWidth: 136,
+    maxWidth: 170,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.45)',
+    backgroundColor: 'rgba(15,23,42,0.42)',
+    gap: 4,
+  },
+  sessionChipActive: {
+    borderColor: 'rgba(125,211,252,0.9)',
+    backgroundColor: 'rgba(85,197,241,0.28)',
+  },
+  sessionChipTitle: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  sessionChipTitleActive: {
+    color: '#FFFFFF',
+  },
+  sessionChipMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  sessionChipMetaText: {
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  sessionChipMetaTextActive: {
+    color: '#E0F2FE',
   },
   liveTitle: {
     fontSize: 20,

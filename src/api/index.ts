@@ -27,7 +27,7 @@ export type {
 export { favoriteService } from './favoriteService';
 export type { AddFavoriteRequest } from './favoriteService';
 export { livestreamService } from './livestreamService';
-export type { NowPlayingData, SongRequestItem, TrackInfo } from './livestreamService';
+export type { LiveSessionResult, NowPlayingData, SongRequestItem, TrackInfo } from './livestreamService';
 export { paymentService } from './paymentService';
 export type {
     CreatePaymentRequest, CreatePaymentResponse, PaymentCallbackVerificationResponse,

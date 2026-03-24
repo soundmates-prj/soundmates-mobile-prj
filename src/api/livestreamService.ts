@@ -1,5 +1,5 @@
 import { API_HOST } from '@env';
-import axios from 'axios';
+import authApiClient from './apiClient';
 import { API_CONFIG } from './config';
 
 export interface TrackInfo {
@@ -57,11 +57,42 @@ export interface SongRequestItem {
   art: string;
 }
 
-const api = axios.create({
-  baseURL: API_CONFIG.MAIN_BASE_URL,
-  timeout: API_CONFIG.TIMEOUT,
-  headers: API_CONFIG.HEADERS,
-});
+interface ApiGatewayResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+  errorCode: string | null;
+}
+
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  pageNumber: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface LiveSessionResult {
+  id: string;
+  userId: string;
+  stationId: string;
+  stationName: string | null;
+  sessionName: string;
+  description: string | null;
+  status: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  totalListeners: number;
+  peakListeners: number;
+  totalDuration: number;
+  createdAt: string;
+  streamUrl: string | null;
+  thumbnailUrl: string | null;
+  genre: string | null;
+  listenersCount: number;
+}
+
+const api = authApiClient;
 
 const FALLBACK_STATION_UUID = 'e1cd49c9-c82f-4eec-8e9b-67b80a5ba0dc';
 const DEFAULT_STATION_SHORTCODE = 'duc_phan';
@@ -182,10 +213,33 @@ export const livestreamService = {
     await bootstrapStationContext();
   },
 
-  async getNowPlaying(): Promise<NowPlayingData> {
-    const stationUuid = await resolveStationUuid();
-    const response = await api.get<ApiResponse<NowPlayingData>>(
-      `station/${stationUuid}/now-playing`,
+  async getLiveSessions(params?: {
+    userId?: string;
+    status?: string;
+    pageNumber?: number;
+    pageSize?: number;
+  }): Promise<PagedResult<LiveSessionResult>> {
+    const response = await api.get<ApiGatewayResponse<PagedResult<LiveSessionResult>>>(
+      '/livesession',
+      { params },
+    );
+    return response.data.data;
+  },
+
+  async getActiveSessions(): Promise<LiveSessionResult[]> {
+    const response = await api.get<ApiGatewayResponse<LiveSessionResult[]>>('/livesession/active');
+    return response.data.data || [];
+  },
+
+  async getLiveSession(sessionId: string): Promise<LiveSessionResult> {
+    const response = await api.get<ApiGatewayResponse<LiveSessionResult>>(`/livesession/${sessionId}`);
+    return response.data.data;
+  },
+
+  async getNowPlaying(stationUuid?: string): Promise<NowPlayingData> {
+    const resolvedStationUuid = stationUuid || await resolveStationUuid();
+    const response = await api.get<ApiGatewayResponse<NowPlayingData>>(
+      `station/${resolvedStationUuid}/now-playing`,
     );
 
     const rawData = response.data.data;
