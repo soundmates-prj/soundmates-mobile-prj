@@ -4,9 +4,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { StatusBar, StyleSheet } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
-import { showToast, toastConfig } from './components/ui/Toast';
 import { SoundMateColors, SoundMateLightColors } from './constants/theme';
 import { authService, livestreamService, registerUnauthorizedHandler } from './src/api';
+import { showToast, toastConfig } from './src/components/ui/Toast';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { UserProvider, useUser } from './src/context/UserContext';
 import {

@@ -3,27 +3,27 @@ import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Image,
-  Keyboard,
-  Modal,
-  PanResponder,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Animated,
+    Image,
+    Keyboard,
+    Modal,
+    PanResponder,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { showToast } from '../../../components/ui/Toast';
 import {
-  livestreamService,
-  type LiveSessionResult,
-  type NowPlayingData,
-  type TrackInfo,
+    livestreamService,
+    type LiveSessionResult,
+    type NowPlayingData,
+    type TrackInfo,
 } from '../../api/livestreamService';
+import { showToast } from '../../components/ui/Toast';
 
 interface ChatMessage {
   id: string;

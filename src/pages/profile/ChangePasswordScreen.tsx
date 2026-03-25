@@ -1,19 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo, useState } from 'react';
 import {
-  Dimensions,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    Dimensions,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { showToast } from '../../../components/ui/Toast';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
+import { showToast } from '../../components/ui/Toast';
 import { useTheme } from '../../context/ThemeContext';
 
 const { width } = Dimensions.get('window');

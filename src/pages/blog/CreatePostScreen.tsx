@@ -16,8 +16,8 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { showToast } from '../../../components/ui/Toast';
 import { blogService } from '../../api';
+import { showToast } from '../../components/ui/Toast';
 import { useUser } from '../../context/UserContext';
 
 // ─────────────────────────────────────────────────────

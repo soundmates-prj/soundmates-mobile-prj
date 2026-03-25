@@ -12,9 +12,9 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { showToast } from '../../../components/ui/Toast';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { authService, UpdateProfileRequest } from '../../api';
+import { showToast } from '../../components/ui/Toast';
 import { useTheme } from '../../context/ThemeContext';
 import { UserData, useUser } from '../../context/UserContext';
 

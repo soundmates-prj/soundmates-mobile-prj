@@ -18,10 +18,10 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { showToast } from '../../../components/ui/Toast';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { authService, BlogPostResponse, blogService, paymentService, ReactionResponse, UpdateProfileRequest } from '../../api';
 import { BlogPostCard, DisplayPost } from '../../components/blog/BlogPostCard';
+import { showToast } from '../../components/ui/Toast';
 import { ThemePreference, useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
 import BottomNavigation, { TabName } from '../BottomNavigation';

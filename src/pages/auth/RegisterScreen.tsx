@@ -15,9 +15,9 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { showToast } from '../../../components/ui/Toast';
 import { SoundMateLightColors } from '../../../constants/theme';
 import { authService } from '../../api';
+import { showToast } from '../../components/ui/Toast';
 
 interface RegisterScreenProps {
     navigation?: any;

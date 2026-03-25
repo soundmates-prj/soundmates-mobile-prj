@@ -14,7 +14,7 @@ import {
     View,
 } from 'react-native';
 import Toast, { ToastConfig, ToastConfigParams } from 'react-native-toast-message';
-import { SoundMateColors } from '../../constants/theme';
+import { SoundMateColors } from '../../../constants/theme';
 
 const { width } = Dimensions.get('window');
 
