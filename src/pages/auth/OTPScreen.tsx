@@ -10,12 +10,12 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
 import { SoundMateLightColors } from '../../../constants/theme';
 import { authService } from '../../api';
+import OtpCodeInput, { type OtpCodeInputRef } from '../../components/ui/OtpCodeInput';
 import { showToast } from '../../components/ui/Toast';
 
 interface OTPScreenProps {
@@ -33,14 +33,12 @@ export default function OTPScreen({
     onVerifySuccess,
     onNavigateBack
 }: OTPScreenProps) {
-    // OTP states - 6 digits
-    const [otp, setOtp] = useState(['', '', '', '', '', '']);
+    const [otp, setOtp] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [countdown, setCountdown] = useState(60);
     const [canResend, setCanResend] = useState(false);
 
-    // Input refs for auto-focus
-    const inputRefs = useRef<Array<TextInput | null>>([]);
+    const otpInputRef = useRef<OtpCodeInputRef>(null);
 
     // Animation values
     const buttonScale = useRef(new Animated.Value(1)).current;
@@ -96,28 +94,8 @@ export default function OTPScreen({
         ]).start();
     }, [shakeAnimation]);
 
-    const handleOtpChange = useCallback((value: string, index: number) => {
-        // Only allow numbers
-        if (value && !/^\d$/.test(value)) return;
-
-        const newOtp = [...otp];
-        newOtp[index] = value;
-        setOtp(newOtp);
-
-        // Auto-focus next input
-        if (value && index < 5) {
-            inputRefs.current[index + 1]?.focus();
-        }
-    }, [otp]);
-
-    const handleKeyPress = useCallback((e: any, index: number) => {
-        if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-            inputRefs.current[index - 1]?.focus();
-        }
-    }, [otp]);
-
     const handleVerify = useCallback(async () => {
-        const otpCode = otp.join('');
+        const otpCode = otp;
 
         if (otpCode.length !== 6) {
             showToast.warning('Mã không đầy đủ', 'Vui lòng nhập đủ 6 số');
@@ -141,9 +119,8 @@ export default function OTPScreen({
             } else {
                 showToast.error('Xác thực thất bại', response.message || 'Mã OTP không đúng');
                 shakeInputs();
-                // Clear OTP inputs
-                setOtp(['', '', '', '', '', '']);
-                inputRefs.current[0]?.focus();
+                setOtp('');
+                otpInputRef.current?.focus(0);
             }
         } catch (error: any) {
             console.log('Verify OTP error:', error);
@@ -167,8 +144,8 @@ export default function OTPScreen({
                 showToast.success('Đã gửi lại mã', 'Vui lòng kiểm tra email của bạn');
                 setCountdown(60);
                 setCanResend(false);
-                setOtp(['', '', '', '', '', '']);
-                inputRefs.current[0]?.focus();
+                setOtp('');
+                otpInputRef.current?.focus(0);
             } else {
                 showToast.error('Gửi mã thất bại', response.message || 'Không thể gửi lại mã OTP');
             }
@@ -237,23 +214,17 @@ export default function OTPScreen({
 
                     {/* OTP Inputs */}
                     <Animated.View style={[styles.otpContainer, shakeTransformStyle]}>
-                        {otp.map((digit, index) => (
-                            <TextInput
-                                key={index}
-                                ref={(ref) => { inputRefs.current[index] = ref; }}
-                                style={[
-                                    styles.otpInput,
-                                    digit ? styles.otpInputFilled : null
-                                ]}
-                                value={digit}
-                                onChangeText={(value) => handleOtpChange(value, index)}
-                                onKeyPress={(e) => handleKeyPress(e, index)}
-                                keyboardType="number-pad"
-                                maxLength={1}
-                                selectTextOnFocus
-                                autoFocus={index === 0}
-                            />
-                        ))}
+                        <OtpCodeInput
+                            ref={otpInputRef}
+                            value={otp}
+                            onChange={setOtp}
+                            length={6}
+                            autoFocus
+                            containerStyle={styles.otpContainerInner}
+                            inputStyle={styles.otpInput}
+                            filledInputStyle={styles.otpInputFilled}
+                            editable={!isLoading}
+                        />
                     </Animated.View>
 
                     {/* Verify Button */}
@@ -359,10 +330,11 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     otpContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: 10,
         marginBottom: 32,
+        width: '100%',
+    },
+    otpContainerInner: {
+        gap: 10,
         width: '100%',
     },
     otpInput: {

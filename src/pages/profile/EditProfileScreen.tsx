@@ -7,13 +7,15 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { authService, UpdateProfileRequest } from '../../api';
+import DateField from '../../components/ui/DateField';
+import FormTextField from '../../components/ui/FormTextField';
+import SelectField from '../../components/ui/SelectField';
 import { showToast } from '../../components/ui/Toast';
 import { useTheme } from '../../context/ThemeContext';
 import { UserData, useUser } from '../../context/UserContext';
@@ -261,7 +263,8 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
               <View style={styles.inputContent}>
                 <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Họ và tên</Text>
                 <View style={styles.nameRow}>
-                  <TextInput
+                  <FormTextField
+                    containerStyle={styles.nameField}
                     value={profileData.firstName}
                     onChangeText={(value) => handleChange('firstName', value)}
                     onFocus={() => setEditingField('firstName')}
@@ -271,11 +274,11 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                     style={[
                       styles.input,
                       { color: palette.textPrimary },
-                      styles.nameField,
                       editingField === 'firstName' && styles.inputFocused,
                     ]}
                   />
-                  <TextInput
+                  <FormTextField
+                    containerStyle={styles.nameField}
                     value={profileData.lastName}
                     onChangeText={(value) => handleChange('lastName', value)}
                     onFocus={() => setEditingField('lastName')}
@@ -285,7 +288,6 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                     style={[
                       styles.input,
                       { color: palette.textPrimary },
-                      styles.nameField,
                       editingField === 'lastName' && styles.inputFocused,
                     ]}
                   />
@@ -304,7 +306,8 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                 <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Tên người dùng</Text>
                 <View style={styles.usernameRow}>
                   {/* <Text style={styles.atSymbol}>@</Text> */}
-                  <TextInput
+                  <FormTextField
+                    containerStyle={styles.usernameInput}
                     value={profileData.username}
                     onChangeText={(value) => handleChange('username', value)}
                     onFocus={() => setEditingField('username')}
@@ -312,7 +315,6 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                     style={[
                       styles.input,
                       { color: palette.textPrimary },
-                      styles.usernameInput,
                       editingField === 'username' && styles.inputFocused,
                     ]}
                   />
@@ -338,7 +340,8 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                     {profileData.bio.length}/150
                   </Text>
                 </View>
-                <TextInput
+                <FormTextField
+                  containerStyle={styles.bioInput}
                   value={profileData.bio}
                   onChangeText={(value) => {
                     if (value.length <= 150) handleChange('bio', value);
@@ -351,7 +354,6 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                   style={[
                     styles.input,
                     { color: palette.textPrimary },
-                    styles.bioInput,
                     editingField === 'bio' && styles.inputFocused,
                   ]}
                 />
@@ -371,7 +373,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
               </View>
               <View style={styles.inputContent}>
                 <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Email</Text>
-                <TextInput
+                <FormTextField
                   value={profileData.email}
                   onChangeText={(value) => handleChange('email', value)}
                   onFocus={() => setEditingField('email')}
@@ -400,7 +402,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
               </View>
               <View style={styles.inputContent}>
                 <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Số điện thoại</Text>
-                <TextInput
+                <FormTextField
                   value={profileData.phone}
                   onChangeText={(value) => handleChange('phone', value)}
                   onFocus={() => setEditingField('phone')}
@@ -424,7 +426,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
               </View>
               <View style={styles.inputContent}>
                 <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Website</Text>
-                <TextInput
+                <FormTextField
                   value={profileData.website}
                   onChangeText={(value) => handleChange('website', value)}
                   onFocus={() => setEditingField('website')}
@@ -452,19 +454,21 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                 <View style={[styles.iconBox, { backgroundColor: '#EC4899' + '1A' }]}>
                   <Ionicons name="male-female-outline" size={18} color="#EC4899" />
                 </View>
-                <TouchableOpacity
-                  style={styles.inputContent}
+                <SelectField
+                  containerStyle={styles.inputContent}
                   onPress={() => {
                     setShowDatePicker(false);
                     setShowGenderPicker(!showGenderPicker);
                   }}
-                >
-                  <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Giới tính</Text>
-                  <View style={styles.genderRow}>
-                    <Text style={[styles.genderValue, { color: palette.textPrimary }]}>{profileData.gender}</Text>
-                    <Ionicons name={showGenderPicker ? 'chevron-up' : 'chevron-down'} size={18} color={palette.textMuted} />
-                  </View>
-                </TouchableOpacity>
+                  label="Giới tính"
+                  labelStyle={[styles.inputLabel, { color: palette.textMuted }]}
+                  value={profileData.gender}
+                  valueTextStyle={[styles.genderValue, { color: palette.textPrimary }]}
+                  rowStyle={styles.genderRow}
+                  showChevron
+                  isExpanded={showGenderPicker}
+                  chevronColor={palette.textMuted}
+                />
               </View>
 
               {showGenderPicker && (
@@ -507,22 +511,23 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
                 <View style={[styles.iconBox, { backgroundColor: '#F59E0B' + '1A' }]}>
                   <Ionicons name="calendar-outline" size={18} color="#F59E0B" />
                 </View>
-                <TouchableOpacity
-                  style={styles.inputContent}
+                <DateField
+                  containerStyle={styles.inputContent}
                   activeOpacity={0.85}
                   onPress={() => {
                     setShowGenderPicker(false);
                     setShowDatePicker(!showDatePicker);
                   }}
-                >
-                  <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Ngày sinh</Text>
-                  <View style={styles.datePickerRow}>
-                    <Text style={[styles.input, { color: profileData.birthday ? palette.textPrimary : palette.textMuted }]}>
-                      {formatDateDisplay(profileData.birthday)}
-                    </Text>
-                    <Ionicons name={showDatePicker ? 'chevron-up' : 'chevron-down'} size={18} color={palette.textMuted} />
-                  </View>
-                </TouchableOpacity>
+                  label="Ngày sinh"
+                  labelStyle={[styles.inputLabel, { color: palette.textMuted }]}
+                  value={formatDateDisplay(profileData.birthday)}
+                  isPlaceholder={!profileData.birthday}
+                  valueTextStyle={[styles.input, { color: profileData.birthday ? palette.textPrimary : palette.textMuted }]}
+                  rowStyle={styles.datePickerRow}
+                  showChevron
+                  isExpanded={showDatePicker}
+                  chevronColor={palette.textMuted}
+                />
               </View>
 
               {showDatePicker && (
@@ -548,7 +553,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
               </View>
               <View style={styles.inputContent}>
                 <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Vị trí</Text>
-                <TextInput
+                <FormTextField
                   value={profileData.location}
                   onChangeText={(value) => handleChange('location', value)}
                   onFocus={() => setEditingField('location')}
@@ -571,7 +576,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
               </View>
               <View style={styles.inputContent}>
                 <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Thể loại yêu thích</Text>
-                <TextInput
+                <FormTextField
                   value={profileData.favoriteGenre}
                   onChangeText={(value) => handleChange('favoriteGenre', value)}
                   onFocus={() => setEditingField('favoriteGenre')}
@@ -600,7 +605,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
               </View>
               <View style={styles.inputContent}>
                 <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Instagram</Text>
-                <TextInput
+                <FormTextField
                   placeholder="@username"
                   placeholderTextColor={palette.textMuted}
                   defaultValue="@minhanh_music"
@@ -619,7 +624,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
               </View>
               <View style={styles.inputContent}>
                 <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Facebook</Text>
-                <TextInput
+                <FormTextField
                   placeholder="Tên hoặc link Facebook"
                   placeholderTextColor={palette.textMuted}
                   defaultValue="Minh Anh"

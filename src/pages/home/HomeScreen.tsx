@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Image, Linking, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Image, Linking, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import {
     blogService,
@@ -12,6 +12,7 @@ import {
     spotifyService,
     SpotifyTrack
 } from '../../api';
+import FormTextField from '../../components/ui/FormTextField';
 import { useTheme } from '../../context/ThemeContext';
 import BlogScreen from '../blog/BlogScreen';
 import CreatePostScreen from '../blog/CreatePostScreen';
@@ -575,7 +576,8 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
 
                         <View style={[styles.searchInputWrap, { borderColor: palette.border, backgroundColor: isDarkMode ? '#111827' : '#F8FAFC' }]}>
                             <Ionicons name="search" size={16} color={palette.textSecondary} />
-                            <TextInput
+                            <FormTextField
+                                containerStyle={styles.searchInputFieldWrap}
                                 value={searchInput}
                                 onChangeText={setSearchInput}
                                 style={[styles.searchInput, { color: palette.textPrimary }]}
@@ -875,6 +877,9 @@ const styles = StyleSheet.create({
         fontSize: 14,
         marginLeft: 8,
         marginRight: 8,
+    },
+    searchInputFieldWrap: {
+        flex: 1,
     },
     searchGoButton: {
         borderRadius: 12,

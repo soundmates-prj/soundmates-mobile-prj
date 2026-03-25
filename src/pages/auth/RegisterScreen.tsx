@@ -11,12 +11,12 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
 import { SoundMateLightColors } from '../../../constants/theme';
 import { authService } from '../../api';
+import FormTextField from '../../components/ui/FormTextField';
 import { showToast } from '../../components/ui/Toast';
 
 interface RegisterScreenProps {
@@ -39,8 +39,6 @@ export default function RegisterScreen({
     const [lastName, setLastName] = useState('');
 
     // UI states
-    const [showPassword, setShowPassword] = useState(false);
-    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
     // Animation values
@@ -64,14 +62,6 @@ export default function RegisterScreen({
 
     const dismissKeyboard = useCallback(() => {
         Keyboard.dismiss();
-    }, []);
-
-    const toggleShowPassword = useCallback(() => {
-        setShowPassword(prev => !prev);
-    }, []);
-
-    const toggleShowConfirmPassword = useCallback(() => {
-        setShowConfirmPassword(prev => !prev);
     }, []);
 
     const handleRegister = useCallback(async () => {
@@ -199,143 +189,105 @@ export default function RegisterScreen({
                         {/* Name Row - Họ và Tên */}
                         <View style={styles.nameRow}>
                             {/* Họ Input */}
-                            <View style={styles.inputContainerHalf}>
-                                <Ionicons
-                                    name="people-outline"
-                                    size={22}
-                                    color={SoundMateLightColors.textPrimary}
-                                    style={styles.inputIcon}
-                                />
-                                <TextInput
-                                    style={styles.inputHalf}
-                                    placeholder="Họ"
-                                    placeholderTextColor={SoundMateLightColors.textPrimary}
-                                    value={firstName}
-                                    onChangeText={setFirstName}
-                                    autoCapitalize="words"
-                                    returnKeyType="next"
-                                />
-                            </View>
+                            <FormTextField
+                                inputContainerStyle={styles.inputContainerHalf}
+                                style={styles.inputHalf}
+                                size="50%"
+                                leftIconName="people-outline"
+                                leftIconSize={22}
+                                leftIconColor={SoundMateLightColors.textPrimary}
+                                placeholder="Họ"
+                                placeholderTextColor={SoundMateLightColors.textPrimary}
+                                value={firstName}
+                                onChangeText={setFirstName}
+                                autoCapitalize="words"
+                                returnKeyType="next"
+                            />
 
                             {/* Tên Input */}
-                            <View style={styles.inputContainerHalf}>
-                                <Ionicons
-                                    name="people-outline"
-                                    size={22}
-                                    color={SoundMateLightColors.textPrimary}
-                                    style={styles.inputIcon}
-                                />
-                                <TextInput
-                                    style={styles.inputHalf}
-                                    placeholder="Tên"
-                                    placeholderTextColor={SoundMateLightColors.textPrimary}
-                                    value={lastName}
-                                    onChangeText={setLastName}
-                                    autoCapitalize="words"
-                                    returnKeyType="next"
-                                />
-                            </View>
+                            <FormTextField
+                                inputContainerStyle={styles.inputContainerHalf}
+                                style={styles.inputHalf}
+                                size="50%"
+                                leftIconName="people-outline"
+                                leftIconSize={22}
+                                leftIconColor={SoundMateLightColors.textPrimary}
+                                placeholder="Tên"
+                                placeholderTextColor={SoundMateLightColors.textPrimary}
+                                value={lastName}
+                                onChangeText={setLastName}
+                                autoCapitalize="words"
+                                returnKeyType="next"
+                            />
                         </View>
 
                         {/* Username Input */}
-                        <View style={styles.inputContainer}>
-                            <Ionicons
-                                name="people-outline"
-                                size={22}
-                                color={SoundMateLightColors.textPrimary}
-                                style={styles.inputIcon}
-                            />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Tên người dùng"
-                                placeholderTextColor={SoundMateLightColors.textPrimary}
-                                value={username}
-                                onChangeText={setUsername}
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                                returnKeyType="next"
-                            />
-                        </View>
+                        <FormTextField
+                            inputContainerStyle={styles.inputContainer}
+                            style={styles.input}
+                            leftIconName="people-outline"
+                            leftIconSize={22}
+                            leftIconColor={SoundMateLightColors.textPrimary}
+                            placeholder="Tên người dùng"
+                            placeholderTextColor={SoundMateLightColors.textPrimary}
+                            value={username}
+                            onChangeText={setUsername}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            returnKeyType="next"
+                        />
 
                         {/* Email Input */}
-                        <View style={styles.inputContainer}>
-                            <Ionicons
-                                name="mail-outline"
-                                size={22}
-                                color={SoundMateLightColors.textPrimary}
-                                style={styles.inputIcon}
-                            />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Email"
-                                placeholderTextColor={SoundMateLightColors.textPrimary}
-                                value={email}
-                                onChangeText={setEmail}
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                                returnKeyType="next"
-                            />
-                        </View>
+                        <FormTextField
+                            inputContainerStyle={styles.inputContainer}
+                            style={styles.input}
+                            leftIconName="mail-outline"
+                            leftIconSize={22}
+                            leftIconColor={SoundMateLightColors.textPrimary}
+                            placeholder="Email"
+                            placeholderTextColor={SoundMateLightColors.textPrimary}
+                            value={email}
+                            onChangeText={setEmail}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            returnKeyType="next"
+                        />
 
                         {/* Password Input */}
-                        <View style={styles.inputContainer}>
-                            <Ionicons
-                                name="lock-closed-outline"
-                                size={22}
-                                color={SoundMateLightColors.textPrimary}
-                                style={styles.inputIcon}
-                            />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Mật khẩu"
-                                placeholderTextColor={SoundMateLightColors.textPrimary}
-                                value={password}
-                                onChangeText={setPassword}
-                                secureTextEntry={!showPassword}
-                                returnKeyType="next"
-                            />
-                            <TouchableOpacity
-                                onPress={toggleShowPassword}
-                                style={styles.eyeIcon}
-                            >
-                                <Ionicons
-                                    name={showPassword ? "eye-outline" : "eye-off-outline"}
-                                    size={22}
-                                    color={SoundMateLightColors.textMuted}
-                                />
-                            </TouchableOpacity>
-                        </View>
+                        <FormTextField
+                            inputContainerStyle={styles.inputContainer}
+                            style={styles.input}
+                            leftIconName="lock-closed-outline"
+                            leftIconSize={22}
+                            leftIconColor={SoundMateLightColors.textPrimary}
+                            placeholder="Mật khẩu"
+                            placeholderTextColor={SoundMateLightColors.textPrimary}
+                            value={password}
+                            onChangeText={setPassword}
+                            secureTextEntry
+                            showPasswordToggle
+                            passwordIconColor={SoundMateLightColors.textMuted}
+                            returnKeyType="next"
+                        />
 
                         {/* Confirm Password Input */}
-                        <View style={styles.inputContainer}>
-                            <Ionicons
-                                name="lock-closed-outline"
-                                size={22}
-                                color={SoundMateLightColors.textPrimary}
-                                style={styles.inputIcon}
-                            />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Xác nhận mật khẩu"
-                                placeholderTextColor={SoundMateLightColors.textPrimary}
-                                value={confirmPassword}
-                                onChangeText={setConfirmPassword}
-                                secureTextEntry={!showConfirmPassword}
-                                returnKeyType="done"
-                                onSubmitEditing={handleRegister}
-                            />
-                            <TouchableOpacity
-                                onPress={toggleShowConfirmPassword}
-                                style={styles.eyeIcon}
-                            >
-                                <Ionicons
-                                    name={showConfirmPassword ? "eye-outline" : "eye-off-outline"}
-                                    size={22}
-                                    color={SoundMateLightColors.textMuted}
-                                />
-                            </TouchableOpacity>
-                        </View>
+                        <FormTextField
+                            inputContainerStyle={styles.inputContainer}
+                            style={styles.input}
+                            leftIconName="lock-closed-outline"
+                            leftIconSize={22}
+                            leftIconColor={SoundMateLightColors.textPrimary}
+                            placeholder="Xác nhận mật khẩu"
+                            placeholderTextColor={SoundMateLightColors.textPrimary}
+                            value={confirmPassword}
+                            onChangeText={setConfirmPassword}
+                            secureTextEntry
+                            showPasswordToggle
+                            passwordIconColor={SoundMateLightColors.textMuted}
+                            returnKeyType="done"
+                            onSubmitEditing={handleRegister}
+                        />
 
                         {/* Register Button */}
                         <Animated.View style={[styles.registerButtonWrapper, buttonTransformStyle]}>

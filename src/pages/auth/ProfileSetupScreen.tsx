@@ -11,12 +11,14 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
 import { SoundMateLightColors } from '../../../constants/theme';
 import { authService } from '../../api';
+import DateField from '../../components/ui/DateField';
+import FormTextField from '../../components/ui/FormTextField';
+import SelectField from '../../components/ui/SelectField';
 import { showToast } from '../../components/ui/Toast';
 
 interface ProfileSetupScreenProps {
@@ -202,46 +204,35 @@ export default function ProfileSetupScreen({
                     {/* Form Section */}
                     <View style={styles.formContainer}>
                         {/* Phone Input */}
-                        <View style={styles.inputContainer}>
-                            <Ionicons
-                                name="call-outline"
-                                size={22}
-                                color={SoundMateLightColors.textPrimary}
-                                style={styles.inputIcon}
-                            />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Số điện thoại"
-                                placeholderTextColor={SoundMateLightColors.textPrimary}
-                                value={phone}
-                                onChangeText={setPhone}
-                                keyboardType="phone-pad"
-                                maxLength={20}
-                            />
-                        </View>
+                        <FormTextField
+                            inputContainerStyle={styles.inputContainer}
+                            style={styles.input}
+                            leftIconName="call-outline"
+                            leftIconSize={22}
+                            leftIconColor={SoundMateLightColors.textPrimary}
+                            placeholder="Số điện thoại"
+                            placeholderTextColor={SoundMateLightColors.textPrimary}
+                            value={phone}
+                            onChangeText={setPhone}
+                            keyboardType="phone-pad"
+                            maxLength={20}
+                        />
 
                         {/* Gender Picker */}
-                        <TouchableOpacity
-                            style={styles.inputContainer}
+                        <SelectField
+                            containerStyle={styles.inputContainer}
                             onPress={() => setShowGenderPicker(!showGenderPicker)}
                             activeOpacity={0.7}
-                        >
-                            <Ionicons
-                                name="male-female-outline"
-                                size={22}
-                                color={SoundMateLightColors.textPrimary}
-                                style={styles.inputIcon}
-                            />
-                            <Text
-                                style={[
-                                    styles.input,
-                                    styles.pickerText,
-                                    !gender && styles.placeholderText,
-                                ]}
-                            >
-                                {getGenderLabel(gender)}
-                            </Text>
-                        </TouchableOpacity>
+                            value={getGenderLabel(gender)}
+                            isPlaceholder={!gender}
+                            leftIconName="male-female-outline"
+                            leftIconSize={22}
+                            leftIconColor={SoundMateLightColors.textPrimary}
+                            leftIconStyle={styles.inputIcon}
+                            valueTextStyle={[styles.input, styles.pickerText]}
+                            placeholderTextStyle={styles.placeholderText}
+                            showChevron={false}
+                        />
 
                         {/* Gender Options */}
                         {showGenderPicker && (
@@ -268,27 +259,20 @@ export default function ProfileSetupScreen({
                         )}
 
                         {/* Date of Birth Picker */}
-                        <TouchableOpacity
-                            style={styles.inputContainer}
+                        <DateField
+                            containerStyle={styles.inputContainer}
                             onPress={() => setShowDatePicker(true)}
                             activeOpacity={0.7}
-                        >
-                            <Ionicons
-                                name="calendar-outline"
-                                size={22}
-                                color={SoundMateLightColors.textPrimary}
-                                style={styles.inputIcon}
-                            />
-                            <Text
-                                style={[
-                                    styles.input,
-                                    styles.pickerText,
-                                    !dateOfBirth && styles.placeholderText,
-                                ]}
-                            >
-                                {formatDate(dateOfBirth)}
-                            </Text>
-                        </TouchableOpacity>
+                            value={formatDate(dateOfBirth)}
+                            isPlaceholder={!dateOfBirth}
+                            leftIconName="calendar-outline"
+                            leftIconSize={22}
+                            leftIconColor={SoundMateLightColors.textPrimary}
+                            leftIconStyle={styles.inputIcon}
+                            valueTextStyle={[styles.input, styles.pickerText]}
+                            placeholderTextStyle={styles.placeholderText}
+                            showChevron={false}
+                        />
                         {showDatePicker && (
                             <DateTimePicker
                                 value={dateOfBirth || new Date(2000, 0, 1)}
@@ -301,19 +285,18 @@ export default function ProfileSetupScreen({
                         )}
 
                         {/* Bio Input */}
-                        <View style={[styles.inputContainer, styles.bioContainer]}>
-                            <TextInput
-                                style={[styles.input, styles.bioInput]}
-                                placeholder="Tiểu sử"
-                                placeholderTextColor={SoundMateLightColors.textPrimary}
-                                value={bio}
-                                onChangeText={setBio}
-                                multiline
-                                numberOfLines={4}
-                                maxLength={500}
-                                textAlignVertical="top"
-                            />
-                        </View>
+                        <FormTextField
+                            inputContainerStyle={[styles.inputContainer, styles.bioContainer]}
+                            style={[styles.input, styles.bioInput]}
+                            placeholder="Tiểu sử"
+                            placeholderTextColor={SoundMateLightColors.textPrimary}
+                            value={bio}
+                            onChangeText={setBio}
+                            multiline
+                            numberOfLines={4}
+                            maxLength={500}
+                            textAlignVertical="top"
+                        />
                     </View>
 
                     {/* Action Buttons */}

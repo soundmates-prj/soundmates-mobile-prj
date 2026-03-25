@@ -12,11 +12,11 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
 import { blogService } from '../../api';
+import FormTextField from '../../components/ui/FormTextField';
 import { showToast } from '../../components/ui/Toast';
 import { useUser } from '../../context/UserContext';
 
@@ -279,7 +279,7 @@ export default function CreatePostScreen({ onBack, onPostCreated, editingPost = 
 
                     {/* ── Title input ── */}
                     <View style={styles.titleSection}>
-                        <TextInput
+                        <FormTextField
                             value={title}
                             onChangeText={setTitle}
                             placeholder="Tiêu đề bài viết..."
@@ -292,7 +292,7 @@ export default function CreatePostScreen({ onBack, onPostCreated, editingPost = 
                     </View>
 
                     {/* ── Content input ── */}
-                    <TextInput
+                    <FormTextField
                         value={content}
                         onChangeText={setContent}
                         placeholder="Bạn đang nghĩ gì về âm nhạc hôm nay?"

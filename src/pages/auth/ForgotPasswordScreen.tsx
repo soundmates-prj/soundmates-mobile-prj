@@ -6,11 +6,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { authService } from '../../api';
+import FormTextField from '../../components/ui/FormTextField';
+import OtpCodeInput, { type OtpCodeInputRef } from '../../components/ui/OtpCodeInput';
 import { showToast } from '../../components/ui/Toast';
 
 interface ForgotPasswordScreenProps {
@@ -133,72 +134,18 @@ function StepIndicator({ currentStep }: { currentStep: Step }) {
   );
 }
 
-// ─── OTP Input ──────────────────────────────────────────
-
-function OTPInput({
-  length = 6,
-  value,
-  onChange,
-}: {
-  length?: number;
-  value: string;
-  onChange: (val: string) => void;
-}) {
-  const inputRefs = useRef<(TextInput | null)[]>([]);
-
-  const handleChange = (index: number, char: string) => {
-    if (!/^\d*$/.test(char)) return;
-    const newValue = value.split('');
-    newValue[index] = char;
-    const result = newValue.join('').slice(0, length);
-    onChange(result);
-    if (char && index < length - 1) {
-      inputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleKeyPress = (index: number, key: string) => {
-    if (key === 'Backspace' && !value[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-      const newValue = value.split('');
-      newValue[index - 1] = '';
-      onChange(newValue.join(''));
-    }
-  };
-
-  return (
-    <View style={styles.otpContainer}>
-      {Array.from({ length }).map((_, i) => (
-        <TextInput
-          key={i}
-          ref={(el) => {
-            inputRefs.current[i] = el;
-          }}
-          keyboardType="numeric"
-          maxLength={1}
-          value={value[i] || ''}
-          onChangeText={(char) => handleChange(i, char)}
-          onKeyPress={({ nativeEvent }) => handleKeyPress(i, nativeEvent.key)}
-          style={[styles.otpInput, value[i] && styles.otpInputFilled]}
-        />
-      ))}
-    </View>
-  );
-}
-
 // ─── Main Component ─────────────────────────────────────
 
 export default function ForgotPasswordScreen({
   onBack,
   prefillEmail,
 }: ForgotPasswordScreenProps) {
+  const otpInputRef = useRef<OtpCodeInputRef>(null);
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState(prefillEmail || '');
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
@@ -264,6 +211,7 @@ export default function ForgotPasswordScreen({
       setOtp('');
       setOtpError('');
       setResendTimer(60);
+      otpInputRef.current?.focus(0);
     } else {
       showToast.error('Lỗi', result.message || 'Không thể gửi lại mã OTP');
     }
@@ -357,8 +305,12 @@ export default function ForgotPasswordScreen({
             <View style={styles.fieldContainer}>
               <Text style={styles.label}>EMAIL ĐĂNG KÝ</Text>
               <View style={[styles.inputContainer, error && styles.inputContainerError]}>
-                <Ionicons name="mail-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
-                <TextInput
+                <FormTextField
+                  inputContainerStyle={styles.inputReset}
+                  style={styles.input}
+                  leftIconName="mail-outline"
+                  leftIconSize={18}
+                  leftIconColor="#9CA3AF"
                   value={email}
                   onChangeText={(text) => {
                     setEmail(text);
@@ -369,7 +321,6 @@ export default function ForgotPasswordScreen({
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
-                  style={styles.input}
                 />
                 {isValidEmail && (
                   <Ionicons name="checkmark-circle" size={18} color="#10B981" style={styles.checkIcon} />
@@ -437,12 +388,19 @@ export default function ForgotPasswordScreen({
 
             {/* OTP input */}
             <View style={styles.fieldContainer}>
-              <OTPInput
+              <OtpCodeInput
+                ref={otpInputRef}
                 value={otp}
                 onChange={(val) => {
                   setOtp(val);
                   setOtpError('');
                 }}
+                length={6}
+                autoFocus
+                containerStyle={styles.otpContainer}
+                inputStyle={styles.otpInput}
+                filledInputStyle={styles.otpInputFilled}
+                editable={!isLoading}
               />
             </View>
 
@@ -529,25 +487,20 @@ export default function ForgotPasswordScreen({
             <View style={styles.fieldContainer}>
               <Text style={styles.label}>MẬT KHẨU MỚI</Text>
               <View style={styles.inputContainer}>
-                <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
-                <TextInput
+                <FormTextField
+                  inputContainerStyle={styles.inputReset}
+                  style={styles.input}
+                  leftIconName="lock-closed-outline"
+                  leftIconSize={18}
+                  leftIconColor="#9CA3AF"
                   value={newPassword}
                   onChangeText={setNewPassword}
                   placeholder="Nhập mật khẩu mới"
                   placeholderTextColor="#D1D5DB"
-                  secureTextEntry={!showNewPassword}
-                  style={styles.input}
+                  secureTextEntry
+                  showPasswordToggle
+                  passwordIconColor="#9CA3AF"
                 />
-                <TouchableOpacity
-                  onPress={() => setShowNewPassword(!showNewPassword)}
-                  style={styles.eyeButton}
-                >
-                  <Ionicons
-                    name={showNewPassword ? 'eye-off-outline' : 'eye-outline'}
-                    size={18}
-                    color="#9CA3AF"
-                  />
-                </TouchableOpacity>
               </View>
 
               {/* Strength bar */}
@@ -602,34 +555,29 @@ export default function ForgotPasswordScreen({
                   confirmPassword && passwordsMatch && styles.inputContainerSuccess,
                 ]}
               >
-                <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
-                <TextInput
+                <FormTextField
+                  inputContainerStyle={styles.inputReset}
+                  style={styles.input}
+                  leftIconName="lock-closed-outline"
+                  leftIconSize={18}
+                  leftIconColor="#9CA3AF"
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   placeholder="Nhập lại mật khẩu mới"
                   placeholderTextColor="#D1D5DB"
-                  secureTextEntry={!showConfirmPassword}
-                  style={styles.input}
+                  secureTextEntry
+                  showPasswordToggle
+                  passwordIconColor="#9CA3AF"
+                  rightElement={confirmPassword.length > 0 ? (
+                    <View style={styles.matchIndicator}>
+                      <Ionicons
+                        name={passwordsMatch ? 'checkmark-circle' : 'close-circle'}
+                        size={18}
+                        color={passwordsMatch ? '#10B981' : '#EF4444'}
+                      />
+                    </View>
+                  ) : null}
                 />
-                {confirmPassword.length > 0 && (
-                  <View style={styles.matchIndicator}>
-                    <Ionicons
-                      name={passwordsMatch ? 'checkmark-circle' : 'close-circle'}
-                      size={18}
-                      color={passwordsMatch ? '#10B981' : '#EF4444'}
-                    />
-                  </View>
-                )}
-                <TouchableOpacity
-                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                  style={styles.eyeButton}
-                >
-                  <Ionicons
-                    name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
-                    size={18}
-                    color="#9CA3AF"
-                  />
-                </TouchableOpacity>
               </View>
               {confirmPassword && !passwordsMatch && (
                 <View style={styles.errorContainer}>
@@ -856,6 +804,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: '#1E293B',
+  },
+  inputReset: {
+    flex: 1,
   },
   checkIcon: {
     marginLeft: 8,

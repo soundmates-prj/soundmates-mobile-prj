@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
@@ -11,12 +10,12 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
 import { SoundMateLightColors } from '../../../constants/theme';
 import { authService } from '../../api';
+import FormTextField from '../../components/ui/FormTextField';
 import { showToast } from '../../components/ui/Toast';
 
 interface LoginScreenProps {
@@ -36,7 +35,6 @@ export default function LoginScreen({
 }: LoginScreenProps) {
     const [emailOrUsername, setEmailOrUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
     // Animation values
@@ -60,10 +58,6 @@ export default function LoginScreen({
 
     const dismissKeyboard = useCallback(() => {
         Keyboard.dismiss();
-    }, []);
-
-    const toggleShowPassword = useCallback(() => {
-        setShowPassword(prev => !prev);
     }, []);
 
     const isUnverifiedEmailMessage = useCallback((message: string) => {
@@ -196,55 +190,39 @@ export default function LoginScreen({
                     {/* Login Form */}
                     <View style={styles.formContainer}>
                         {/* Email Input */}
-                        <View style={styles.inputContainer}>
-                            <Ionicons
-                                name="mail-outline"
-                                size={22}
-                                color={SoundMateLightColors.textPrimary}
-                                style={styles.inputIcon}
-                            />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Email"
-                                placeholderTextColor={SoundMateLightColors.textPrimary}
-                                value={emailOrUsername}
-                                onChangeText={setEmailOrUsername}
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                                keyboardType="email-address"
-                                returnKeyType="next"
-                            />
-                        </View>
+                        <FormTextField
+                            inputContainerStyle={styles.inputContainer}
+                            style={styles.input}
+                            leftIconName="mail-outline"
+                            leftIconSize={22}
+                            leftIconColor={SoundMateLightColors.textPrimary}
+                            placeholder="Email"
+                            placeholderTextColor={SoundMateLightColors.textPrimary}
+                            value={emailOrUsername}
+                            onChangeText={setEmailOrUsername}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            keyboardType="email-address"
+                            returnKeyType="next"
+                        />
 
                         {/* Password Input */}
-                        <View style={styles.inputContainer}>
-                            <Ionicons
-                                name="lock-closed-outline"
-                                size={22}
-                                color={SoundMateLightColors.textPrimary}
-                                style={styles.inputIcon}
-                            />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Mật khẩu"
-                                placeholderTextColor={SoundMateLightColors.textPrimary}
-                                value={password}
-                                onChangeText={setPassword}
-                                secureTextEntry={!showPassword}
-                                returnKeyType="done"
-                                onSubmitEditing={handleLogin}
-                            />
-                            <TouchableOpacity
-                                onPress={toggleShowPassword}
-                                style={styles.eyeIcon}
-                            >
-                                <Ionicons
-                                    name={showPassword ? "eye-outline" : "eye-off-outline"}
-                                    size={22}
-                                    color={SoundMateLightColors.textMuted}
-                                />
-                            </TouchableOpacity>
-                        </View>
+                        <FormTextField
+                            inputContainerStyle={styles.inputContainer}
+                            style={styles.input}
+                            leftIconName="lock-closed-outline"
+                            leftIconSize={22}
+                            leftIconColor={SoundMateLightColors.textPrimary}
+                            placeholder="Mật khẩu"
+                            placeholderTextColor={SoundMateLightColors.textPrimary}
+                            value={password}
+                            onChangeText={setPassword}
+                            secureTextEntry
+                            showPasswordToggle
+                            passwordIconColor={SoundMateLightColors.textMuted}
+                            returnKeyType="done"
+                            onSubmitEditing={handleLogin}
+                        />
 
                         {/* Login Button */}
                         <Animated.View style={[styles.loginButtonWrapper, buttonTransformStyle]}>

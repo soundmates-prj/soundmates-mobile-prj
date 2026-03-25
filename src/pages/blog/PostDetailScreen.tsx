@@ -9,10 +9,10 @@ import {
     KeyboardEvent,
     Platform,
     RefreshControl,
+    TextInput as RNTextInput,
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     View
 } from 'react-native';
@@ -23,6 +23,7 @@ import {
     CommentResponse,
     PostStatsResponse
 } from '../../api';
+import FormTextField from '../../components/ui/FormTextField';
 import { useUser } from '../../context/UserContext';
 
 interface PostDetailScreenProps {
@@ -65,7 +66,7 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [replyingTo, setReplyingTo] = useState<{ commentId: string; username: string } | null>(null);
     const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
-    const inputRef = React.useRef<TextInput>(null);
+    const inputRef = React.useRef<RNTextInput>(null);
 
     const fetchData = useCallback(async (refresh = false) => {
         if (refresh) setIsRefreshing(true);
@@ -356,7 +357,8 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                     source={{ uri: `https://api.dicebear.com/7.x/initials/png?seed=me&backgroundColor=55C5F1` }}
                     style={styles.inputAvatar}
                 />
-                <TextInput
+                <FormTextField
+                    containerStyle={styles.inputFieldWrap}
                     ref={inputRef}
                     style={styles.inputField}
                     placeholder="Viết bình luận..."
@@ -619,6 +621,9 @@ const styles = StyleSheet.create({
         minHeight: 40,
         maxHeight: 100,
         fontSize: 14,
+    },
+    inputFieldWrap: {
+        flex: 1,
     },
     sendButton: {
         padding: 8,

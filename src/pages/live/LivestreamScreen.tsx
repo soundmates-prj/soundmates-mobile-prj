@@ -13,7 +13,6 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
@@ -23,6 +22,7 @@ import {
     type NowPlayingData,
     type TrackInfo,
 } from '../../api/livestreamService';
+import FormTextField from '../../components/ui/FormTextField';
 import { showToast } from '../../components/ui/Toast';
 
 interface ChatMessage {
@@ -516,7 +516,7 @@ function RequestSongModal({
               <Ionicons name="close" size={18} color="#1E293B" />
             </TouchableOpacity>
           </View>
-          <TextInput
+          <FormTextField
             value={search}
             onChangeText={setSearch}
             placeholder="Tìm bài hát hoặc nghệ sĩ..."
@@ -591,7 +591,7 @@ function SendPodcastModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
               <Ionicons name="close" size={18} color="#1E293B" />
             </TouchableOpacity>
           </View>
-          <TextInput
+          <FormTextField
             value={podcastContent}
             onChangeText={setPodcastContent}
             placeholder="Nội dung podcast của bạn..."
@@ -1356,7 +1356,8 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
         >
           <View style={styles.bottomBarRow}>
             <View style={styles.inputContainer}>
-              <TextInput
+              <FormTextField
+                containerStyle={styles.chatInputFieldWrap}
                 value={inputMessage}
                 onChangeText={setInputMessage}
                 onSubmitEditing={handleSendMessage}
@@ -1895,6 +1896,9 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#FFFFFF',
     fontSize: 14,
+  },
+  chatInputFieldWrap: {
+    flex: 1,
   },
   sendButton: {
     width: 32,
