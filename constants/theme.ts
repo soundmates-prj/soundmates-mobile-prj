@@ -98,6 +98,44 @@ export const SoundMateLightColors = {
   textInverse: '#FFFFFF',
   textPlaceholder: '#55C5F1',
 
+  // Modern UI Additions
+  glass: {
+    light: 'rgba(255, 255, 255, 0.7)',
+    dark: 'rgba(255, 255, 255, 0.15)',
+    border: 'rgba(255, 255, 255, 0.3)',
+  },
+  shadow: {
+    small: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    medium: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    large: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.15,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+  },
+  radius: {
+    xs: 8,
+    sm: 12,
+    md: 16,
+    lg: 24,
+    xl: 32,
+    full: 9999,
+  },
+
   // Borders
   border: '#55C5F1',
   borderLight: '#D1D5DB',
@@ -117,6 +155,40 @@ export const SoundMateLightColors = {
   gradient: {
     primary: ['#7DD4F5', '#55C5F1'],
     light: ['#FAFAFA', '#FFFFFF'],
+  },
+};
+
+// Add modern properties to SoundMateColors (Dark)
+export const SoundMateDarkColors = {
+  ...SoundMateColors,
+  glass: {
+    light: 'rgba(26, 26, 26, 0.7)',
+    dark: 'rgba(0, 0, 0, 0.3)',
+    border: 'rgba(255, 255, 255, 0.1)',
+  },
+  radius: SoundMateLightColors.radius,
+  shadow: {
+    small: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    medium: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.4,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    large: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.6,
+      shadowRadius: 16,
+      elevation: 8,
+    },
   },
 };
 

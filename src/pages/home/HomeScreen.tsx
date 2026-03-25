@@ -1,8 +1,37 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Image, Linking, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
+import {
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    Image,
+    Linking,
+    Platform,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import Animated, {
+    Extrapolate,
+    interpolate,
+    useAnimatedScrollHandler,
+    useAnimatedStyle,
+    useSharedValue,
+    withRepeat,
+    withSequence,
+    withTiming,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/theme';
+
+const { width } = Dimensions.get('window');
+const HEADER_HEIGHT = 120;
 import {
     blogService,
     favoriteService,
@@ -14,6 +43,7 @@ import {
 } from '../../api';
 import { useTheme } from '../../context/ThemeContext';
 import BlogScreen from '../blog/BlogScreen';
+import { formatTimeAgo } from '../../components/blog/BlogPostCard';
 import CreatePostScreen from '../blog/CreatePostScreen';
 import PostDetailScreen from '../blog/PostDetailScreen';
 import BottomNavigation, { TabName } from '../BottomNavigation';
@@ -45,7 +75,7 @@ type ForumPostItem = {
     time: string;
 };
 
-type AppPalette = typeof SoundMateLightColors | typeof SoundMateColors;
+type AppPalette = typeof SoundMateLightColors | typeof SoundMateDarkColors;
 
 interface SearchSuggestionItem {
     id: string;
@@ -135,62 +165,43 @@ interface SectionHeaderProps {
     onPressSeeAll?: () => void;
 }
 
-function SectionHeader({ title, titleColor = '#0059C5', onPressSeeAll }: SectionHeaderProps) {
+function SectionHeader({ title, titleColor, onPressSeeAll, palette }: { title: string; titleColor?: string; onPressSeeAll?: () => void; palette: AppPalette }) {
     return (
         <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: titleColor }]}>{title}</Text>
-            <TouchableOpacity activeOpacity={0.7} onPress={onPressSeeAll}>
-                <Text style={styles.seeAllText}>Xem tất cả</Text>
+            <Text style={[styles.sectionTitle, { color: titleColor || palette.textPrimary }]}>{title}</Text>
+            <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={onPressSeeAll}
+                style={styles.seeAllButton}
+            >
+                <Text style={[styles.seeAllText, { color: palette.primary }]}>Xem tất cả</Text>
+                <Ionicons name="chevron-forward" size={14} color={palette.primary} />
             </TouchableOpacity>
         </View>
     );
 }
 
-function formatTimeAgo(dateStr: string): string {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMin = Math.floor(diffMs / 60000);
-
-    if (diffMin < 1) return 'Vừa xong';
-    if (diffMin < 60) return `${diffMin} phút`;
-
-    const diffHrs = Math.floor(diffMin / 60);
-    if (diffHrs < 24) return `${diffHrs} giờ`;
-
-    const diffDays = Math.floor(diffHrs / 24);
-    if (diffDays < 7) return `${diffDays} ngày`;
-
-    const diffWeeks = Math.floor(diffDays / 7);
-    if (diffWeeks < 5) return `${diffWeeks} tuần`;
-
-    const diffMonths = Math.floor(diffDays / 30);
-    return `${diffMonths} tháng`;
-}
-
-function PlaylistCard({ item }: { item: PlaylistItem }) {
+function PlaylistCard({ item, palette }: { item: PlaylistItem; palette: AppPalette }) {
     return (
         <TouchableOpacity style={styles.playlistCard} activeOpacity={0.9}>
             <View style={styles.playlistImageWrapper}>
                 <Image source={{ uri: item.image }} style={styles.playlistImage} />
                 <LinearGradient
-                    colors={['rgba(0,0,0,0.72)', 'rgba(0,0,0,0.12)']}
-                    start={{ x: 0, y: 1 }}
-                    end={{ x: 0, y: 0 }}
+                    colors={['transparent', 'rgba(0,0,0,0.6)']}
                     style={styles.playlistOverlay}
                 />
-                <TouchableOpacity style={styles.playIconButton} activeOpacity={0.85}>
-                    <Ionicons name="play" size={16} color="#FFFFFF" style={styles.playIcon} />
-                </TouchableOpacity>
-                <View style={styles.playlistTitleContainer}>
-                    <Text style={styles.playlistTitle} numberOfLines={1}>
-                        {item.title}
-                    </Text>
+                <View style={styles.playIconButton}>
+                    <Ionicons name="play" size={20} color="#FFFFFF" />
                 </View>
             </View>
-            <Text style={styles.playlistSubtitle} numberOfLines={1}>
-                {item.subtitle}
-            </Text>
+            <View style={styles.playlistInfo}>
+                <Text style={[styles.playlistTitle, { color: palette.textPrimary }]} numberOfLines={1}>
+                    {item.title}
+                </Text>
+                <Text style={[styles.playlistSubtitle, { color: palette.textMuted }]} numberOfLines={1}>
+                    {item.subtitle}
+                </Text>
+            </View>
         </TouchableOpacity>
     );
 }
@@ -222,34 +233,23 @@ function ForumPost({
     palette: AppPalette;
     isDarkMode: boolean;
 }) {
-    const badgeText = post.moodTag ? `#${post.moodTag}` : 'Popular';
-
     return (
         <TouchableOpacity
-            style={[styles.forumCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
+            style={[styles.forumCard, { backgroundColor: palette.surface }]}
             activeOpacity={0.9}
             onPress={onPress}
         >
             <View style={styles.forumAuthorRow}>
                 <Image
                     source={{ uri: `https://api.dicebear.com/7.x/initials/png?seed=${post.userId}&backgroundColor=55C5F1` }}
-                    style={[styles.forumAvatar, { borderColor: palette.primary }]}
+                    style={styles.forumAvatar}
                 />
                 <View style={styles.forumAuthorInfo}>
-                    <View style={styles.forumAuthorNameRow}>
-                        <Text style={[styles.forumAuthorName, { color: palette.textPrimary }]} numberOfLines={1}>
-                            {post.userId.substring(0, 8)}...
-                        </Text>
-                        <LinearGradient
-                            colors={[palette.primary, palette.primaryDark]}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={styles.forumBadge}
-                        >
-                            <Text style={styles.forumBadgeText}>{badgeText}</Text>
-                        </LinearGradient>
-                    </View>
+                    <Text style={[styles.forumAuthorName, { color: palette.textPrimary }]}>{post.userId.substring(0, 8)}</Text>
                     <Text style={[styles.forumTime, { color: palette.textMuted }]}>{post.time} trước</Text>
+                </View>
+                <View style={[styles.forumBadge, { backgroundColor: palette.primary + '20' }]}>
+                    <Text style={[styles.forumBadgeText, { color: palette.primary }]}>#{post.moodTag || 'Trending'}</Text>
                 </View>
             </View>
 
@@ -258,20 +258,14 @@ function ForumPost({
             </Text>
 
             <View style={styles.forumActionRow}>
-                <TouchableOpacity
-                    style={[styles.forumActionButton, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}
-                    activeOpacity={0.8}
-                >
-                    <Ionicons name="thumbs-up-outline" size={14} color={palette.textSecondary} />
-                    <Text style={[styles.forumActionText, { color: palette.textPrimary }]}>{post.likes}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.forumActionButton, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}
-                    activeOpacity={0.8}
-                >
-                    <Ionicons name="chatbubble-ellipses-outline" size={14} color={palette.textSecondary} />
-                    <Text style={[styles.forumActionText, { color: palette.textPrimary }]}>{post.comments}</Text>
-                </TouchableOpacity>
+                <View style={styles.forumStat}>
+                    <Ionicons name="heart-outline" size={18} color={palette.textMuted} />
+                    <Text style={[styles.forumStatText, { color: palette.textMuted }]}>{post.likes}</Text>
+                </View>
+                <View style={styles.forumStat}>
+                    <Ionicons name="chatbubble-outline" size={18} color={palette.textMuted} />
+                    <Text style={[styles.forumStatText, { color: palette.textMuted }]}>{post.comments}</Text>
+                </View>
             </View>
         </TouchableOpacity>
     );
@@ -279,7 +273,7 @@ function ForumPost({
 
 export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateToProfile, onNavigateToLive }: HomeScreenProps) {
     const { isDarkMode } = useTheme();
-    const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
+    const palette = isDarkMode ? SoundMateDarkColors : SoundMateLightColors;
     const [activeTab, setActiveTab] = useState<TabName>(initialTab);
     const [showCreatePost, setShowCreatePost] = useState(false);
     const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -295,8 +289,27 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
     const [searchResultBundle, setSearchResultBundle] = useState<SearchResultBundle | null>(null);
     const [isSearchingSuggestions, setIsSearchingSuggestions] = useState(false);
     const [isSearchingResults, setIsSearchingResults] = useState(false);
-    const pulseAnim = useRef(new Animated.Value(1)).current;
     const suggestionRequestIdRef = useRef(0);
+
+    // Animation values
+    const scrollY = useSharedValue(0);
+    const pulseScale = useSharedValue(1);
+
+    const scrollHandler = useAnimatedScrollHandler({
+        onScroll: (event) => {
+            scrollY.value = event.contentOffset.y;
+        },
+    });
+
+    const headerAnimatedStyle = useAnimatedStyle(() => {
+        const opacity = interpolate(scrollY.value, [0, 50], [0, 1], Extrapolate.CLAMP);
+        return { opacity };
+    });
+
+    const brandAnimatedStyle = useAnimatedStyle(() => {
+        const scale = interpolate(scrollY.value, [-50, 0, 100], [1.1, 1, 0.9], Extrapolate.CLAMP);
+        return { transform: [{ scale }] };
+    });
 
     const handleOpenSpotifyLink = useCallback(async (url: string) => {
         try {
@@ -406,27 +419,15 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
     }, [executeSearch]);
 
     useEffect(() => {
-        const loop = Animated.loop(
-            Animated.sequence([
-                Animated.timing(pulseAnim, {
-                    toValue: 1.08,
-                    duration: 850,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(pulseAnim, {
-                    toValue: 1,
-                    duration: 850,
-                    useNativeDriver: true,
-                }),
-            ])
+        pulseScale.value = withRepeat(
+            withSequence(
+                withTiming(1.05, { duration: 1000 }),
+                withTiming(1, { duration: 1000 })
+            ),
+            -1,
+            true
         );
-
-        loop.start();
-
-        return () => {
-            loop.stop();
-        };
-    }, [pulseAnim]);
+    }, [pulseScale]);
 
     useEffect(() => {
         if (initialTab === 'home' || initialTab === 'blog' || initialTab === 'podcast') {
@@ -480,6 +481,7 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
     }, [fetchSearchBundle, makeSuggestions, searchInput, showSearchResults, showSearchScreen]);
 
     const handleTabPress = (tab: TabName) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         setActiveTab(tab);
 
         if (tab === 'profile') {
@@ -609,17 +611,11 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
 
                     {!showSearchResults ? (
                         <ScrollView contentContainerStyle={styles.searchBodyContent} keyboardShouldPersistTaps="handled">
-                            {/* <Text style={[styles.searchSectionTitle, { color: palette.textPrimary }]}>Goi y ket qua</Text> */}
-
                             {isSearchingSuggestions ? (
                                 <View style={styles.searchLoadingBlock}>
                                     <ActivityIndicator size="small" color={palette.primary} />
                                     <Text style={[styles.searchHintText, { color: palette.textSecondary }]}>Đang tìm kiếm...</Text>
                                 </View>
-                            // ) : searchInput.trim().length < SEARCH_MIN_CHARS ? (
-                            //     <Text style={[styles.searchHintText, { color: palette.textSecondary }]}>Nhap it nhat 2 ky tu de bat dau tim kiem.</Text>
-                            // ) : searchSuggestions.length === 0 ? (
-                            //     <Text style={[styles.searchHintText, { color: palette.textSecondary }]}>Chua co goi y phu hop. Bam Tim de xem ket qua day du.</Text>
                             ) : (
                                 searchSuggestions.map((item) => (
                                     <TouchableOpacity
@@ -647,15 +643,6 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
                                     </TouchableOpacity>
                                 ))
                             )}
-
-                            {/* <TouchableOpacity
-                                activeOpacity={0.85}
-                                style={[styles.searchFallbackButton, { borderColor: palette.primary }]}
-                                onPress={handleSubmitSearch}
-                            >
-                                <Ionicons name="open-outline" size={15} color={palette.primary} />
-                                <Text style={[styles.searchFallbackText, { color: palette.primary }]}>Khong chon goi y? Xem ket qua day du</Text>
-                            </TouchableOpacity> */}
                         </ScrollView>
                     ) : (
                         <SearchResultsScreen
@@ -664,171 +651,168 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
                             isLoading={isSearchingResults}
                             onBackToSuggestions={() => setShowSearchResults(false)}
                             onOpenSpotifyLink={handleOpenSpotifyLink}
-                                onAddFavoriteTrack={handleAddFavoriteTrack}
+                            onAddFavoriteTrack={handleAddFavoriteTrack}
                         />
                     )}
                 </View>
             ) : selectedPostId ? (
-                <PostDetailScreen 
-                    postId={selectedPostId} 
-                    onBack={() => setSelectedPostId(null)} 
+                <PostDetailScreen
+                    postId={selectedPostId}
+                    onBack={() => setSelectedPostId(null)}
                 />
             ) : showCreatePost ? (
-                <CreatePostScreen 
-                    onBack={() => setShowCreatePost(false)} 
-                    onPostCreated={() => setShowCreatePost(false)} 
+                <CreatePostScreen
+                    onBack={() => setShowCreatePost(false)}
+                    onPostCreated={() => setShowCreatePost(false)}
                 />
             ) : (
                 <>
-                    {activeTab === 'blog' ? (
-                        <BlogScreen 
-                            onNavigateToCreatePost={() => setShowCreatePost(true)} 
-                            onNavigateToPostDetail={(id) => setSelectedPostId(id)}
-                        />
-                    ) : activeTab === 'podcast' ? (
-                        <PodcastScreen />
-                    ) : (
-                        <ScrollView
-                            showsVerticalScrollIndicator={false}
-                            contentContainerStyle={styles.scrollContent}
-                            refreshControl={
-                                <RefreshControl
-                                    refreshing={isRefreshing}
-                                    onRefresh={() => void handleRefresh()}
-                                    colors={[palette.primary]}
-                                    tintColor={palette.primary}
-                                />
-                            }
-                        >
-                            <LinearGradient
-                                colors={['#3C5F99', '#2D4A7A']}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 1 }}
-                                style={styles.header}
-                            >
-                                <View style={styles.topBar}>
-                                    <View style={styles.brandWrapper}>
+                    {/* Custom Modern Header */}
+                    <View style={styles.headerContainer}>
+                        <Animated.View style={[StyleSheet.absoluteFill, headerAnimatedStyle, { overflow: 'hidden' }]}>
+                            <BlurView intensity={80} tint={isDarkMode ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+                        </Animated.View>
+                        <View style={styles.topBar}>
+                            <Animated.View style={[styles.brandWrapper, brandAnimatedStyle]}>
+                                <Image source={require('../../../assets/logo_notext.png')} style={styles.brandLogoIcon} />
+                                <Text style={[styles.brandText, { color: palette.textPrimary }]}>SoundMates</Text>
+                            </Animated.View>
+                            <View style={styles.headerIcons}>
+                                <TouchableOpacity style={[styles.iconButton, { backgroundColor: palette.surface }]} onPress={openSearch}>
+                                    <Ionicons name="search" size={20} color={palette.textPrimary} />
+                                </TouchableOpacity>
+                                <TouchableOpacity style={[styles.iconButton, { backgroundColor: palette.surface }]}>
+                                    <Ionicons name="notifications-outline" size={20} color={palette.textPrimary} />
+                                    <View style={styles.notifBadge} />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+
+                    <Animated.ScrollView
+                        onScroll={scrollHandler}
+                        scrollEventThrottle={16}
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={styles.scrollContent}
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={isRefreshing}
+                                onRefresh={() => void handleRefresh()}
+                                colors={[palette.primary]}
+                                tintColor={palette.primary}
+                            />
+                        }
+                    >
+                        {activeTab === 'blog' ? (
+                            <BlogScreen
+                                onNavigateToCreatePost={() => setShowCreatePost(true)}
+                                onNavigateToPostDetail={(id) => setSelectedPostId(id)}
+                            />
+                        ) : activeTab === 'podcast' ? (
+                            <PodcastScreen />
+                        ) : (
+                            <>
+                                {/* Greetings */}
+                                <View style={styles.greetingSection}>
+                                    <Text style={[styles.greetingText, { color: palette.textMuted }]}>Chào buổi sáng,</Text>
+                                    <Text style={[styles.userNameText, { color: palette.textPrimary }]}>Âm nhạc hôm nay thế nào?</Text>
+                                </View>
+
+                                {/* Immersive Live Banner */}
+                                <TouchableOpacity
+                                    activeOpacity={0.92}
+                                    onPress={handleLivePress}
+                                    style={styles.liveBannerWrapper}
+                                >
+                                    <LinearGradient
+                                        colors={['#667EEA', '#764BA2', '#F093FB']}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 1 }}
+                                        style={styles.liveBanner}
+                                    >
+                                        <View style={styles.liveBannerContent}>
+                                            <Animated.View style={[styles.liveIndicator, { transform: [{ scale: pulseScale.value }] }]}>
+                                                <View style={styles.liveDot} />
+                                                <Text style={styles.liveLabel}>{isLiveNow ? 'ĐANG LIVE' : 'OFFLINE'}</Text>
+                                            </Animated.View>
+
+                                            <Text style={styles.liveTitle} numberOfLines={2}>
+                                                {liveBannerTitle}
+                                            </Text>
+
+                                            <View style={styles.liveHostRow}>
+                                                <Image
+                                                    source={{ uri: `https://api.dicebear.com/7.x/avataaars/png?seed=${liveBannerHost}` }}
+                                                    style={styles.hostAvatar}
+                                                />
+                                                <Text style={styles.hostName}>{liveBannerHost}</Text>
+                                                <View style={styles.listenerBadge}>
+                                                    <Ionicons name="radio" size={14} color="#FFFFFF" />
+                                                    <Text style={styles.listenerCount}>{liveBannerListeners} người</Text>
+                                                </View>
+                                            </View>
+                                        </View>
                                         <Image
                                             source={require('../../../assets/logo_notext.png')}
-                                            style={styles.brandLogoIcon}
+                                            style={[styles.bannerLogoBg, { opacity: 0.1 }]}
                                         />
-                                        <Image
-                                            source={require('../../../assets/logo_text.png')}
-                                            style={styles.brandLogoText}
-                                        />
-                                    </View>
+                                    </LinearGradient>
+                                </TouchableOpacity>
 
-                                    <View style={styles.headerIcons}>
-                                        <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8} onPress={openSearch}>
-                                            <Ionicons name="search" size={18} color="#FFFFFF" />
-                                        </TouchableOpacity>
-                                        <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8}>
-                                            <Ionicons name="notifications-outline" size={18} color="#FFFFFF" />
-                                        </TouchableOpacity>
+                                <View style={styles.sectionContainer}>
+                                    <SectionHeader title="Top Hit Playlist Live" palette={palette} />
+                                    <ScrollView
+                                        horizontal
+                                        showsHorizontalScrollIndicator={false}
+                                        contentContainerStyle={styles.horizontalList}
+                                    >
+                                        {TOP_HIT_PLAYLISTS.map((item) => (
+                                            <PlaylistCard key={item.id} item={item} palette={palette} />
+                                        ))}
+                                    </ScrollView>
+                                </View>
+
+                                <View style={styles.sectionContainer}>
+                                    <SectionHeader title="Dành cho bạn" palette={palette} />
+                                    <ScrollView
+                                        horizontal
+                                        showsHorizontalScrollIndicator={false}
+                                        contentContainerStyle={styles.horizontalList}
+                                    >
+                                        {PLAYLISTS.map((item) => (
+                                            <PlaylistCard key={item.id} item={item} palette={palette} />
+                                        ))}
+                                    </ScrollView>
+                                </View>
+
+                                <View style={styles.communitySection}>
+                                    <SectionHeader
+                                        title="Cộng đồng"
+                                        palette={palette}
+                                        onPressSeeAll={() => setActiveTab('blog')}
+                                    />
+
+                                    <View style={styles.forumList}>
+                                        {isCommunityLoading ? (
+                                            <ActivityIndicator size="large" color={palette.primary} style={{ marginVertical: 20 }} />
+                                        ) : communityPosts.length === 0 ? (
+                                            <Text style={styles.communityEmptyText}>Chưa có bài viết cộng đồng</Text>
+                                        ) : (
+                                            communityPosts.map((post) => (
+                                                <ForumPost
+                                                    key={post.id}
+                                                    post={post}
+                                                    palette={palette}
+                                                    isDarkMode={isDarkMode}
+                                                    onPress={() => setSelectedPostId(post.id)}
+                                                />
+                                            ))
+                                        )}
                                     </View>
                                 </View>
-                            </LinearGradient>
-
-                            <TouchableOpacity
-                                activeOpacity={0.92}
-                                onPress={handleLivePress}
-                                style={styles.liveBannerContainer}
-                            >
-                                <LinearGradient
-                                    colors={['#667EEA', '#764BA2', '#F093FB']}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={styles.liveBanner}
-                                >
-                                    <Animated.View style={[styles.livePill, { transform: [{ scale: pulseAnim }] }]}>
-                                        <View style={styles.livePillDot} />
-                                        <Text style={styles.livePillText}>{isLiveNow ? 'ĐANG LIVE' : 'OFFLINE'}</Text>
-                                    </Animated.View>
-
-                                    <Text style={styles.liveBannerTitle}>{liveBannerTitle}</Text>
-                                    <Text style={styles.liveBannerHost}>{liveBannerHost}</Text>
-
-                                    <View style={styles.liveBannerMeta}>
-                                        <Ionicons name="radio" size={14} color="rgba(255,255,255,0.92)" />
-                                        <Text style={styles.liveBannerMetaText}>{liveBannerListeners} người</Text>
-                                    </View>
-
-                                    <View style={styles.liveBannerOverlay} />
-                                </LinearGradient>
-                            </TouchableOpacity>
-
-                            <View style={styles.sectionBlock}>
-                                <SectionHeader title="Top Hit Playlist Live" />
-                                <ScrollView
-                                    horizontal
-                                    showsHorizontalScrollIndicator={false}
-                                    contentContainerStyle={styles.horizontalScrollContent}
-                                >
-                                    {TOP_HIT_PLAYLISTS.map((item) => (
-                                        <PlaylistCard key={item.id} item={item} />
-                                    ))}
-                                </ScrollView>
-                            </View>
-
-                            <View style={styles.sectionBlock}>
-                                <SectionHeader title="Playlist của bạn" />
-                                <ScrollView
-                                    horizontal
-                                    showsHorizontalScrollIndicator={false}
-                                    contentContainerStyle={styles.horizontalScrollContent}
-                                >
-                                    {PLAYLISTS.map((item) => (
-                                        <PlaylistCard key={item.id} item={item} />
-                                    ))}
-                                </ScrollView>
-                            </View>
-
-                            <LinearGradient
-                                colors={isDarkMode ? ['#111827', '#0F172A'] : ['#E0F2FE', '#FAFAFA']}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 1 }}
-                                style={styles.podcastSection}
-                            >
-                                <SectionHeader title="Podcast Hot" titleColor="#0E7490" />
-                                <ScrollView
-                                    horizontal
-                                    showsHorizontalScrollIndicator={false}
-                                    contentContainerStyle={styles.horizontalScrollContent}
-                                >
-                                    {PODCASTS.map((item) => (
-                                        <PodcastCard key={item.id} item={item} palette={palette} />
-                                    ))}
-                                </ScrollView>
-                            </LinearGradient>
-
-                            <View style={styles.communitySection}>
-                                <SectionHeader
-                                    title="Cộng đồng"
-                                    titleColor={isDarkMode ? '#BFDBFE' : '#1D4ED8'}
-                                    onPressSeeAll={() => setActiveTab('blog')}
-                                />
-
-                                {isCommunityLoading ? (
-                                    <View style={styles.communityLoadingWrap}>
-                                        <ActivityIndicator size="small" color={palette.primary} />
-                                        <Text style={styles.communityLoadingText}>Đang tải bài viết cộng đồng...</Text>
-                                    </View>
-                                ) : communityPosts.length === 0 ? (
-                                    <Text style={styles.communityEmptyText}>Chưa có bài viết cộng đồng</Text>
-                                ) : (
-                                    communityPosts.map((post) => (
-                                        <ForumPost
-                                            key={post.id}
-                                            post={post}
-                                            palette={palette}
-                                            isDarkMode={isDarkMode}
-                                            onPress={() => setSelectedPostId(post.id)}
-                                        />
-                                    ))
-                                )}
-                            </View>
-                        </ScrollView>
-                    )}
+                            </>
+                        )}
+                    </Animated.ScrollView>
 
                     <BottomNavigation activeTab={activeTab} onTabPress={handleTabPress} onLogout={onLogout} />
                 </>
@@ -840,7 +824,6 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: SoundMateLightColors.background,
     },
     searchScreen: {
         flex: 1,
@@ -1009,6 +992,13 @@ const styles = StyleSheet.create({
     scrollContent: {
         paddingBottom: 114,
     },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        marginBottom: 10,
+    },
     header: {
         paddingHorizontal: 16,
     },
@@ -1023,134 +1013,183 @@ const styles = StyleSheet.create({
         position: 'relative',
         top: 4,
     },
-    brandLogoIcon: {
-        width: 60,
-        height: 60,
+    headerContainer: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: HEADER_HEIGHT,
+        zIndex: 100,
+        paddingTop: Platform.OS === 'ios' ? 50 : 20,
     },
-    brandLogoText: {
-        position: 'relative',
-        bottom: 4,
-        right: 10,
-        width: 104,
-        height: 34,
+    brandLogoIcon: {
+        width: 32,
+        height: 32,
+    },
+    brandText: {
+        fontSize: 22,
+        fontWeight: '800',
+        letterSpacing: -0.5,
     },
     headerIcons: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 10,
     },
-    headerIconButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        alignItems: 'center',
+    iconButton: {
+        width: 42,
+        height: 42,
+        borderRadius: 21,
         justifyContent: 'center',
-        backgroundColor: 'rgba(255,255,255,0.12)',
-        marginLeft: 8,
-    },
-    liveBannerContainer: {
-        marginTop: 16,
-        marginBottom: 14,
-        marginHorizontal: 16,
-        borderRadius: 18,
-        overflow: 'hidden',
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.16,
-        shadowRadius: 14,
-        elevation: 8,
-    },
-    liveBanner: {
-        height: 182,
         alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: 16,
-        position: 'relative',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 5,
+        elevation: 2,
     },
-    livePill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#EF4444',
-        paddingHorizontal: 14,
-        paddingVertical: 7,
-        borderRadius: 999,
-        marginBottom: 12,
-        zIndex: 2,
-    },
-    livePillDot: {
+    notifBadge: {
+        position: 'absolute',
+        top: 10,
+        right: 10,
         width: 8,
         height: 8,
         borderRadius: 4,
-        backgroundColor: '#FFFFFF',
-        marginRight: 7,
+        backgroundColor: '#FF4B2B',
+        borderWidth: 1.5,
+        borderColor: '#FFF',
     },
-    livePillText: {
-        fontSize: 12,
-        fontWeight: '800',
-        color: '#FFFFFF',
+    greetingSection: {
+        paddingHorizontal: 20,
+        marginBottom: 25,
     },
-    liveBannerTitle: {
-        zIndex: 2,
-        fontSize: 21,
-        fontWeight: '800',
-        color: '#FFFFFF',
-        textAlign: 'center',
-        marginBottom: 4,
-    },
-    liveBannerHost: {
-        zIndex: 2,
-        fontSize: 13,
-        color: 'rgba(255,255,255,0.95)',
-        marginBottom: 10,
-    },
-    liveBannerMeta: {
-        zIndex: 2,
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    liveBannerMetaText: {
-        marginLeft: 4,
-        color: 'rgba(255,255,255,0.92)',
-        fontSize: 11,
+    greetingText: {
+        fontSize: 16,
         fontWeight: '500',
     },
-    liveBannerOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.18)',
+    userNameText: {
+        fontSize: 24,
+        fontWeight: '800',
+        letterSpacing: -0.5,
     },
-    sectionBlock: {
-        paddingTop: 10,
-        paddingBottom: 8,
+    liveBannerWrapper: {
+        paddingHorizontal: 20,
+        marginBottom: 30,
     },
-    sectionHeader: {
+    liveBanner: {
+        borderRadius: 28,
+        padding: 24,
+        height: 200,
+        justifyContent: 'center',
+        overflow: 'hidden',
+    },
+    liveBannerContent: {
+        zIndex: 1,
+    },
+    liveIndicator: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 20,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        alignSelf: 'flex-start',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 20,
+        gap: 6,
         marginBottom: 12,
+    },
+    liveDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: '#FF4B2B',
+    },
+    liveLabel: {
+        color: '#FFF',
+        fontSize: 10,
+        fontWeight: '800',
+        letterSpacing: 1,
+    },
+    liveTitle: {
+        color: '#FFF',
+        fontSize: 24,
+        fontWeight: '800',
+        marginBottom: 15,
+        lineHeight: 30,
+    },
+    liveHostRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    hostAvatar: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        borderWidth: 1.5,
+        borderColor: '#FFF',
+    },
+    hostName: {
+        color: '#FFF',
+        fontWeight: '600',
+        fontSize: 14,
+    },
+    listenerBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 10,
+        gap: 4,
+    },
+    listenerCount: {
+        color: '#FFF',
+        fontSize: 11,
+        fontWeight: '700',
+    },
+    bannerLogoBg: {
+        position: 'absolute',
+        right: -20,
+        bottom: -20,
+        width: 150,
+        height: 150,
+    },
+    sectionContainer: {
+        marginBottom: 30,
+    },
+    communitySection: {
+        paddingHorizontal: 20,
+        marginTop: 10,
     },
     sectionTitle: {
         fontSize: 20,
         fontWeight: '800',
+        letterSpacing: -0.3,
+    },
+    seeAllButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
     },
     seeAllText: {
-        fontSize: 12,
+        fontSize: 14,
         fontWeight: '700',
-        color: SoundMateLightColors.primary,
     },
-    horizontalScrollContent: {
-        paddingHorizontal: 20,
+    horizontalList: {
+        paddingLeft: 20,
+        paddingRight: 10,
     },
     playlistCard: {
-        width: 140,
-        marginRight: 12,
+        width: 160,
+        marginRight: 15,
     },
     playlistImageWrapper: {
-        width: 140,
-        height: 140,
-        borderRadius: 16,
+        width: 160,
+        height: 160,
+        borderRadius: 24,
         overflow: 'hidden',
-        backgroundColor: '#D1D5DB',
-        marginBottom: 8,
+        position: 'relative',
+        marginBottom: 10,
     },
     playlistImage: {
         width: '100%',
@@ -1161,175 +1200,116 @@ const styles = StyleSheet.create({
     },
     playIconButton: {
         position: 'absolute',
-        top: 8,
-        right: 8,
-        width: 34,
-        height: 34,
-        borderRadius: 17,
-        backgroundColor: SoundMateLightColors.primary,
+        right: 10,
+        bottom: 10,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(0,0,0,0.4)',
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: SoundMateLightColors.primary,
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.32,
-        shadowRadius: 8,
-        elevation: 5,
     },
-    playIcon: {
-        marginLeft: 1,
-    },
-    playlistTitleContainer: {
-        position: 'absolute',
-        left: 8,
-        right: 8,
-        bottom: 8,
+    playlistInfo: {
+        paddingHorizontal: 4,
     },
     playlistTitle: {
-        color: '#FFFFFF',
-        fontSize: 13,
-        fontWeight: '800',
+        fontSize: 15,
+        fontWeight: '700',
+        marginBottom: 2,
     },
     playlistSubtitle: {
-        fontSize: 11,
-        color: SoundMateLightColors.textSecondary,
-        textAlign: 'center',
-    },
-    podcastSection: {
-        marginTop: 10,
-        paddingTop: 8,
-        paddingBottom: 12,
+        fontSize: 13,
+        fontWeight: '500',
     },
     podcastCard: {
         width: 140,
-        marginRight: 12,
         alignItems: 'center',
+        marginRight: 12,
     },
     podcastImageFrame: {
         width: 120,
         height: 120,
-        borderRadius: 60,
-        borderWidth: 4,
-        borderColor: '#FFFFFF',
-        backgroundColor: '#D1D5DB',
+        borderRadius: 24,
+        borderWidth: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
         overflow: 'hidden',
-        marginBottom: 10,
-        shadowColor: '#0EA5E9',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 10,
-        elevation: 4,
+        marginBottom: 8,
     },
     podcastImage: {
         width: '100%',
         height: '100%',
+        borderRadius: 22,
     },
     podcastTitle: {
-        fontSize: 13,
+        fontSize: 14,
         fontWeight: '700',
-        color: SoundMateLightColors.textPrimary,
-        textAlign: 'center',
-        paddingHorizontal: 4,
     },
     podcastHost: {
-        marginTop: 2,
-        fontSize: 11,
-        color: SoundMateLightColors.textSecondary,
-        textAlign: 'center',
-        paddingHorizontal: 4,
-    },
-    communitySection: {
-        paddingHorizontal: 16,
-        paddingTop: 12,
-    },
-    communityLoadingWrap: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 18,
-    },
-    communityLoadingText: {
-        marginTop: 8,
         fontSize: 12,
-        color: SoundMateLightColors.textSecondary,
+        fontWeight: '500',
     },
-    communityEmptyText: {
-        fontSize: 13,
-        color: SoundMateLightColors.textMuted,
-        textAlign: 'center',
-        paddingVertical: 16,
+    forumList: {
+        gap: 15,
     },
     forumCard: {
-        backgroundColor: SoundMateLightColors.surface,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        padding: 12,
-        marginBottom: 12,
+        borderRadius: 24,
+        padding: 20,
     },
     forumAuthorRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 8,
+        marginBottom: 15,
+    },
+    forumAuthorInfo: {
+        flex: 1,
     },
     forumAvatar: {
         width: 40,
         height: 40,
         borderRadius: 20,
-        borderWidth: 2,
-        borderColor: SoundMateLightColors.primary,
-        marginRight: 10,
-    },
-    forumAuthorInfo: {
-        flex: 1,
-    },
-    forumAuthorNameRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 2,
+        marginRight: 12,
     },
     forumAuthorName: {
-        maxWidth: '60%',
-        fontSize: 13,
+        fontSize: 15,
         fontWeight: '700',
-        color: SoundMateLightColors.textPrimary,
-        marginRight: 8,
-    },
-    forumBadge: {
-        borderRadius: 999,
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-    },
-    forumBadgeText: {
-        color: '#FFFFFF',
-        fontSize: 9,
-        fontWeight: '800',
     },
     forumTime: {
-        fontSize: 10,
-        color: SoundMateLightColors.textMuted,
+        fontSize: 12,
+    },
+    forumBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 10,
+    },
+    forumBadgeText: {
+        fontSize: 11,
+        fontWeight: '800',
     },
     forumPostTitle: {
-        fontSize: 13,
-        color: SoundMateLightColors.textPrimary,
-        lineHeight: 19,
-        marginBottom: 10,
+        fontSize: 17,
+        fontWeight: '700',
+        lineHeight: 24,
+        marginBottom: 15,
     },
     forumActionRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 12,
+        marginTop: 10,
     },
-    forumActionButton: {
+    forumStat: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F3F4F6',
-        borderRadius: 8,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        marginRight: 8,
+        gap: 6,
     },
-    forumActionText: {
-        marginLeft: 5,
-        fontSize: 12,
+    forumStatText: {
+        fontSize: 14,
         fontWeight: '600',
-        color: SoundMateLightColors.textPrimary,
+    },
+    communityEmptyText: {
+        fontSize: 14,
+        color: '#9CA3AF',
+        textAlign: 'center',
     },
 });

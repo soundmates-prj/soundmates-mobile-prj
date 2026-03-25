@@ -1,11 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { registerRootComponent } from 'expo';
 import React, { useCallback, useEffect, useState } from 'react';
-import { StatusBar, StyleSheet } from 'react-native';
+import { StatusBar, StyleSheet, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { showToast, toastConfig } from './components/ui/Toast';
-import { SoundMateColors, SoundMateLightColors } from './constants/theme';
+import { SoundMateDarkColors, SoundMateLightColors } from './constants/theme';
 import { authService, livestreamService, registerUnauthorizedHandler } from './src/api';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { UserProvider, useUser } from './src/context/UserContext';
@@ -35,26 +38,31 @@ const STORAGE_KEYS = {
 };
 
 // Define screens enum
-enum Screen {
-    LOGIN = 'login',
-    HOME = 'home',
-    LIVE = 'live',
-    REGISTER = 'register',
-    OTP = 'otp',
-    PROFILE_SETUP = 'profile_setup',
-    PROFILE = 'profile',
-    FORGOT_PASSWORD = 'forgot_password',
-    SUBSCRIPTION = 'subscription',
-    PAYMENT_CHECKOUT = 'payment_checkout',
-    PAYMENT_RESULT = 'payment_result',
-}
-
 type HomeEntryTab = Extract<TabName, 'home' | 'blog' | 'podcast'>;
+
+type RootStackParamList = {
+    Login: undefined;
+    Register: undefined;
+    OTP: undefined;
+    ProfileSetup: undefined;
+    ForgotPassword: { prefillEmail?: string } | undefined;
+    Home: undefined;
+    Live: undefined;
+    Profile: undefined;
+    Subscription: undefined;
+    PaymentCheckout: undefined;
+    PaymentResult: undefined;
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function AppContent() {
     const { clearUser, refreshUser } = useUser();
     const { isDarkMode } = useTheme();
-    const [currentScreen, setCurrentScreen] = useState<Screen>(Screen.LOGIN);
+    const navigationRef = useNavigationContainerRef<RootStackParamList>();
+    const [currentRouteName, setCurrentRouteName] = useState<string | undefined>(undefined);
+    const [isAuthChecked, setIsAuthChecked] = useState(false);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [userEmail, setUserEmail] = useState<string>('');
     const [pendingPassword, setPendingPassword] = useState<string>('');
     const [isNewRegistration, setIsNewRegistration] = useState<boolean>(false);
@@ -63,20 +71,20 @@ function AppContent() {
     const [selectedPlan, setSelectedPlan] = useState<SelectedPlan | null>(null);
     const [paymentResultType, setPaymentResultType] = useState<'success' | 'failed'>('success');
     const [paymentResultMessage, setPaymentResultMessage] = useState<string>('');
-    const useDarkThemeShell = isDarkMode && currentScreen !== Screen.LIVE;
-    const appBackground = useDarkThemeShell ? SoundMateColors.background : SoundMateLightColors.background;
+    const useDarkThemeShell = isDarkMode && currentRouteName !== 'Live';
+    const appBackground = useDarkThemeShell ? SoundMateDarkColors.background : SoundMateLightColors.background;
 
     // Check for saved tokens on app start
     useEffect(() => {
         const checkAuth = async () => {
             try {
                 const token = await AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
-                if (token) {
-                    // User has a valid token, go to home
-                    setCurrentScreen(Screen.HOME);
-                }
+                setIsAuthenticated(Boolean(token));
             } catch (error) {
                 console.log('Error checking auth:', error);
+                setIsAuthenticated(false);
+            } finally {
+                setIsAuthChecked(true);
             }
         };
         checkAuth();
@@ -175,7 +183,7 @@ function AppContent() {
             return;
         }
 
-        setCurrentScreen(Screen.HOME);
+        setIsAuthenticated(true);
     }, [clearAuthTokens, establishAuthenticatedSession]);
 
     // Handle login attempt with unverified email (error 403)
@@ -194,7 +202,7 @@ function AppContent() {
         }
 
         // Navigate immediately so user can input OTP right away
-        setCurrentScreen(Screen.OTP);
+        navigationRef.navigate('OTP');
 
         // Send verification OTP
         showToast.info('Xác thực email', 'Đang gửi mã xác thực đến email của bạn...');
@@ -228,7 +236,7 @@ function AppContent() {
             }
         }
         setIsNewRegistration(true);
-        setCurrentScreen(Screen.OTP);
+        navigationRef.navigate('OTP');
     }, []);
 
     // Handle OTP verification success
@@ -250,7 +258,7 @@ function AppContent() {
                     if (!sessionReady) {
                         await clearAuthTokens();
                         showToast.error('Đăng nhập thất bại', 'Không nhận được token. Vui lòng đăng nhập lại.');
-                        setCurrentScreen(Screen.LOGIN);
+                        setIsAuthenticated(false);
                         return;
                     }
 
@@ -263,23 +271,23 @@ function AppContent() {
                     // If new registration, go to profile setup; otherwise go to home
                     if (isNewRegistration) {
                         showToast.success('Xác thực thành công!', 'Hãy hoàn thiện hồ sơ của bạn');
-                        setCurrentScreen(Screen.PROFILE_SETUP);
+                        navigationRef.navigate('ProfileSetup');
                     } else {
                         showToast.success('Đăng nhập thành công!', 'Chào mừng bạn quay trở lại!');
-                        setCurrentScreen(Screen.HOME);
+                        setIsAuthenticated(true);
                     }
                 } else {
                     showToast.error('Đăng nhập thất bại', loginResponse.message || 'Vui lòng đăng nhập lại');
-                    setCurrentScreen(Screen.LOGIN);
+                    setIsAuthenticated(false);
                 }
             } catch (error) {
                 console.log('Auto-login error:', error);
                 showToast.error('Lỗi đăng nhập', 'Vui lòng đăng nhập lại');
-                setCurrentScreen(Screen.LOGIN);
+                setIsAuthenticated(false);
             }
         } else {
             // No credentials saved, go to login
-            setCurrentScreen(Screen.LOGIN);
+            setIsAuthenticated(false);
         }
 
         // Reset pending data
@@ -296,99 +304,67 @@ function AppContent() {
     // Handle profile setup complete
     const handleProfileSetupComplete = useCallback(() => {
         showToast.success('Hoàn tất!', 'Hồ sơ của bạn đã được cập nhật');
-        setCurrentScreen(Screen.HOME);
+        setIsAuthenticated(true);
     }, []);
 
     // Handle profile setup skip
     const handleProfileSetupSkip = useCallback(() => {
         showToast.info('Đã bỏ qua', 'Bạn có thể cập nhật hồ sơ sau trong phần cài đặt');
-        setCurrentScreen(Screen.HOME);
+        setIsAuthenticated(true);
     }, []);
-
-    const handleNavigateToRegister = useCallback(() => {
-        setCurrentScreen(Screen.REGISTER);
-    }, []);
-
-    const handleNavigateToLogin = useCallback(() => {
-        setCurrentScreen(Screen.LOGIN);
-    }, []);
-
-    const handleOTPGoBack = useCallback(() => {
-        if (isNewRegistration) {
-            setCurrentScreen(Screen.REGISTER);
-        } else {
-            setCurrentScreen(Screen.LOGIN);
-        }
-    }, [isNewRegistration]);
 
     const handleLogout = useCallback(async () => {
         await clearAuthTokens();
-        setCurrentScreen(Screen.LOGIN);
+        setIsAuthenticated(false);
     }, [clearAuthTokens]);
-
-    const handleNavigateToProfile = useCallback(() => {
-        setCurrentScreen(Screen.PROFILE);
-    }, []);
 
     const handleBackToHome = useCallback((tab: TabName = 'home') => {
         const entryTab: HomeEntryTab = tab === 'blog' || tab === 'podcast' ? tab : 'home';
         setHomeEntryTab(entryTab);
-        setCurrentScreen(Screen.HOME);
-    }, []);
-
-    const handleNavigateToLive = useCallback(() => {
-        setCurrentScreen(Screen.LIVE);
-    }, []);
-
-    const handleNavigateToForgotPassword = useCallback(() => {
-        setCurrentScreen(Screen.FORGOT_PASSWORD);
-    }, []);
-
-    const handleForgotPasswordBack = useCallback(() => {
-        setCurrentScreen(Screen.LOGIN);
+        navigationRef.goBack();
     }, []);
 
     // ─── Payment flow navigation ─────────────────────
     const handleNavigateToSubscription = useCallback(() => {
-        setCurrentScreen(Screen.SUBSCRIPTION);
+        navigationRef.navigate('Subscription');
     }, []);
 
     const handleSubscriptionBack = useCallback(() => {
-        setCurrentScreen(Screen.PROFILE);
+        navigationRef.goBack();
     }, []);
 
     const handleSelectPlan = useCallback((plan: SelectedPlan) => {
         setSelectedPlan(plan);
-        setCurrentScreen(Screen.PAYMENT_CHECKOUT);
+        navigationRef.navigate('PaymentCheckout');
     }, []);
 
     const handlePaymentCheckoutBack = useCallback(() => {
-        setCurrentScreen(Screen.SUBSCRIPTION);
+        navigationRef.goBack();
     }, []);
 
     const handlePaymentSuccess = useCallback(() => {
         setPaymentResultType('success');
         setPaymentResultMessage('');
-        setCurrentScreen(Screen.PAYMENT_RESULT);
+        navigationRef.navigate('PaymentResult');
     }, []);
 
     const handlePaymentFailed = useCallback((reason?: string) => {
         setPaymentResultType('failed');
         setPaymentResultMessage(reason || '');
-        setCurrentScreen(Screen.PAYMENT_RESULT);
+        navigationRef.navigate('PaymentResult');
     }, []);
 
     const handlePaymentResultDone = useCallback(() => {
         setSelectedPlan(null);
         setHomeEntryTab('home');
-        setCurrentScreen(Screen.HOME);
+        navigationRef.navigate('Home');
     }, []);
 
     const handlePaymentRetry = useCallback(() => {
         if (selectedPlan) {
-            setCurrentScreen(Screen.PAYMENT_CHECKOUT);
+            navigationRef.navigate('PaymentCheckout');
         } else {
-            setCurrentScreen(Screen.SUBSCRIPTION);
+            navigationRef.navigate('Subscription');
         }
     }, [selectedPlan]);
 
@@ -402,7 +378,7 @@ function AppContent() {
             await clearAuthTokens();
             setPendingPassword('');
             setIsNewRegistration(false);
-            setCurrentScreen(Screen.LOGIN);
+            setIsAuthenticated(false);
             showToast.warning('Phiên đăng nhập hết hạn', 'Vui lòng đăng nhập lại để tiếp tục');
         });
 
@@ -411,102 +387,18 @@ function AppContent() {
         };
     }, [clearAuthTokens]);
 
-    const renderScreen = () => {
-        switch (currentScreen) {
-            case Screen.LOGIN:
-                return (
-                    <LoginScreen
-                        onLoginSuccess={handleLoginSuccess}
-                        onNavigateToRegister={handleNavigateToRegister}
-                        onUnverifiedEmail={handleUnverifiedEmail}
-                        onNavigateToForgotPassword={handleNavigateToForgotPassword}
-                    />
-                );
-            case Screen.HOME:
-                return (
-                    <HomeScreen
-                        initialTab={homeEntryTab}
-                        onLogout={handleLogout}
-                        onNavigateToProfile={handleNavigateToProfile}
-                        onNavigateToLive={handleNavigateToLive}
-                    />
-                );
-            case Screen.LIVE:
-                return <LivestreamScreen onBack={handleBackToHome} />;
-            case Screen.PROFILE:
-                return (
-                    <ProfileScreen 
-                        onBackToHome={handleBackToHome} 
-                        onNavigateToForgotPassword={handleNavigateToForgotPassword}
-                        onNavigateToSubscription={handleNavigateToSubscription}
-                        onLogout={handleLogout}
-                    />
-                );
-            case Screen.REGISTER:
-                return (
-                    <RegisterScreen
-                        onRegisterSuccess={handleRegisterSuccess}
-                        onNavigateToLogin={handleNavigateToLogin}
-                    />
-                );
-            case Screen.OTP:
-                return (
-                    <OTPScreen
-                        email={userEmail}
-                        onVerifySuccess={handleOTPVerifySuccess}
-                        onNavigateBack={handleOTPGoBack}
-                    />
-                );
-            case Screen.PROFILE_SETUP:
-                return (
-                    <ProfileSetupScreen
-                        onSetupComplete={handleProfileSetupComplete}
-                        onSkip={handleProfileSetupSkip}
-                    />
-                );
-            case Screen.FORGOT_PASSWORD:
-                return (
-                    <ForgotPasswordScreen
-                        onBack={handleForgotPasswordBack}
-                        prefillEmail={userEmail}
-                    />
-                );
-            case Screen.SUBSCRIPTION:
-                return (
-                    <SubscriptionScreen
-                        onBack={handleSubscriptionBack}
-                        onSelectPlan={handleSelectPlan}
-                    />
-                );
-            case Screen.PAYMENT_CHECKOUT:
-                return selectedPlan ? (
-                    <PaymentCheckoutScreen
-                        plan={selectedPlan}
-                        onBack={handlePaymentCheckoutBack}
-                        onPaymentSuccess={handlePaymentSuccess}
-                        onPaymentFailed={handlePaymentFailed}
-                    />
-                ) : null;
-            case Screen.PAYMENT_RESULT:
-                return (
-                    <PaymentResultScreen
-                        type={paymentResultType}
-                        planName={selectedPlan?.name}
-                        message={paymentResultMessage}
-                        onDone={handlePaymentResultDone}
-                        onRetry={paymentResultType === 'failed' ? handlePaymentRetry : undefined}
-                    />
-                );
-            default:
-                return (
-                    <LoginScreen
-                        onLoginSuccess={handleLoginSuccess}
-                        onNavigateToRegister={handleNavigateToRegister}
-                        onUnverifiedEmail={handleUnverifiedEmail}
-                    />
-                );
+    useEffect(() => {
+        if (!isAuthChecked) {
+            return;
         }
-    };
+        if (!navigationRef.isReady()) {
+            return;
+        }
+        navigationRef.reset({
+            index: 0,
+            routes: [{ name: isAuthenticated ? 'Home' : 'Login' }],
+        });
+    }, [isAuthenticated, isAuthChecked, navigationRef]);
 
     return (
         <SafeAreaProvider>
@@ -516,7 +408,132 @@ function AppContent() {
                 translucent
             />
             <SafeAreaView style={[styles.container, { backgroundColor: appBackground }]} edges={['top']}>
-                {renderScreen()}
+                {!isAuthChecked ? (
+                    <View style={styles.placeholder} />
+                ) : (
+                    <NavigationContainer
+                        ref={navigationRef}
+                        onReady={() => setCurrentRouteName(navigationRef.getCurrentRoute()?.name)}
+                        onStateChange={() => setCurrentRouteName(navigationRef.getCurrentRoute()?.name)}
+                    >
+                        <Stack.Navigator
+                            screenOptions={{
+                                headerShown: false,
+                                gestureEnabled: true,
+                                animation: 'slide_from_right',
+                                fullScreenGestureEnabled: true, // Enable full-screen swipe
+                            }}
+                        >
+                            <Stack.Screen name="Login">
+                                {(props) => (
+                                    <LoginScreen
+                                        onLoginSuccess={handleLoginSuccess}
+                                        onNavigateToRegister={() => props.navigation.navigate('Register')}
+                                        onUnverifiedEmail={handleUnverifiedEmail}
+                                        onNavigateToForgotPassword={() => props.navigation.navigate('ForgotPassword', { prefillEmail: userEmail })}
+                                    />
+                                )}
+                            </Stack.Screen>
+
+                            <Stack.Screen name="Register">
+                                {(props) => (
+                                    <RegisterScreen
+                                        onRegisterSuccess={handleRegisterSuccess}
+                                        onNavigateToLogin={() => props.navigation.goBack()}
+                                    />
+                                )}
+                            </Stack.Screen>
+
+                            <Stack.Screen name="OTP">
+                                {(props) => (
+                                    <OTPScreen
+                                        email={userEmail}
+                                        onVerifySuccess={handleOTPVerifySuccess}
+                                        onNavigateBack={() => props.navigation.goBack()}
+                                    />
+                                )}
+                            </Stack.Screen>
+
+                            <Stack.Screen name="ProfileSetup">
+                                {(props) => (
+                                    <ProfileSetupScreen
+                                        onSetupComplete={handleProfileSetupComplete}
+                                        onSkip={handleProfileSetupSkip}
+                                    />
+                                )}
+                            </Stack.Screen>
+
+                            <Stack.Screen name="ForgotPassword">
+                                {(props) => (
+                                    <ForgotPasswordScreen
+                                        onBack={() => props.navigation.goBack()}
+                                        prefillEmail={(props.route.params as any)?.prefillEmail || userEmail}
+                                    />
+                                )}
+                            </Stack.Screen>
+
+                            <Stack.Screen name="Home">
+                                {(props) => (
+                                    <HomeScreen
+                                        initialTab={homeEntryTab}
+                                        onLogout={handleLogout}
+                                        onNavigateToProfile={() => props.navigation.navigate('Profile')}
+                                        onNavigateToLive={() => props.navigation.navigate('Live')}
+                                    />
+                                )}
+                            </Stack.Screen>
+
+                            <Stack.Screen name="Live">
+                                {(props) => <LivestreamScreen onBack={handleBackToHome} />}
+                            </Stack.Screen>
+
+                            <Stack.Screen name="Profile">
+                                {(props) => (
+                                    <ProfileScreen
+                                        onBackToHome={handleBackToHome}
+                                        onNavigateToForgotPassword={() => props.navigation.navigate('ForgotPassword', { prefillEmail: userEmail })}
+                                        onNavigateToSubscription={handleNavigateToSubscription}
+                                        onLogout={handleLogout}
+                                    />
+                                )}
+                            </Stack.Screen>
+
+                            <Stack.Screen name="Subscription">
+                                {(props) => (
+                                    <SubscriptionScreen
+                                        onBack={handleSubscriptionBack}
+                                        onSelectPlan={handleSelectPlan}
+                                    />
+                                )}
+                            </Stack.Screen>
+
+                            <Stack.Screen name="PaymentCheckout">
+                                {(props) =>
+                                    selectedPlan ? (
+                                        <PaymentCheckoutScreen
+                                            plan={selectedPlan}
+                                            onBack={handlePaymentCheckoutBack}
+                                            onPaymentSuccess={handlePaymentSuccess}
+                                            onPaymentFailed={handlePaymentFailed}
+                                        />
+                                    ) : null
+                                }
+                            </Stack.Screen>
+
+                            <Stack.Screen name="PaymentResult">
+                                {(props) => (
+                                    <PaymentResultScreen
+                                        type={paymentResultType}
+                                        planName={selectedPlan?.name}
+                                        message={paymentResultMessage}
+                                        onDone={handlePaymentResultDone}
+                                        onRetry={paymentResultType === 'failed' ? handlePaymentRetry : undefined}
+                                    />
+                                )}
+                            </Stack.Screen>
+                        </Stack.Navigator>
+                    </NavigationContainer>
+                )}
             </SafeAreaView>
             {/* Toast notification component - must be at the end */}
             <Toast config={toastConfig} />
@@ -537,11 +554,13 @@ const styles = StyleSheet.create({
 // Root App component with UserProvider
 function App() {
     return (
-        <ThemeProvider>
-            <UserProvider>
-                <AppContent />
-            </UserProvider>
-        </ThemeProvider>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+            <ThemeProvider>
+                <UserProvider>
+                    <AppContent />
+                </UserProvider>
+            </ThemeProvider>
+        </GestureHandlerRootView>
     );
 }
 

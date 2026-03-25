@@ -1,17 +1,30 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import Animated, {
+  FadeInDown,
+  FadeInUp,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { showToast } from '../../../components/ui/Toast';
+import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/theme';
 import { authService } from '../../api';
+import { useTheme } from '../../context/ThemeContext';
 
 interface ForgotPasswordScreenProps {
   onBack: () => void;
@@ -19,6 +32,8 @@ interface ForgotPasswordScreenProps {
 }
 
 type Step = 'email' | 'otp' | 'newPassword' | 'success';
+
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
 // ─── Helpers ────────────────────────────────────────────
 
@@ -133,65 +148,11 @@ function StepIndicator({ currentStep }: { currentStep: Step }) {
   );
 }
 
-// ─── OTP Input ──────────────────────────────────────────
-
-function OTPInput({
-  length = 6,
-  value,
-  onChange,
-}: {
-  length?: number;
-  value: string;
-  onChange: (val: string) => void;
-}) {
-  const inputRefs = useRef<(TextInput | null)[]>([]);
-
-  const handleChange = (index: number, char: string) => {
-    if (!/^\d*$/.test(char)) return;
-    const newValue = value.split('');
-    newValue[index] = char;
-    const result = newValue.join('').slice(0, length);
-    onChange(result);
-    if (char && index < length - 1) {
-      inputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleKeyPress = (index: number, key: string) => {
-    if (key === 'Backspace' && !value[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-      const newValue = value.split('');
-      newValue[index - 1] = '';
-      onChange(newValue.join(''));
-    }
-  };
-
-  return (
-    <View style={styles.otpContainer}>
-      {Array.from({ length }).map((_, i) => (
-        <TextInput
-          key={i}
-          ref={(el) => {
-            inputRefs.current[i] = el;
-          }}
-          keyboardType="numeric"
-          maxLength={1}
-          value={value[i] || ''}
-          onChangeText={(char) => handleChange(i, char)}
-          onKeyPress={({ nativeEvent }) => handleKeyPress(i, nativeEvent.key)}
-          style={[styles.otpInput, value[i] && styles.otpInputFilled]}
-        />
-      ))}
-    </View>
-  );
-}
-
 // ─── Main Component ─────────────────────────────────────
 
-export default function ForgotPasswordScreen({
-  onBack,
-  prefillEmail,
-}: ForgotPasswordScreenProps) {
+export default function ForgotPasswordScreen({ onBack, prefillEmail }: ForgotPasswordScreenProps) {
+  const { isDarkMode } = useTheme();
+  const palette = isDarkMode ? SoundMateDarkColors : SoundMateLightColors;
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState(prefillEmail || '');
   const [otp, setOtp] = useState('');
@@ -202,13 +163,13 @@ export default function ForgotPasswordScreen({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
-  const [otpError, setOtpError] = useState('');
+
+  const buttonScale = useSharedValue(1);
 
   const strength = useMemo(() => getPasswordStrength(newPassword), [newPassword]);
   const passwordsMatch = newPassword === confirmPassword && confirmPassword.length > 0;
   const allRulesPassed = PASSWORD_RULES.every((rule) => rule.test(newPassword));
 
-  // Resend countdown
   useEffect(() => {
     if (resendTimer <= 0) return;
     const t = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
@@ -217,7 +178,18 @@ export default function ForgotPasswordScreen({
 
   const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-  // ── Step handlers ──
+  const handlePressIn = useCallback(() => {
+    buttonScale.value = withSpring(0.96);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [buttonScale]);
+
+  const handlePressOut = useCallback(() => {
+    buttonScale.value = withSpring(1);
+  }, [buttonScale]);
+
+  const buttonAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: buttonScale.value }],
+  }));
 
   const handleSendOTP = async () => {
     if (!isValidEmail) {
@@ -226,62 +198,35 @@ export default function ForgotPasswordScreen({
     }
     setError('');
     setIsLoading(true);
-
     const result = await authService.forgotPassword(email);
-    console.log('Forgot Password Result:', result);
-
     setIsLoading(false);
-
     if (result.success) {
-      showToast.success('Đã gửi mã OTP', 'Vui lòng kiểm tra email của bạn');
+      showToast.success('Đã gửi mã OTP', 'Kiểm tra email của bạn');
       setResendTimer(60);
       setStep('otp');
     } else {
-      setError(result.message || 'Không thể gửi mã OTP. Vui lòng thử lại.');
-      showToast.error('Lỗi', result.message || 'Không thể gửi mã OTP');
+      setError(result.message || 'Lỗi gửi mã');
     }
   };
 
   const handleVerifyOTP = async () => {
     if (otp.length !== 6) {
-      setOtpError('Vui lòng nhập đủ 6 số');
+      showToast.warning('Lỗi', 'Vui lòng nhập đủ 6 số');
       return;
     }
-    setOtpError('');
     setStep('newPassword');
-  };
-
-  const handleResendOTP = async () => {
-    if (resendTimer > 0) return;
-    setIsLoading(true);
-
-    const result = await authService.forgotPassword(email);
-
-    setIsLoading(false);
-
-    if (result.success) {
-      showToast.success('Đã gửi lại mã OTP', 'Vui lòng kiểm tra email của bạn');
-      setOtp('');
-      setOtpError('');
-      setResendTimer(60);
-    } else {
-      showToast.error('Lỗi', result.message || 'Không thể gửi lại mã OTP');
-    }
   };
 
   const handleResetPassword = async () => {
     if (!allRulesPassed || !passwordsMatch) return;
     setIsLoading(true);
-
     const result = await authService.resetPassword(email, otp, newPassword);
-
     setIsLoading(false);
-
     if (result.success) {
       showToast.success('Thành công', 'Mật khẩu đã được đặt lại');
       setStep('success');
     } else {
-      showToast.error('Lỗi', result.message || 'Không thể đặt lại mật khẩu');
+      showToast.error('Lỗi', result.message);
     }
   };
 
@@ -291,23 +236,31 @@ export default function ForgotPasswordScreen({
     else onBack();
   };
 
-  // ── Success screen ──
-
   if (step === 'success') {
     return (
-      <View style={styles.successContainer}>
-        <View style={styles.successContent}>
-          <View style={styles.successIconContainer}>
-            <Ionicons name="shield-checkmark" size={48} color="#10B981" />
-          </View>
-          <Text style={styles.successTitle}>Đặt lại mật khẩu thành công!</Text>
-          <Text style={styles.successSubtitle}>
-            Mật khẩu của bạn đã được cập nhật.{'\n'}Hãy sử dụng mật khẩu mới để đăng nhập.
-          </Text>
-          <TouchableOpacity onPress={onBack} style={styles.successButton} activeOpacity={0.8}>
-            <Ionicons name="arrow-back" size={18} color="white" />
-            <Text style={styles.successButtonText}>Quay lại đăng nhập</Text>
-          </TouchableOpacity>
+      <View style={styles.container}>
+        <LinearGradient
+          colors={isDarkMode ? ['#020617', '#0B1220', '#000000'] : ['#E0F7FF', '#FFFFFF', '#F0F9FF']}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={styles.successContainer}>
+          <Animated.View entering={FadeInUp.duration(800)} style={styles.successIconCircle}>
+            <Ionicons name="checkmark-circle" size={80} color={palette.success} />
+          </Animated.View>
+          <Animated.View entering={FadeInDown.delay(200).duration(800)}>
+            <Text style={styles.title}>Thành công!</Text>
+            <Text style={styles.subtitle}>Mật khẩu của bạn đã được cập nhật thành công.</Text>
+            <AnimatedTouchableOpacity
+              style={[styles.submitButtonWrapper, buttonAnimatedStyle]}
+              onPressIn={handlePressIn}
+              onPressOut={handlePressOut}
+              onPress={onBack}
+            >
+              <LinearGradient colors={[SoundMateLightColors.primary, SoundMateLightColors.primaryDark]} style={styles.submitButton}>
+                <Text style={styles.submitButtonText}>Quay lại đăng nhập</Text>
+              </LinearGradient>
+            </AnimatedTouchableOpacity>
+          </Animated.View>
         </View>
       </View>
     );
@@ -315,370 +268,154 @@ export default function ForgotPasswordScreen({
 
   return (
     <View style={styles.container}>
-      {/* ── Header ── */}
+      <LinearGradient
+        colors={isDarkMode ? ['#020617', '#0B1220', '#000000'] : ['#E0F7FF', '#FFFFFF', '#F0F9FF']}
+        style={StyleSheet.absoluteFill}
+      />
+
       <View style={styles.header}>
         <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={22} color="#1E293B" />
+          <Ionicons name="chevron-back" size={24} color={palette.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Quên mật khẩu</Text>
       </View>
 
-      {/* ── Step Indicator ── */}
       <StepIndicator currentStep={step} />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-        style={styles.keyboardView}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 120}
-        enabled
-      >
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-        {/* ═══ STEP 1: Email ═══ */}
-        {step === 'email' && (
-          <View style={styles.stepContent}>
-            {/* Illustration */}
-            <View style={styles.illustrationContainer}>
-              <View style={[styles.iconCircle, { backgroundColor: '#55C5F1' + '1A' }]}>
-                <Ionicons name="mail" size={36} color="#55C5F1" />
-              </View>
-              <Text style={styles.stepTitle}>Xác minh email của bạn</Text>
-              <Text style={styles.stepDescription}>
-                Nhập email đã đăng ký tài khoản SoundMates. Chúng tôi sẽ gửi mã xác thực 6 số đến
-                email của bạn.
-              </Text>
-            </View>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-            {/* Email input */}
-            <View style={styles.fieldContainer}>
-              <Text style={styles.label}>EMAIL ĐĂNG KÝ</Text>
-              <View style={[styles.inputContainer, error && styles.inputContainerError]}>
-                <Ionicons name="mail-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
+          {step === 'email' && (
+            <Animated.View entering={FadeInDown.duration(600)}>
+              <View style={styles.illustrationContainer}>
+                <View style={styles.iconCircle}>
+                  <Ionicons name="mail-open" size={40} color={SoundMateLightColors.primary} />
+                </View>
+                <Text style={styles.title}>Nhập email</Text>
+                <Text style={styles.subtitle}>Chúng tôi sẽ gửi mã xác thực đến email của bạn</Text>
+              </View>
+
+              <BlurView intensity={60} tint="light" style={styles.inputWrapper}>
+                <Ionicons name="mail-outline" size={20} color={SoundMateLightColors.primary} style={styles.inputIcon} />
                 <TextInput
+                  style={styles.input}
+                  placeholder="Email đăng ký"
+                  placeholderTextColor={SoundMateLightColors.textMuted}
                   value={email}
-                  onChangeText={(text) => {
-                    setEmail(text);
-                    setError('');
-                  }}
-                  placeholder="example@soundmates.vn"
-                  placeholderTextColor="#D1D5DB"
+                  onChangeText={setEmail}
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  autoCorrect={false}
-                  style={styles.input}
                 />
-                {isValidEmail && (
-                  <Ionicons name="checkmark-circle" size={18} color="#10B981" style={styles.checkIcon} />
-                )}
-              </View>
-              {error && (
-                <View style={styles.errorContainer}>
-                  <Ionicons name="alert-circle" size={12} color="#EF4444" />
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
-              )}
-            </View>
+              </BlurView>
 
-            {/* Info box */}
-            <View style={styles.infoBox}>
-              <Ionicons name="warning" size={16} color="#F59E0B" />
-              <Text style={styles.infoText}>
-                Nếu bạn không nhận được email, hãy kiểm tra thư mục Spam hoặc thử lại sau vài phút.
-              </Text>
-            </View>
-
-            {/* Submit */}
-            <TouchableOpacity
-              onPress={handleSendOTP}
-              disabled={!isValidEmail || isLoading}
-              style={[
-                styles.submitButton,
-                isValidEmail && !isLoading
-                  ? styles.submitButtonEnabled
-                  : styles.submitButtonDisabled,
-              ]}
-              activeOpacity={0.8}
-            >
-              {isLoading ? (
-                <View style={styles.submitButtonContent}>
-                  <Ionicons name="sync" size={20} color="white" />
-                  <Text style={styles.submitButtonText}>Đang gửi...</Text>
-                </View>
-              ) : (
-                <View style={styles.submitButtonContent}>
-                  <Text style={[styles.submitButtonText, !isValidEmail && styles.submitButtonTextDisabled]}>
-                    Gửi mã xác thực
-                  </Text>
-                  <Ionicons name="arrow-forward" size={18} color={isValidEmail ? 'white' : '#D1D5DB'} />
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* ═══ STEP 2: OTP ═══ */}
-        {step === 'otp' && (
-          <View style={styles.stepContent}>
-            {/* Illustration */}
-            <View style={styles.illustrationContainer}>
-              <View style={[styles.iconCircle, { backgroundColor: '#A78BFA' + '1A' }]}>
-                <Ionicons name="phone-portrait" size={36} color="#A78BFA" />
-              </View>
-              <Text style={styles.stepTitle}>Nhập mã xác thực</Text>
-              <Text style={styles.stepDescription}>
-                Mã xác thực 6 số đã được gửi đến{' '}
-                <Text style={styles.emailHighlight}>{maskEmail(email)}</Text>
-              </Text>
-            </View>
-
-            {/* OTP input */}
-            <View style={styles.fieldContainer}>
-              <OTPInput
-                value={otp}
-                onChange={(val) => {
-                  setOtp(val);
-                  setOtpError('');
-                }}
-              />
-            </View>
-
-            {/* OTP Error */}
-            {otpError && (
-              <View style={styles.errorContainerCenter}>
-                <Ionicons name="alert-circle" size={12} color="#EF4444" />
-                <Text style={styles.errorText}>{otpError}</Text>
-              </View>
-            )}
-
-            {/* Resend */}
-            <View style={styles.resendContainer}>
-              <Text style={styles.resendLabel}>Chưa nhận được mã?</Text>
-              {resendTimer > 0 ? (
-                <Text style={styles.resendTimer}>Gửi lại sau {resendTimer}s</Text>
-              ) : (
-                <TouchableOpacity onPress={handleResendOTP} disabled={isLoading}>
-                  <View style={styles.resendButton}>
-                    <Ionicons name="refresh" size={12} color="#55C5F1" />
-                    <Text style={styles.resendButtonText}>Gửi lại mã</Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Submit */}
-            <TouchableOpacity
-              onPress={handleVerifyOTP}
-              disabled={otp.length !== 6 || isLoading}
-              style={[
-                styles.submitButton,
-                otp.length === 6 && !isLoading
-                  ? styles.submitButtonEnabled
-                  : styles.submitButtonDisabled,
-              ]}
-              activeOpacity={0.8}
-            >
-              {isLoading ? (
-                <View style={styles.submitButtonContent}>
-                  <Ionicons name="sync" size={20} color="white" />
-                  <Text style={styles.submitButtonText}>Đang xác thực...</Text>
-                </View>
-              ) : (
-                <View style={styles.submitButtonContent}>
-                  <Text style={[styles.submitButtonText, otp.length !== 6 && styles.submitButtonTextDisabled]}>
-                    Xác nhận
-                  </Text>
-                  <Ionicons name="arrow-forward" size={18} color={otp.length === 6 ? 'white' : '#D1D5DB'} />
-                </View>
-              )}
-            </TouchableOpacity>
-
-            {/* Change email */}
-            <TouchableOpacity
-              onPress={() => {
-                setStep('email');
-                setOtp('');
-                setOtpError('');
-              }}
-              style={styles.changeEmailButton}
-            >
-              <Text style={styles.changeEmailText}>Thay đổi email</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* ═══ STEP 3: New Password ═══ */}
-        {step === 'newPassword' && (
-          <View style={styles.stepContent}>
-            {/* Illustration */}
-            <View style={styles.illustrationContainer}>
-              <View style={[styles.iconCircle, { backgroundColor: '#10B981' + '1A' }]}>
-                <Ionicons name="key" size={36} color="#10B981" />
-              </View>
-              <Text style={styles.stepTitle}>Tạo mật khẩu mới</Text>
-              <Text style={styles.stepDescription}>
-                Chọn mật khẩu mạnh để bảo vệ tài khoản của bạn. Mật khẩu mới không được trùng với
-                mật khẩu cũ.
-              </Text>
-            </View>
-
-            {/* New Password */}
-            <View style={styles.fieldContainer}>
-              <Text style={styles.label}>MẬT KHẨU MỚI</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
-                <TextInput
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                  placeholder="Nhập mật khẩu mới"
-                  placeholderTextColor="#D1D5DB"
-                  secureTextEntry={!showNewPassword}
-                  style={styles.input}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowNewPassword(!showNewPassword)}
-                  style={styles.eyeButton}
-                >
-                  <Ionicons
-                    name={showNewPassword ? 'eye-off-outline' : 'eye-outline'}
-                    size={18}
-                    color="#9CA3AF"
-                  />
-                </TouchableOpacity>
-              </View>
-
-              {/* Strength bar */}
-              {newPassword.length > 0 && (
-                <View style={styles.strengthContainer}>
-                  <View style={styles.strengthBar}>
-                    {[0, 1, 2, 3].map((i) => (
-                      <View
-                        key={i}
-                        style={[
-                          styles.strengthBarSegment,
-                          {
-                            backgroundColor: i < strength.score ? strength.color : '#E5E7EB',
-                          },
-                        ]}
-                      />
-                    ))}
-                  </View>
-                  <Text style={[styles.strengthLabel, { color: strength.color }]}>
-                    {strength.label}
-                  </Text>
-
-                  {/* Rules checklist */}
-                  <View style={styles.rulesContainer}>
-                    {PASSWORD_RULES.map((rule) => {
-                      const passed = rule.test(newPassword);
-                      return (
-                        <View key={rule.id} style={styles.ruleItem}>
-                          <Ionicons
-                            name={passed ? 'checkmark-circle' : 'close-circle'}
-                            size={15}
-                            color={passed ? '#10B981' : '#D1D5DB'}
-                          />
-                          <Text style={[styles.ruleText, { color: passed ? '#10B981' : '#9CA3AF' }]}>
-                            {rule.label}
-                          </Text>
-                        </View>
-                      );
-                    })}
-                  </View>
-                </View>
-              )}
-            </View>
-
-            {/* Confirm Password */}
-            <View style={styles.fieldContainer}>
-              <Text style={styles.label}>XÁC NHẬN MẬT KHẨU MỚI</Text>
-              <View
-                style={[
-                  styles.inputContainer,
-                  confirmPassword && !passwordsMatch && styles.inputContainerError,
-                  confirmPassword && passwordsMatch && styles.inputContainerSuccess,
-                ]}
+              <AnimatedTouchableOpacity
+                style={[styles.submitButtonWrapper, buttonAnimatedStyle]}
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+                onPress={handleSendOTP}
+                disabled={!isValidEmail || isLoading}
               >
-                <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
-                <TextInput
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  placeholder="Nhập lại mật khẩu mới"
-                  placeholderTextColor="#D1D5DB"
-                  secureTextEntry={!showConfirmPassword}
-                  style={styles.input}
-                />
-                {confirmPassword.length > 0 && (
-                  <View style={styles.matchIndicator}>
-                    <Ionicons
-                      name={passwordsMatch ? 'checkmark-circle' : 'close-circle'}
-                      size={18}
-                      color={passwordsMatch ? '#10B981' : '#EF4444'}
-                    />
-                  </View>
-                )}
-                <TouchableOpacity
-                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                  style={styles.eyeButton}
-                >
-                  <Ionicons
-                    name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
-                    size={18}
-                    color="#9CA3AF"
-                  />
-                </TouchableOpacity>
-              </View>
-              {confirmPassword && !passwordsMatch && (
-                <View style={styles.errorContainer}>
-                  <Ionicons name="alert-circle" size={12} color="#EF4444" />
-                  <Text style={styles.errorText}>Mật khẩu xác nhận không khớp</Text>
-                </View>
-              )}
-              {confirmPassword && passwordsMatch && (
-                <View style={styles.successContainer2}>
-                  <Ionicons name="checkmark-circle" size={12} color="#10B981" />
-                  <Text style={styles.successText}>Mật khẩu khớp</Text>
-                </View>
-              )}
-            </View>
+                <LinearGradient colors={[SoundMateLightColors.primary, SoundMateLightColors.primaryDark]} style={styles.submitButton}>
+                  <Text style={styles.submitButtonText}>{isLoading ? 'Đang gửi...' : 'Tiếp tục'}</Text>
+                </LinearGradient>
+              </AnimatedTouchableOpacity>
+            </Animated.View>
+          )}
 
-            {/* Submit */}
-            <TouchableOpacity
-              onPress={handleResetPassword}
-              disabled={!allRulesPassed || !passwordsMatch || isLoading}
-              style={[
-                styles.submitButton,
-                allRulesPassed && passwordsMatch && !isLoading
-                  ? styles.submitButtonEnabled
-                  : styles.submitButtonDisabled,
-              ]}
-              activeOpacity={0.8}
-            >
-              {isLoading ? (
-                <View style={styles.submitButtonContent}>
-                  <Ionicons name="sync" size={20} color="white" />
-                  <Text style={styles.submitButtonText}>Đang xử lý...</Text>
+          {step === 'otp' && (
+            <Animated.View entering={FadeInDown.duration(600)}>
+              <View style={styles.illustrationContainer}>
+                <View style={styles.iconCircle}>
+                  <Ionicons name="shield-checkmark" size={40} color={SoundMateLightColors.primary} />
                 </View>
-              ) : (
-                <View style={styles.submitButtonContent}>
-                  <Ionicons name="shield-checkmark" size={20} color={allRulesPassed && passwordsMatch ? 'white' : '#D1D5DB'} />
-                  <Text
-                    style={[
-                      styles.submitButtonText,
-                      (!allRulesPassed || !passwordsMatch) && styles.submitButtonTextDisabled,
-                    ]}
-                  >
-                    Đặt lại mật khẩu
-                  </Text>
+                <Text style={styles.title}>Xác thực</Text>
+                <Text style={styles.subtitle}>Nhập mã 6 số đã được gửi đến {maskEmail(email)}</Text>
+              </View>
+
+              <BlurView intensity={60} tint="light" style={styles.inputWrapper}>
+                <TextInput
+                  style={[styles.input, { textAlign: 'center', fontSize: 24, letterSpacing: 10 }]}
+                  placeholder="000000"
+                  placeholderTextColor={SoundMateLightColors.textMuted}
+                  value={otp}
+                  onChangeText={setOtp}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                />
+              </BlurView>
+
+              <AnimatedTouchableOpacity
+                style={[styles.submitButtonWrapper, buttonAnimatedStyle]}
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+                onPress={handleVerifyOTP}
+              >
+                <LinearGradient colors={[SoundMateLightColors.primary, SoundMateLightColors.primaryDark]} style={styles.submitButton}>
+                  <Text style={styles.submitButtonText}>Xác nhận</Text>
+                </LinearGradient>
+              </AnimatedTouchableOpacity>
+
+              <TouchableOpacity style={styles.resendButton} disabled={resendTimer > 0}>
+                <Text style={[styles.resendText, resendTimer > 0 && { color: '#AAA' }]}>
+                  {resendTimer > 0 ? `Gửi lại sau ${resendTimer}s` : 'Gửi lại mã'}
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+
+          {step === 'newPassword' && (
+            <Animated.View entering={FadeInDown.duration(600)}>
+              <View style={styles.illustrationContainer}>
+                <View style={styles.iconCircle}>
+                  <Ionicons name="lock-open" size={40} color={SoundMateLightColors.primary} />
                 </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-      </ScrollView>
+                <Text style={styles.title}>Mật khẩu mới</Text>
+                <Text style={styles.subtitle}>Tạo mật khẩu mới an toàn hơn</Text>
+              </View>
+
+              <View style={{ gap: 12 }}>
+                <BlurView intensity={60} tint="light" style={styles.inputWrapper}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Mật khẩu mới"
+                    secureTextEntry={!showNewPassword}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                  />
+                  <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)}>
+                    <Ionicons name={showNewPassword ? "eye-outline" : "eye-off-outline"} size={20} color={SoundMateLightColors.textMuted} />
+                  </TouchableOpacity>
+                </BlurView>
+
+                <BlurView intensity={60} tint="light" style={styles.inputWrapper}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Xác nhận mật khẩu"
+                    secureTextEntry={!showConfirmPassword}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                  />
+                  <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+                    <Ionicons name={showConfirmPassword ? "eye-outline" : "eye-off-outline"} size={20} color={SoundMateLightColors.textMuted} />
+                  </TouchableOpacity>
+                </BlurView>
+              </View>
+
+              <AnimatedTouchableOpacity
+                style={[styles.submitButtonWrapper, buttonAnimatedStyle]}
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+                onPress={handleResetPassword}
+                disabled={!allRulesPassed || !passwordsMatch || isLoading}
+              >
+                <LinearGradient colors={[SoundMateLightColors.primary, SoundMateLightColors.primaryDark]} style={styles.submitButton}>
+                  <Text style={styles.submitButtonText}>{isLoading ? 'Đang cập nhật...' : 'Đổi mật khẩu'}</Text>
+                </LinearGradient>
+              </AnimatedTouchableOpacity>
+            </Animated.View>
+          )}
+
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
@@ -687,48 +424,47 @@ export default function ForgotPasswordScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    height: 52,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    height: 60,
+    marginTop: Platform.OS === 'ios' ? 40 : 0,
   },
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
-    marginRight: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1E293B',
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginLeft: 15,
   },
   keyboardView: {
     flex: 1,
   },
-  scrollView: {
-    flex: 1,
-  },
   scrollContent: {
+    paddingHorizontal: 30,
+    paddingTop: 20,
     paddingBottom: 40,
   },
-
-  // Step Indicator
   stepIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    gap: 8,
+    paddingVertical: 20,
+    gap: 10,
   },
   stepItem: {
     flexDirection: 'row',
@@ -736,366 +472,146 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   stepCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepCircleCompleted: {
-    backgroundColor: '#10B981',
-  },
   stepCircleActive: {
-    backgroundColor: '#55C5F1',
+    backgroundColor: SoundMateLightColors.primary,
   },
   stepCircleInactive: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#E0E0E0',
+  },
+  stepCircleCompleted: {
+    backgroundColor: SoundMateLightColors.success,
   },
   stepNumber: {
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   stepNumberActive: {
-    color: 'white',
+    color: '#FFFFFF',
   },
   stepNumberInactive: {
     color: '#9CA3AF',
   },
   stepLabel: {
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
+    color: '#999',
   },
   stepLabelActive: {
-    color: '#55C5F1',
+    color: SoundMateLightColors.primary,
   },
   stepLabelCompleted: {
-    color: '#10B981',
+    color: SoundMateLightColors.success,
   },
   stepLabelInactive: {
     color: '#9CA3AF',
   },
   stepDivider: {
-    width: 32,
+    width: 20,
     height: 2,
-    borderRadius: 1,
+    backgroundColor: '#E0E0E0',
   },
   stepDividerCompleted: {
-    backgroundColor: '#10B981',
+    backgroundColor: SoundMateLightColors.success,
   },
   stepDividerInactive: {
-    backgroundColor: '#E5E7EB',
-  },
-
-  // Content
-  stepContent: {
-    paddingHorizontal: 20,
+    backgroundColor: '#E0E0E0',
   },
   illustrationContainer: {
     alignItems: 'center',
-    marginBottom: 32,
-    marginTop: 16,
+    marginVertical: 30,
   },
   iconCircle: {
     width: 80,
     height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: SoundMateLightColors.primary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 5,
     marginBottom: 20,
   },
-  stepTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1E293B',
-    marginBottom: 8,
+  title: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1A1A1A',
     textAlign: 'center',
+    marginBottom: 10,
   },
-  stepDescription: {
-    fontSize: 14,
-    color: '#6B7280',
+  subtitle: {
+    fontSize: 15,
+    color: '#666',
     textAlign: 'center',
     lineHeight: 22,
-    maxWidth: 320,
   },
-  emailHighlight: {
-    fontWeight: '600',
-    color: '#1E293B',
-  },
-
-  // Form fields
-  fieldContainer: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#6B7280',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  inputContainer: {
+  inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 16,
+    height: 60,
+    borderRadius: 18,
     paddingHorizontal: 16,
-    height: 52,
-  },
-  inputContainerError: {
-    borderColor: '#EF4444',
-  },
-  inputContainerSuccess: {
-    borderColor: '#10B981',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+    overflow: 'hidden',
+    marginBottom: 20,
   },
   inputIcon: {
     marginRight: 12,
   },
   input: {
     flex: 1,
-    fontSize: 15,
-    color: '#1E293B',
-  },
-  checkIcon: {
-    marginLeft: 8,
-  },
-  eyeButton: {
-    padding: 4,
-    marginLeft: 8,
-  },
-  matchIndicator: {
-    marginRight: 8,
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
-  },
-  errorContainerCenter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  errorText: {
-    fontSize: 12,
-    color: '#EF4444',
-  },
-  successContainer2: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
-  },
-  successText: {
-    fontSize: 12,
-    color: '#10B981',
-  },
-
-  // Info box
-  infoBox: {
-    backgroundColor: '#F59E0B' + '14',
-    borderWidth: 1,
-    borderColor: '#F59E0B' + '33',
-    borderRadius: 16,
-    padding: 16,
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
-  },
-  infoText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#92400E',
-    lineHeight: 18,
-  },
-
-  // OTP Input
-  otpContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'center',
-  },
-  otpInput: {
-    width: 48,
-    height: 56,
-    textAlign: 'center',
-    fontSize: 22,
-    fontWeight: 'bold',
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    backgroundColor: 'white',
-    color: '#1E293B',
-  },
-  otpInputFilled: {
-    borderColor: '#55C5F1',
-    backgroundColor: '#55C5F1' + '0D',
-  },
-
-  // Resend
-  resendContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginVertical: 24,
-  },
-  resendLabel: {
-    fontSize: 13,
-    color: '#6B7280',
-  },
-  resendTimer: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#9CA3AF',
-  },
-  resendButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  resendButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#55C5F1',
-  },
-
-  // Strength
-  strengthContainer: {
-    marginTop: 12,
-  },
-  strengthBar: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 8,
-  },
-  strengthBarSegment: {
-    flex: 1,
-    height: 4,
-    borderRadius: 2,
-  },
-  strengthLabel: {
-    fontSize: 12,
+    fontSize: 16,
+    color: '#1A1A1A',
     fontWeight: '500',
-    marginBottom: 12,
   },
-  rulesContainer: {
-    gap: 8,
-  },
-  ruleItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  ruleText: {
-    fontSize: 13,
-  },
-
-  // Submit button
-  submitButton: {
-    height: 54,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  submitButtonEnabled: {
-    backgroundColor: '#55C5F1',
-    shadowColor: '#55C5F1',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+  submitButtonWrapper: {
+    marginTop: 10,
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: SoundMateLightColors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
     shadowRadius: 12,
-    elevation: 4,
+    elevation: 6,
   },
-  submitButtonDisabled: {
-    backgroundColor: '#F3F4F6',
-  },
-  submitButtonContent: {
-    flexDirection: 'row',
+  submitButton: {
+    height: 60,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
   },
   submitButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: 'white',
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
   },
-  submitButtonTextDisabled: {
-    color: '#D1D5DB',
-  },
-
-  // Change email
-  changeEmailButton: {
-    marginTop: 12,
-    paddingVertical: 12,
+  resendButton: {
+    marginTop: 20,
     alignItems: 'center',
   },
-  changeEmailText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#6B7280',
+  resendText: {
+    color: SoundMateLightColors.primary,
+    fontSize: 15,
+    fontWeight: '700',
   },
-
-  // Success screen
   successContainer: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
-  },
-  successContent: {
     alignItems: 'center',
-    width: '100%',
-    maxWidth: 400,
+    paddingHorizontal: 30,
   },
-  successIconContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#10B981' + '1A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  successTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1E293B',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  successSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 32,
-  },
-  successButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    width: '100%',
-    maxWidth: 280,
-    height: 54,
-    borderRadius: 16,
-    backgroundColor: '#55C5F1',
-    shadowColor: '#55C5F1',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  successButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: 'white',
+  successIconCircle: {
+    marginBottom: 30,
   },
 });
+
+// Removed duplicate styles block that caused "Duplicate identifier 'styles'"

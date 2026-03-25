@@ -1,9 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Image, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
+import Animated, { 
+  useAnimatedStyle, 
+  useSharedValue, 
+  withSpring,
+  interpolate,
+  withTiming
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { SoundMateColors, SoundMateLightColors } from '../../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { useUser } from '../context/UserContext';
 
 export type TabName = 'home' | 'blog' | 'live' | 'podcast' | 'profile';
 
@@ -13,40 +23,66 @@ interface BottomNavigationProps {
   onLogout?: () => void;
 }
 
-interface NavItemProps {
-  icon: keyof typeof Ionicons.glyphMap;
-  iconActive: keyof typeof Ionicons.glyphMap;
-  label: string;
-  isActive: boolean;
-  activeColor: string;
-  inactiveColor: string;
-  onPress: () => void;
-}
+const NavItem = ({ icon, iconActive, label, isActive, palette, onPress }: any) => {
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(0.6);
 
-const NavItem = ({ icon, iconActive, label, isActive, activeColor, inactiveColor, onPress }: NavItemProps) => (
-  <TouchableOpacity style={styles.navItem} onPress={onPress} activeOpacity={0.7}>
-    <View style={styles.iconContainer}>
-      <Ionicons name={isActive ? iconActive : icon} size={24} color={isActive ? activeColor : inactiveColor} />
-    </View>
-    <Text style={[styles.navText, { color: isActive ? activeColor : inactiveColor }, isActive && styles.navTextActive]} numberOfLines={1}>
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
+  useEffect(() => {
+    scale.value = withSpring(isActive ? 1.1 : 1);
+    opacity.value = withTiming(isActive ? 1 : 0.6);
+  }, [isActive]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <TouchableOpacity 
+      style={styles.navItem} 
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onPress();
+      }} 
+      activeOpacity={0.7}
+    >
+      <Animated.View style={[styles.iconContainer, animatedStyle]}>
+        <Ionicons 
+          name={isActive ? iconActive : icon} 
+          size={24} 
+          color={isActive ? palette.primary : palette.textSecondary} 
+        />
+      </Animated.View>
+      <Text style={[
+        styles.navText, 
+        { color: isActive ? palette.primary : palette.textSecondary },
+        isActive && styles.navTextActive
+      ]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+};
 
 export default function BottomNavigation({ activeTab, onTabPress }: BottomNavigationProps) {
   const { isDarkMode } = useTheme();
+  const { user } = useUser();
   const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
 
   return (
-    <View style={[styles.container, { backgroundColor: palette.surface, borderTopColor: palette.border }]}> 
+    <View style={styles.container}>
+      <BlurView 
+        intensity={Platform.OS === 'ios' ? 80 : 100} 
+        style={StyleSheet.absoluteFill} 
+        tint={isDarkMode ? 'dark' : 'light'} 
+      />
+      
       <NavItem
         icon="home-outline"
         iconActive="home"
-        label="Trang chủ"
+        label="Home"
         isActive={activeTab === 'home'}
-        activeColor={palette.primary}
-        inactiveColor={palette.textMuted}
+        palette={palette}
         onPress={() => onTabPress('home')}
       />
 
@@ -55,42 +91,60 @@ export default function BottomNavigation({ activeTab, onTabPress }: BottomNaviga
         iconActive="mic"
         label="Podcast"
         isActive={activeTab === 'podcast'}
-        activeColor={palette.primary}
-        inactiveColor={palette.textMuted}
+        palette={palette}
         onPress={() => onTabPress('podcast')}
       />
 
-      <TouchableOpacity style={styles.navItemCenter} onPress={() => onTabPress('live')} activeOpacity={0.8}>
-        <LinearGradient colors={[palette.primary, palette.primaryDark]} style={styles.navItemCenterGradient}>
-          <Ionicons name="radio" size={28} color="#FFFFFF" />
-        </LinearGradient>
-      </TouchableOpacity>
+      <View style={styles.centerBtnContainer}>
+        <TouchableOpacity 
+          style={styles.navItemCenter} 
+          onPress={() => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            onTabPress('live');
+          }} 
+          activeOpacity={0.8}
+        >
+          <LinearGradient 
+            colors={[palette.primary, '#2DD4BF']} 
+            style={styles.navItemCenterGradient}
+          >
+            <Ionicons name="radio" size={28} color="#FFFFFF" />
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
 
       <NavItem
         icon="newspaper-outline"
         iconActive="newspaper"
         label="Blog"
         isActive={activeTab === 'blog'}
-        activeColor={palette.primary}
-        inactiveColor={palette.textMuted}
+        palette={palette}
         onPress={() => onTabPress('blog')}
       />
 
-      <TouchableOpacity style={styles.navItem} onPress={() => onTabPress('profile')} activeOpacity={0.7}>
-        <View style={styles.iconContainer}>
-          <Image source={{ uri: 'https://i.pravatar.cc/150?img=10' }} style={[styles.userAvatar, { borderColor: palette.primary }]} />
+      <TouchableOpacity 
+        style={styles.navItem} 
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onTabPress('profile');
+        }} 
+        activeOpacity={0.7}
+      >
+        <View style={styles.avatarContainer}>
+          <Image 
+            source={{ uri: user?.profileImageUrl || 'https://i.pravatar.cc/150?img=10' }} 
+            style={[
+              styles.userAvatar, 
+              { borderColor: activeTab === 'profile' ? palette.primary : 'transparent' }
+            ]} 
+          />
         </View>
-        <Text
-          style={[
-            styles.navText,
-            { color: activeTab === 'profile' ? palette.primary : palette.textMuted },
-            activeTab === 'profile' && styles.navTextActive,
-          ]}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.82}
-        >
-          Trang Cá Nhân
+        <Text style={[
+          styles.navText, 
+          { color: activeTab === 'profile' ? palette.primary : palette.textSecondary },
+          activeTab === 'profile' && styles.navTextActive
+        ]}>
+          Hồ sơ
         </Text>
       </TouchableOpacity>
     </View>
@@ -104,15 +158,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     flexDirection: 'row',
-    borderTopWidth: 1,
-    paddingBottom: 10,
+    height: Platform.OS === 'ios' ? 90 : 70,
+    paddingBottom: Platform.OS === 'ios' ? 25 : 10,
     paddingTop: 10,
-    paddingHorizontal: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 10,
+    paddingHorizontal: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(150,150,150,0.2)',
+    overflow: 'hidden',
   },
   navItem: {
     flex: 1,
@@ -120,15 +172,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconContainer: {
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  centerBtnContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   navItemCenter: {
-    flex: 1,
-    alignItems: 'center',
-    marginTop: -18,
+    marginTop: -35,
   },
   navItemCenterGradient: {
     width: 56,
@@ -136,26 +191,32 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: SoundMateLightColors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
     shadowRadius: 12,
-    elevation: 8,
+    elevation: 10,
+    borderWidth: 4,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   navText: {
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 10,
     marginTop: 4,
-    fontWeight: '400',
-    textAlign: 'center',
+    fontWeight: '500',
   },
   navTextActive: {
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  avatarContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    overflow: 'hidden',
   },
   userAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 1,
+    width: '100%',
+    height: '100%',
+    borderRadius: 14,
+    borderWidth: 1.5,
   },
 });

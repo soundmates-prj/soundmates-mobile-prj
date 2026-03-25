@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Image,
@@ -9,8 +10,22 @@ import {
     Text,
     TouchableOpacity,
     View,
+    Animated as RNAnimated,
+    Dimensions,
 } from 'react-native';
+import Animated, { 
+    FadeInDown, 
+    FadeInUp,
+    useAnimatedStyle, 
+    useSharedValue, 
+    withSpring 
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { podcastService } from '../../api';
+import { useTheme } from '../../context/ThemeContext';
+import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
+
+const { width, height } = Dimensions.get('window');
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -48,19 +63,32 @@ const formatDuration = (seconds: number): string => {
 // ─── Component ───────────────────────────────────────────────────
 
 export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProps) {
+  const { isDarkMode } = useTheme();
+  const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
   const [episodes, setEpisodes] = useState<EpisodeVM[]>([]);
   const [loadingEpisodes, setLoadingEpisodes] = useState(false);
+  const [isFollowed, setIsFollowed] = useState(false);
+
+  const scrollY = useRef(new RNAnimated.Value(0)).current;
+
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [150, 250],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+
+  const imageScale = scrollY.interpolate({
+    inputRange: [-100, 0, 100],
+    outputRange: [1.2, 1, 1],
+    extrapolate: 'clamp',
+  });
 
   const fetchEpisodeInfo = useCallback(async () => {
     if (!podcast) return;
 
     try {
       setLoadingEpisodes(true);
-      // Fetch the podcast detail from API - may include episode info in future
       const detail = await podcastService.getById(podcast.id);
-
-      // Currently the API only returns episodeCount, not episode list.
-      // Generate episode placeholders based on the count.
       const count = detail.episodeCount || podcast.episodes || 0;
       const episodeList: EpisodeVM[] = Array.from({ length: Math.min(20, count) }, (_, i) => ({
         id: `${podcast.id}-${i + 1}`,
@@ -71,7 +99,6 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
       setEpisodes(episodeList);
     } catch (err) {
       console.log('[PodcastDetail] fetch error:', err);
-      // Fallback to generated episodes
       const count = podcast.episodes || 6;
       setEpisodes(
         Array.from({ length: Math.min(20, count) }, (_, i) => ({
@@ -89,309 +116,330 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
     fetchEpisodeInfo();
   }, [fetchEpisodeInfo]);
 
-  // ─── No podcast ──────────────────────────────────────────────
+  const handleFollow = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsFollowed(!isFollowed);
+  };
 
-  if (!podcast) {
-    return (
-      <View style={styles.screen}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onBack} activeOpacity={0.8} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={20} color="#1E293B" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Chi tiết Podcast</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-
-        <View style={styles.emptyWrap}>
-          <View style={styles.emptyIconWrap}>
-            <Ionicons name="mic" size={32} color="#D1D5DB" />
-          </View>
-          <Text style={styles.emptyTitle}>Không tìm thấy podcast</Text>
-          <Text style={styles.emptySubtitle}>Podcast đã được gỡ hoặc không còn khả dụng.</Text>
-        </View>
-      </View>
-    );
-  }
-
-  // ─── Render ───────────────────────────────────────────────────
+  if (!podcast) return null;
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} activeOpacity={0.8} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={20} color="#1E293B" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Podcast Letter</Text>
-        <TouchableOpacity activeOpacity={0.8} style={styles.backButton}>
-          <Ionicons name="search" size={18} color="#1E293B" />
-        </TouchableOpacity>
-      </View>
+    <View style={[styles.screen, { backgroundColor: palette.background }]}>
+      {/* Immersive Header Image */}
+      <RNAnimated.View style={[styles.heroContainer, { transform: [{ scale: imageScale }] }]}>
+        <Image source={{ uri: podcast.coverImage }} style={styles.heroImage} blurRadius={10} />
+        <LinearGradient
+            colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.7)', palette.background]}
+            style={StyleSheet.absoluteFill}
+        />
+      </RNAnimated.View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.heroWrap}>
-          <Image source={{ uri: podcast.coverImage }} style={styles.heroImage} />
-          <LinearGradient
-            colors={['rgba(0,0,0,0.70)', 'rgba(0,0,0,0.25)', 'rgba(0,0,0,0.05)']}
-            start={{ x: 0, y: 1 }}
-            end={{ x: 0, y: 0 }}
-            style={styles.heroOverlay}
-          />
-
-          <View style={styles.heroContent}>
-            <Text style={styles.heroTitle}>{podcast.title}</Text>
-            <Text style={styles.heroSubtitle}>{podcast.subtitle}</Text>
-          </View>
+      {/* Sticky Header */}
+      <RNAnimated.View style={[styles.stickyHeader, { opacity: headerOpacity, backgroundColor: palette.surface + 'E6' }]}>
+        <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={isDarkMode ? 'dark' : 'light'} />
+        <View style={styles.headerContent}>
+           <Text style={[styles.stickyTitle, { color: palette.textPrimary }]} numberOfLines={1}>{podcast.title}</Text>
         </View>
+      </RNAnimated.View>
 
-        <View style={styles.hostCard}>
-          <Image source={{ uri: podcast.hostAvatar }} style={styles.hostAvatar} />
-          <View style={styles.hostInfo}>
-            <Text style={styles.hostLabel}>Host</Text>
-            <Text style={styles.hostName}>{podcast.host}</Text>
-          </View>
-          <TouchableOpacity activeOpacity={0.85} style={styles.followButton}>
-            <Ionicons name="heart" size={14} color="#FFFFFF" />
-            <Text style={styles.followText}>Theo dõi</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Back Button */}
+      <TouchableOpacity 
+        onPress={onBack} 
+        activeOpacity={0.7} 
+        style={[styles.backButton, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}
+      >
+        <BlurView intensity={20} style={StyleSheet.absoluteFill} tint={isDarkMode ? 'dark' : 'light'} />
+        <Ionicons name="chevron-back" size={24} color={palette.textPrimary} />
+      </TouchableOpacity>
 
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Ionicons name="mic-outline" size={16} color="#55C5F1" />
-            <Text style={styles.statValue}>{podcast.episodes}</Text>
-            <Text style={styles.statLabel}>Tập</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Ionicons name="sparkles-outline" size={16} color="#55C5F1" />
-            <Text style={styles.statValue}>{podcast.category}</Text>
-            <Text style={styles.statLabel}>Danh mục</Text>
-          </View>
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Danh sách tập</Text>
-          <Text style={styles.sectionCount}>{episodes.length} tập</Text>
-        </View>
-
-        {loadingEpisodes ? (
-          <View style={styles.episodeLoading}>
-            <ActivityIndicator size="small" color="#55C5F1" />
-            <Text style={styles.episodeLoadingText}>Đang tải danh sách tập...</Text>
-          </View>
-        ) : (
-          episodes.map((episode) => (
-            <TouchableOpacity key={episode.id} activeOpacity={0.9} style={styles.episodeCard}>
-              <View style={styles.episodePlay}>
-                <Ionicons name="play" size={16} color="#FFFFFF" style={styles.episodePlayIcon} />
-              </View>
-              <View style={styles.episodeInfo}>
-                <Text style={styles.episodeTitle} numberOfLines={1}>
-                  {episode.title}
-                </Text>
-                <View style={styles.episodeMeta}>
-                  <Ionicons name="time-outline" size={12} color="#9CA3AF" />
-                  <Text style={styles.episodeDuration}>{episode.duration}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))
+      <RNAnimated.ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContent}
+        onScroll={RNAnimated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
         )}
-      </ScrollView>
+        scrollEventThrottle={16}
+      >
+        {/* Main Podcast Info */}
+        <View style={styles.infoSection}>
+          <Animated.View entering={FadeInDown.delay(200)} style={styles.coverWrapper}>
+             <Image source={{ uri: podcast.coverImage }} style={styles.mainCover} />
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.delay(300)} style={styles.titleWrapper}>
+            <Text style={[styles.mainTitle, { color: palette.textPrimary }]}>{podcast.title}</Text>
+            <Text style={[styles.mainSubtitle, { color: palette.textSecondary }]}>{podcast.subtitle}</Text>
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.delay(400)} style={styles.actionRow}>
+            <TouchableOpacity 
+              activeOpacity={0.8} 
+              onPress={handleFollow}
+              style={[styles.followBtn, isFollowed ? { backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.primary } : { backgroundColor: palette.primary }]}
+            >
+              <Ionicons name={isFollowed ? "checkmark" : "add"} size={20} color={isFollowed ? palette.primary : "#FFFFFF"} />
+              <Text style={[styles.followBtnText, { color: isFollowed ? palette.primary : "#FFFFFF" }]}>
+                {isFollowed ? 'Đang theo dõi' : 'Theo dõi'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity activeOpacity={0.8} style={[styles.shareBtn, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+               <Ionicons name="share-outline" size={20} color={palette.textPrimary} />
+            </TouchableOpacity>
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.delay(500)} style={styles.statsContainer}>
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, { color: palette.textPrimary }]}>{podcast.episodes}</Text>
+              <Text style={[styles.statLabel, { color: palette.textSecondary }]}>Tập</Text>
+            </View>
+            <View style={[styles.statDivider, { backgroundColor: palette.border }]} />
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, { color: palette.textPrimary }]}>{podcast.category}</Text>
+              <Text style={[styles.statLabel, { color: palette.textSecondary }]}>Danh mục</Text>
+            </View>
+            <View style={[styles.statDivider, { backgroundColor: palette.border }]} />
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, { color: palette.textPrimary }]}>4.8</Text>
+              <Text style={[styles.statLabel, { color: palette.textSecondary }]}>Đánh giá</Text>
+            </View>
+          </Animated.View>
+        </View>
+
+        {/* Episode List */}
+        <View style={styles.listSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>Danh sách tập</Text>
+            <TouchableOpacity>
+              <Text style={[styles.seeAll, { color: palette.primary }]}>Xem tất cả</Text>
+            </TouchableOpacity>
+          </View>
+
+          {loadingEpisodes ? (
+            <ActivityIndicator size="small" color={palette.primary} style={{ marginTop: 20 }} />
+          ) : (
+            episodes.map((episode, idx) => (
+              <Animated.View key={episode.id} entering={FadeInUp.delay(600 + idx * 50)}>
+                <TouchableOpacity 
+                  activeOpacity={0.7} 
+                  style={[styles.episodeCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
+                  onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                >
+                  <View style={[styles.playCircle, { backgroundColor: palette.primary + '15' }]}>
+                    <Ionicons name="play" size={18} color={palette.primary} style={{ marginLeft: 2 }} />
+                  </View>
+                  <View style={styles.episodeInfo}>
+                    <Text style={[styles.episodeTitle, { color: palette.textPrimary }]} numberOfLines={1}>{episode.title}</Text>
+                    <View style={styles.episodeMeta}>
+                      <Ionicons name="time-outline" size={12} color={palette.textSecondary} />
+                      <Text style={[styles.episodeDuration, { color: palette.textSecondary }]}>{episode.duration}</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity style={styles.moreBtn}>
+                     <Ionicons name="ellipsis-horizontal" size={18} color={palette.textSecondary} />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              </Animated.View>
+            ))
+          )}
+        </View>
+      </RNAnimated.ScrollView>
+
+      {/* Floating Play Button */}
+      <Animated.View entering={FadeInUp.delay(800)} style={styles.floatingPlayWrapper}>
+         <TouchableOpacity 
+           activeOpacity={0.9} 
+           style={[styles.floatingPlayBtn, { backgroundColor: palette.primary }]}
+           onPress={() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)}
+         >
+           <Ionicons name="play" size={28} color="#FFFFFF" style={{ marginLeft: 4 }} />
+           <Text style={styles.floatingPlayText}>Nghe tập mới nhất</Text>
+         </TouchableOpacity>
+      </Animated.View>
     </View>
   );
 }
 
-// ─── Styles ──────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
   },
-  header: {
-    height: 52,
-    paddingHorizontal: 20,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  backButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  headerSpacer: {
-    width: 34,
-    height: 34,
-  },
-  scrollContent: {
-    paddingBottom: 110,
-  },
-  heroWrap: {
-    marginHorizontal: 20,
-    marginTop: 20,
-    borderRadius: 18,
-    overflow: 'hidden',
-    height: 240,
-    position: 'relative',
+  heroContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: height * 0.45,
   },
   heroImage: {
     width: '100%',
     height: '100%',
   },
-  heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  heroContent: {
+  stickyHeader: {
     position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 16,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+    zIndex: 10,
+    justifyContent: 'flex-end',
+    paddingBottom: 12,
   },
-  heroTitle: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  heroSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.86)',
-  },
-  hostCard: {
-    marginHorizontal: 20,
-    marginTop: 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    flexDirection: 'row',
+  headerContent: {
+    paddingHorizontal: 60,
     alignItems: 'center',
   },
-  hostAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    marginRight: 12,
-  },
-  hostInfo: {
-    flex: 1,
-  },
-  hostLabel: {
-    fontSize: 12,
-    color: '#94A3B8',
-    marginBottom: 2,
-  },
-  hostName: {
+  stickyTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1E293B',
   },
-  followButton: {
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#55C5F1',
-    paddingHorizontal: 12,
+  backButton: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    zIndex: 11,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
+    overflow: 'hidden',
   },
-  followText: {
-    marginLeft: 6,
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
+  scrollContent: {
+    paddingTop: height * 0.15,
+    paddingBottom: 150,
   },
-  statsRow: {
-    marginHorizontal: 20,
-    marginTop: 16,
-    flexDirection: 'row',
-  },
-  statCard: {
-    flex: 1,
-    marginHorizontal: 4,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+  infoSection: {
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  coverWrapper: {
+    width: width * 0.6,
+    aspectRatio: 1,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+    marginBottom: 24,
+  },
+  mainCover: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 24,
+  },
+  titleWrapper: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  mainTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 8,
+    letterSpacing: -0.5,
+  },
+  mainSubtitle: {
+    fontSize: 15,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+    lineHeight: 22,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  followBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
     paddingVertical: 12,
-    paddingHorizontal: 6,
+    borderRadius: 14,
+    marginRight: 12,
+  },
+  followBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+  shareBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingVertical: 20,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
   },
   statValue: {
-    marginTop: 6,
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1E293B',
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 4,
   },
   statLabel: {
-    marginTop: 3,
-    fontSize: 10,
-    color: '#94A3B8',
-    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  statDivider: {
+    width: 1,
+    height: 24,
+    opacity: 0.5,
+  },
+  listSection: {
+    marginTop: 20,
+    paddingHorizontal: 20,
   },
   sectionHeader: {
-    marginTop: 22,
-    marginHorizontal: 20,
-    marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#1E293B',
   },
-  sectionCount: {
-    fontSize: 12,
-    color: '#94A3B8',
-    fontWeight: '500',
+  seeAll: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   episodeCard: {
-    marginHorizontal: 20,
-    marginBottom: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    padding: 14,
+    borderRadius: 20,
+    marginBottom: 12,
+    borderWidth: 1,
   },
-  episodePlay: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#55C5F1',
+  playCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
-  },
-  episodePlayIcon: {
-    marginLeft: 1,
   },
   episodeInfo: {
     flex: 1,
+    marginLeft: 14,
   },
   episodeTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1E293B',
+    fontSize: 15,
+    fontWeight: '700',
     marginBottom: 4,
   },
   episodeMeta: {
@@ -399,45 +447,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   episodeDuration: {
-    marginLeft: 4,
     fontSize: 12,
-    color: '#9CA3AF',
+    marginLeft: 4,
   },
-  episodeLoading: {
+  moreBtn: {
+    padding: 8,
+  },
+  floatingPlayWrapper: {
+    position: 'absolute',
+    bottom: 40,
+    left: 20,
+    right: 20,
+    zIndex: 20,
+  },
+  floatingPlayBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 32,
+    height: 60,
+    borderRadius: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 10,
   },
-  episodeLoadingText: {
-    marginLeft: 8,
-    fontSize: 13,
-    color: '#94A3B8',
-  },
-  emptyWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-  emptyIconWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 16,
+  floatingPlayText: {
+    color: '#FFFFFF',
+    fontSize: 17,
     fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 6,
-  },
-  emptySubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    textAlign: 'center',
+    marginLeft: 10,
   },
 });

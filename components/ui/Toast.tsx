@@ -5,6 +5,7 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import {
@@ -14,44 +15,34 @@ import {
     View,
 } from 'react-native';
 import Toast, { ToastConfig, ToastConfigParams } from 'react-native-toast-message';
-import { SoundMateColors } from '../../constants/theme';
+import { SoundMateColors, SoundMateDarkColors, SoundMateLightColors } from '../../constants/theme';
 
 const { width } = Dimensions.get('window');
 
 // Custom toast types
 type ToastType = 'success' | 'error' | 'info' | 'warning';
 
-interface CustomToastProps {
-    type: ToastType;
-    text1?: string;
-    text2?: string;
-}
-
 // Icon configuration for each toast type
 const TOAST_CONFIG = {
     success: {
         icon: 'checkmark-circle' as const,
         colors: ['#10B981', '#059669'] as [string, string],
-        backgroundColor: 'rgba(16, 185, 129, 0.15)',
-        borderColor: 'rgba(16, 185, 129, 0.3)',
+        tint: '#10B981',
     },
     error: {
         icon: 'close-circle' as const,
         colors: ['#EF4444', '#DC2626'] as [string, string],
-        backgroundColor: 'rgba(239, 68, 68, 0.15)',
-        borderColor: 'rgba(239, 68, 68, 0.3)',
+        tint: '#EF4444',
     },
     info: {
         icon: 'information-circle' as const,
-        colors: [SoundMateColors.primary, SoundMateColors.primaryDark] as [string, string],
-        backgroundColor: `rgba(255, 107, 0, 0.15)`,
-        borderColor: `rgba(255, 107, 0, 0.3)`,
+        colors: ['#3B82F6', '#2563EB'] as [string, string],
+        tint: '#3B82F6',
     },
     warning: {
         icon: 'warning' as const,
         colors: ['#F59E0B', '#D97706'] as [string, string],
-        backgroundColor: 'rgba(245, 158, 11, 0.15)',
-        borderColor: 'rgba(245, 158, 11, 0.3)',
+        tint: '#F59E0B',
     },
 };
 
@@ -60,49 +51,45 @@ const CustomToastComponent: React.FC<ToastConfigParams<any> & { type: ToastType 
     type,
     text1,
     text2,
-    hide,
 }) => {
     const config = TOAST_CONFIG[type];
+    const isDarkMode = true; // Defaulting to dark for consistent glass look or we can use context
 
     return (
-        <View style={[styles.toastContainer, {
-            backgroundColor: config.backgroundColor,
-            borderColor: config.borderColor,
-        }]}>
-            {/* Icon with gradient background */}
-            <LinearGradient
-                colors={config.colors}
-                style={styles.iconContainer}
+        <View style={styles.outerContainer}>
+            <BlurView
+                intensity={80}
+                tint={isDarkMode ? 'dark' : 'light'}
+                style={styles.toastContainer}
             >
-                <Ionicons
-                    name={config.icon}
-                    size={24}
-                    color="#FFFFFF"
-                />
-            </LinearGradient>
+                <View style={[styles.indicator, { backgroundColor: config.tint }]} />
 
-            {/* Text content */}
-            <View style={styles.textContainer}>
-                {text1 && (
-                    <Text style={styles.title} numberOfLines={1}>
-                        {text1}
-                    </Text>
-                )}
-                {text2 && (
-                    <Text style={styles.message} numberOfLines={2}>
-                        {text2}
-                    </Text>
-                )}
-            </View>
+                {/* Icon with gradient background */}
+                <LinearGradient
+                    colors={config.colors}
+                    style={styles.iconContainer}
+                >
+                    <Ionicons
+                        name={config.icon}
+                        size={20}
+                        color="#FFFFFF"
+                    />
+                </LinearGradient>
 
-            {/* Close button */}
-            <View style={styles.closeButton}>
-                <Ionicons
-                    name="close"
-                    size={18}
-                    color={SoundMateColors.textMuted}
-                />
-            </View>
+                {/* Text content */}
+                <View style={styles.textContainer}>
+                    {text1 && (
+                        <Text style={styles.title} numberOfLines={1}>
+                            {text1}
+                        </Text>
+                    )}
+                    {text2 && (
+                        <Text style={styles.message} numberOfLines={2}>
+                            {text2}
+                        </Text>
+                    )}
+                </View>
+            </BlurView>
         </View>
     );
 };
@@ -172,60 +159,59 @@ export const hideToast = () => {
 };
 
 const styles = StyleSheet.create({
+    outerContainer: {
+        width: width - 40,
+        height: 'auto',
+        minHeight: 64,
+        marginTop: 10,
+        borderRadius: 20,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+        elevation: 10,
+    },
     toastContainer: {
-        width: width - 32,
-        minHeight: 60,
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
         paddingVertical: 12,
-        borderRadius: 16,
-        borderWidth: 1,
-        marginHorizontal: 16,
-        // Glass effect
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.25,
-        shadowRadius: 16,
-        elevation: 8,
+        paddingHorizontal: 16,
+    },
+    indicator: {
+        position: 'absolute',
+        left: 0,
+        top: 12,
+        bottom: 12,
+        width: 4,
+        borderRadius: 2,
     },
     iconContainer: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 12,
-        // Shadow for icon
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 4,
     },
     textContainer: {
         flex: 1,
         justifyContent: 'center',
     },
     title: {
+        color: '#FFFFFF',
         fontSize: 15,
         fontWeight: '700',
-        color: SoundMateColors.textPrimary,
         marginBottom: 2,
+        letterSpacing: -0.2,
     },
     message: {
+        color: 'rgba(255, 255, 255, 0.7)',
         fontSize: 13,
-        color: SoundMateColors.textSecondary,
+        fontWeight: '500',
         lineHeight: 18,
-    },
-    closeButton: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginLeft: 8,
     },
 });
 
