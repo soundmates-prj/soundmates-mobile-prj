@@ -5,9 +5,9 @@
 
 import { Platform } from 'react-native';
 
-// SoundMate Orange-Black Theme
-const tintColorLight = '#FF6B35'; // Vibrant Orange
-const tintColorDark = '#FF6B35';
+// SoundMate Blue-Black Theme
+const tintColorLight = '#55C5F1'; // Cyan Blue
+const tintColorDark = '#55C5F1';
 
 export const Colors = {
   light: {
@@ -28,17 +28,17 @@ export const Colors = {
   },
 };
 
-// SoundMate Brand Colors - Dark Theme (Original)
+// SoundMate Brand Colors - Dark Theme (Blue Modernized)
 export const SoundMateColors = {
-  // Primary - Vibrant Orange
-  primary: '#FF6B35',
-  primaryDark: '#E55A2B',
-  primaryLight: '#FF8A5C',
+  // Primary - Cyan Blue
+  primary: '#55C5F1',
+  primaryDark: '#3BB5E8',
+  primaryLight: '#7DD4F5',
 
-  // Accent - Golden Orange
-  accent: '#FFB347',
-  accentDark: '#E5A23F',
-  accentLight: '#FFCC80',
+  // Accent - Complementary Blue
+  accent: '#55C5F1',
+  accentDark: '#3BB5E8',
+  accentLight: '#A8E4FA',
 
   // Background - Deep Blacks
   background: '#0D0D0D',
@@ -64,9 +64,9 @@ export const SoundMateColors = {
 
   // Gradients
   gradient: {
-    orange: ['#FF6B35', '#E55A2B'],
-    orangeLight: ['#FF8A5C', '#FF6B35'],
-    orangeGold: ['#FF6B35', '#FFB347'],
+    primary: ['#7DD4F5', '#55C5F1'],
+    blue: ['#55C5F1', '#3BB5E8'],
+    blueLight: ['#A8E4FA', '#55C5F1'],
     dark: ['#0D0D0D', '#1A1A1A', '#0D0D0D'],
   },
 };
@@ -167,29 +167,7 @@ export const SoundMateDarkColors = {
     border: 'rgba(255, 255, 255, 0.1)',
   },
   radius: SoundMateLightColors.radius,
-  shadow: {
-    small: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.2,
-      shadowRadius: 4,
-      elevation: 2,
-    },
-    medium: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.4,
-      shadowRadius: 8,
-      elevation: 4,
-    },
-    large: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.6,
-      shadowRadius: 16,
-      elevation: 8,
-    },
-  },
+  shadow: SoundMateLightColors.shadow,
 };
 
 export const Fonts = Platform.select({

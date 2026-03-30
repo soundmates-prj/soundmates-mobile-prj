@@ -28,9 +28,20 @@ type TabType = 'trending' | 'newest' | 'following';
 interface BlogScreenProps {
     onNavigateToCreatePost?: () => void;
     onNavigateToPostDetail?: (postId: string) => void;
+    paddingTop?: number;
+    paddingBottom?: number;
+    hideStickyHeader?: boolean;
+    onScroll?: any;
 }
 
-export default function BlogScreen({ onNavigateToCreatePost, onNavigateToPostDetail }: BlogScreenProps) {
+export default function BlogScreen({ 
+    onNavigateToCreatePost, 
+    onNavigateToPostDetail,
+    paddingTop = 0,
+    paddingBottom = 0,
+    hideStickyHeader = false,
+    onScroll
+}: BlogScreenProps) {
     const { isDarkMode } = useTheme();
     const palette = isDarkMode ? SoundMateDarkColors : SoundMateLightColors;
     const [activeTab, setActiveTab] = useState<TabType>('trending');
@@ -42,8 +53,17 @@ export default function BlogScreen({ onNavigateToCreatePost, onNavigateToPostDet
 
     const scrollHandler = useAnimatedScrollHandler({
         onScroll: (event) => {
+            if (onScroll) {
+                // If external onScroll is provided (from HomeScreen), let it handle the event
+                onScroll.onScroll(event);
+            }
             scrollY.value = event.contentOffset.y;
         },
+        onBeginDrag: (event) => {
+            if (onScroll?.onBeginDrag) {
+                onScroll.onBeginDrag(event);
+            }
+        }
     });
 
     const headerAnimatedStyle = useAnimatedStyle(() => {
@@ -125,17 +145,46 @@ export default function BlogScreen({ onNavigateToCreatePost, onNavigateToPostDet
     return (
         <View style={[styles.container, { backgroundColor: palette.background }]}>
             {/* Sticky Blurred Header */}
-            <Animated.View style={[styles.stickyHeader, headerAnimatedStyle]}>
-                <BlurView intensity={80} tint={isDarkMode ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-                <Text style={[styles.stickyTitle, { color: palette.textPrimary }]}>Cộng đồng</Text>
-            </Animated.View>
+            {!hideStickyHeader && (
+                <Animated.View style={[styles.stickyHeader, headerAnimatedStyle]}>
+                    <BlurView intensity={80} tint={isDarkMode ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+                    <Text style={[styles.stickyTitle, { color: palette.textPrimary }]}>Cộng đồng</Text>
+                </Animated.View>
+            )}
 
             <Animated.FlatList
                 data={posts}
                 keyExtractor={(item) => item.id}
-                onScroll={scrollHandler}
+                onScroll={onScroll || scrollHandler}
                 scrollEventThrottle={16}
-                ListHeaderComponent={renderHeader}
+                ListHeaderComponent={() => (
+                    <View style={[styles.listHeader, { paddingTop: 10 + paddingTop }]}>
+                        <View style={styles.featuredSection}>
+                            <Text style={[styles.screenTitle, { color: palette.textPrimary }]}>Cộng đồng</Text>
+                            <Text style={[styles.screenSubtitle, { color: palette.textMuted }]}>Khám phá âm nhạc & câu chuyện mới</Text>
+                        </View>
+
+                        <View style={styles.tabsWrapper}>
+                            {(['trending', 'newest', 'following'] as TabType[]).map((tab) => (
+                                <TouchableOpacity
+                                    key={tab}
+                                    onPress={() => handleTabChange(tab)}
+                                    style={[
+                                        styles.tabItem,
+                                        activeTab === tab && { backgroundColor: palette.primary }
+                                    ]}
+                                >
+                                    <Text style={[
+                                        styles.tabText,
+                                        { color: activeTab === tab ? '#FFF' : palette.textMuted }
+                                    ]}>
+                                        {tab === 'trending' ? 'Thịnh hành' : tab === 'newest' ? 'Mới nhất' : 'Đang theo dõi'}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                )}
                 renderItem={({ item }) => (
                     <BlogPostCard
                         post={item}
@@ -143,7 +192,7 @@ export default function BlogScreen({ onNavigateToCreatePost, onNavigateToPostDet
                         onNavigateToDetail={onNavigateToPostDetail}
                     />
                 )}
-                contentContainerStyle={styles.listContent}
+                contentContainerStyle={[styles.listContent, { paddingBottom: 100 + paddingBottom }]}
                 refreshControl={
                     <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={palette.primary} />
                 }
@@ -161,7 +210,7 @@ export default function BlogScreen({ onNavigateToCreatePost, onNavigateToPostDet
 
             {/* Modern FAB */}
             <TouchableOpacity
-                style={[styles.fab, { backgroundColor: palette.primary }]}
+                style={[styles.fab, { backgroundColor: palette.primary, bottom: 100 + paddingBottom }]}
                 onPress={onNavigateToCreatePost}
             >
                 <LinearGradient
@@ -198,22 +247,21 @@ const styles = StyleSheet.create({
         paddingBottom: 100,
     },
     listHeader: {
-        paddingTop: 60,
         paddingHorizontal: 20,
         marginBottom: 20,
     },
     featuredSection: {
-        marginBottom: 25,
+        marginBottom: 16,
     },
     screenTitle: {
-        fontSize: 34,
+        fontSize: 28,
         fontWeight: '800',
         letterSpacing: -1,
     },
     screenSubtitle: {
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '500',
-        marginTop: 5,
+        marginTop: 4,
     },
     tabsWrapper: {
         flexDirection: 'row',

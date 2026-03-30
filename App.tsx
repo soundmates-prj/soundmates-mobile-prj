@@ -12,9 +12,12 @@ import { SoundMateDarkColors, SoundMateLightColors } from './constants/theme';
 import { authService, livestreamService, registerUnauthorizedHandler } from './src/api';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { UserProvider, useUser } from './src/context/UserContext';
+import { AudioPlayerProvider } from './src/context/AudioPlayerContext';
 import {
     ForgotPasswordScreen,
     HomeScreen,
+    HostBroadcastScreen,
+    HostLiveManagerScreen,
     LivestreamScreen,
     LoginScreen,
     OTPScreen,
@@ -24,6 +27,7 @@ import {
     ProfileSetupScreen,
     RegisterScreen,
     SubscriptionScreen,
+    EditProfileScreen,
 } from './src/pages';
 import type { TabName } from './src/pages/BottomNavigation';
 import type { SelectedPlan } from './src/pages/subscription/PaymentCheckoutScreen';
@@ -48,16 +52,19 @@ type RootStackParamList = {
     ForgotPassword: { prefillEmail?: string } | undefined;
     Home: undefined;
     Live: undefined;
+    HostLiveManager: undefined;
+    HostBroadcast: { sessionId: string };
     Profile: undefined;
-    Subscription: undefined;
+    Subscription: { initialTab?: string } | undefined;
     PaymentCheckout: undefined;
     PaymentResult: undefined;
+    EditProfile: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function AppContent() {
-    const { clearUser, refreshUser } = useUser();
+    const { clearUser, refreshUser, user } = useUser();
     const { isDarkMode } = useTheme();
     const navigationRef = useNavigationContainerRef<RootStackParamList>();
     const [currentRouteName, setCurrentRouteName] = useState<string | undefined>(undefined);
@@ -313,6 +320,22 @@ function AppContent() {
         setIsAuthenticated(true);
     }, []);
 
+    // Role-based redirect after login — fires once when user role is available
+    useEffect(() => {
+        if (!isAuthenticated || !isAuthChecked) return;
+        if (!user?.roleName) return;
+
+        // Prevent redirect loop — only redirect if not already on host pages
+        const currentRoute = navigationRef.getCurrentRoute()?.name;
+        if (currentRoute === 'HostLiveManager' || currentRoute === 'HostBroadcast') return;
+
+        const role = user.roleName.toLowerCase();
+        if (role === 'host' || role === 'admin') {
+            navigationRef.navigate('HostLiveManager');
+        }
+        // Members and other roles go to Home (default)
+    }, [isAuthenticated, isAuthChecked, user?.roleName]);
+
     const handleLogout = useCallback(async () => {
         await clearAuthTokens();
         setIsAuthenticated(false);
@@ -487,12 +510,33 @@ function AppContent() {
                                 {(props) => <LivestreamScreen onBack={handleBackToHome} />}
                             </Stack.Screen>
 
+                            <Stack.Screen name="HostLiveManager">
+                                {(props) => (
+                                    <HostLiveManagerScreen
+                                        onBack={() => props.navigation.navigate('Home')}
+                                        onNavigateToBroadcast={(sessionId) =>
+                                            props.navigation.navigate('HostBroadcast', { sessionId })
+                                        }
+                                    />
+                                )}
+                            </Stack.Screen>
+
+                            <Stack.Screen name="HostBroadcast">
+                                {(props) => (
+                                    <HostBroadcastScreen
+                                        sessionId={(props.route.params as any)?.sessionId || ''}
+                                        onBack={() => props.navigation.navigate('HostLiveManager')}
+                                    />
+                                )}
+                            </Stack.Screen>
+
                             <Stack.Screen name="Profile">
                                 {(props) => (
                                     <ProfileScreen
                                         onBackToHome={handleBackToHome}
                                         onNavigateToForgotPassword={() => props.navigation.navigate('ForgotPassword', { prefillEmail: userEmail })}
                                         onNavigateToSubscription={handleNavigateToSubscription}
+                                        onNavigateToEditProfile={() => props.navigation.navigate('EditProfile')}
                                         onLogout={handleLogout}
                                     />
                                 )}
@@ -531,6 +575,10 @@ function AppContent() {
                                     />
                                 )}
                             </Stack.Screen>
+                            <Stack.Screen name="EditProfile">
+                                {(props) => <EditProfileScreen onBack={() => props.navigation.goBack()} />}
+                            </Stack.Screen>
+
                         </Stack.Navigator>
                     </NavigationContainer>
                 )}
@@ -557,7 +605,9 @@ function App() {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <ThemeProvider>
                 <UserProvider>
-                    <AppContent />
+                    <AudioPlayerProvider>
+                        <AppContent />
+                    </AudioPlayerProvider>
                 </UserProvider>
             </ThemeProvider>
         </GestureHandlerRootView>

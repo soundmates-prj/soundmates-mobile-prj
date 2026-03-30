@@ -127,11 +127,19 @@ let stationBootstrapPromise: Promise<void> | null = null;
 const normalizeNetworkUrl = (url?: string): string => {
   if (!url) return '';
 
-  if (!MAIN_API_HOST || !url.includes('host.docker.internal')) {
-    return url;
+  let result = url;
+
+  // Replace Docker-internal hostname with actual LAN host
+  if (MAIN_API_HOST) {
+    result = result.replace(/host\.docker\.internal/gi, MAIN_API_HOST);
+    // Also replace bare localhost with LAN host (unreachable from physical device)
+    result = result.replace(/\blocalhost\b/gi, MAIN_API_HOST);
+  } else if (API_HOST) {
+    result = result.replace(/host\.docker\.internal/gi, API_HOST);
+    result = result.replace(/\blocalhost\b/gi, API_HOST);
   }
 
-  return url.replace(/host\.docker\.internal/gi, MAIN_API_HOST);
+  return result;
 };
 
 const normalizeTrackInfo = (track: TrackInfo): TrackInfo => ({
@@ -307,6 +315,63 @@ export const livestreamService = {
   // Live session stream URLs can contain host.docker.internal in dev environments.
   normalizeStreamUrl(streamUrl?: string): string {
     return normalizeNetworkUrl(streamUrl);
+  },
+
+  // ── Host APIs ─────────────────────────────────────────────────
+
+  async createLiveSession(data: {
+    sessionName: string;
+    description?: string;
+    genre?: string;
+    thumbnailUrl?: string;
+  }): Promise<LiveSessionResult> {
+    const response = await api.post<ApiGatewayResponse<LiveSessionResult>>(
+      LIVESTREAM_ENDPOINTS.CREATE_LIVE_SESSION,
+      data,
+    );
+    return response.data.data;
+  },
+
+  async startLiveSession(sessionId: string): Promise<LiveSessionResult> {
+    const response = await api.post<ApiGatewayResponse<LiveSessionResult>>(
+      LIVESTREAM_ENDPOINTS.START_LIVE_SESSION(sessionId),
+    );
+    return response.data.data;
+  },
+
+  async stopLiveSession(sessionId: string): Promise<LiveSessionResult> {
+    const response = await api.post<ApiGatewayResponse<LiveSessionResult>>(
+      LIVESTREAM_ENDPOINTS.STOP_LIVE_SESSION(sessionId),
+    );
+    return response.data.data;
+  },
+
+  async updateLiveSession(
+    sessionId: string,
+    data: Partial<{
+      sessionName: string;
+      description: string;
+      genre: string;
+      thumbnailUrl: string;
+    }>,
+  ): Promise<LiveSessionResult> {
+    const response = await api.put<ApiGatewayResponse<LiveSessionResult>>(
+      LIVESTREAM_ENDPOINTS.UPDATE_LIVE_SESSION(sessionId),
+      data,
+    );
+    return response.data.data;
+  },
+
+  async getMyHostedSessions(params?: {
+    status?: string;
+    pageNumber?: number;
+    pageSize?: number;
+  }): Promise<PagedResult<LiveSessionResult>> {
+    const response = await api.get<ApiGatewayResponse<PagedResult<LiveSessionResult>>>(
+      LIVESTREAM_ENDPOINTS.MY_HOSTED_SESSIONS,
+      { params },
+    );
+    return response.data.data;
   },
 };
 

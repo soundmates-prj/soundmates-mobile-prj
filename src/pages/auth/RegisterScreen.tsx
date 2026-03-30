@@ -120,7 +120,7 @@ export default function RegisterScreen({
     return (
         <Animated.View style={styles.container}>
             <LinearGradient
-                colors={isDarkMode ? ['#020617', '#0B1220', '#000000'] : ['#E0F7FF', '#FFFFFF', '#F0F9FF']}
+                colors={isDarkMode ? ['#050B18', '#0A1120', '#000000'] : ['#E0F7FF', '#FFFFFF', '#F0F9FF']}
                 style={StyleSheet.absoluteFill}
             />
 

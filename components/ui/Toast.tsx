@@ -53,41 +53,38 @@ const CustomToastComponent: React.FC<ToastConfigParams<any> & { type: ToastType 
     text2,
 }) => {
     const config = TOAST_CONFIG[type];
-    const isDarkMode = true; // Defaulting to dark for consistent glass look or we can use context
-
+    
     return (
         <View style={styles.outerContainer}>
             <BlurView
-                intensity={80}
-                tint={isDarkMode ? 'dark' : 'light'}
+                intensity={90}
+                tint="dark"
                 style={styles.toastContainer}
             >
-                <View style={[styles.indicator, { backgroundColor: config.tint }]} />
+                <View style={styles.contentRow}>
+                    <LinearGradient
+                        colors={config.colors}
+                        style={styles.iconContainer}
+                    >
+                        <Ionicons
+                            name={config.icon}
+                            size={18}
+                            color="#FFFFFF"
+                        />
+                    </LinearGradient>
 
-                {/* Icon with gradient background */}
-                <LinearGradient
-                    colors={config.colors}
-                    style={styles.iconContainer}
-                >
-                    <Ionicons
-                        name={config.icon}
-                        size={20}
-                        color="#FFFFFF"
-                    />
-                </LinearGradient>
-
-                {/* Text content */}
-                <View style={styles.textContainer}>
-                    {text1 && (
-                        <Text style={styles.title} numberOfLines={1}>
-                            {text1}
-                        </Text>
-                    )}
-                    {text2 && (
-                        <Text style={styles.message} numberOfLines={2}>
-                            {text2}
-                        </Text>
-                    )}
+                    <View style={styles.textContainer}>
+                        {text1 && (
+                            <Text style={styles.title} numberOfLines={1}>
+                                {text1}
+                            </Text>
+                        )}
+                        {text2 && (
+                            <Text style={styles.message} numberOfLines={1}>
+                                {text2}
+                            </Text>
+                        )}
+                    </View>
                 </View>
             </BlurView>
         </View>
@@ -112,7 +109,7 @@ export const showToast = {
             position: 'top',
             visibilityTime: 3000,
             autoHide: true,
-            topOffset: 60,
+            topOffset: 50,
         });
     },
 
@@ -124,7 +121,7 @@ export const showToast = {
             position: 'top',
             visibilityTime: 4000,
             autoHide: true,
-            topOffset: 60,
+            topOffset: 50,
         });
     },
 
@@ -136,7 +133,7 @@ export const showToast = {
             position: 'top',
             visibilityTime: 3000,
             autoHide: true,
-            topOffset: 60,
+            topOffset: 50,
         });
     },
 
@@ -148,7 +145,7 @@ export const showToast = {
             position: 'top',
             visibilityTime: 3500,
             autoHide: true,
-            topOffset: 60,
+            topOffset: 50,
         });
     },
 };
@@ -160,58 +157,51 @@ export const hideToast = () => {
 
 const styles = StyleSheet.create({
     outerContainer: {
-        width: width - 40,
-        height: 'auto',
-        minHeight: 64,
+        alignSelf: 'center',
         marginTop: 10,
-        borderRadius: 20,
+        borderRadius: 30,
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderColor: 'rgba(255, 255, 255, 0.15)',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
-        shadowRadius: 20,
-        elevation: 10,
+        shadowRadius: 10,
+        elevation: 8,
     },
     toastContainer: {
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        minWidth: 200,
+        maxWidth: width - 80,
+    },
+    contentRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-    },
-    indicator: {
-        position: 'absolute',
-        left: 0,
-        top: 12,
-        bottom: 12,
-        width: 4,
-        borderRadius: 2,
+        justifyContent: 'center',
     },
     iconContainer: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 30,
+        height: 30,
+        borderRadius: 15,
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 12,
+        marginRight: 10,
     },
     textContainer: {
-        flex: 1,
         justifyContent: 'center',
     },
     title: {
         color: '#FFFFFF',
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '700',
-        marginBottom: 2,
         letterSpacing: -0.2,
     },
     message: {
         color: 'rgba(255, 255, 255, 0.7)',
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '500',
-        lineHeight: 18,
+        marginTop: 1,
     },
 });
 

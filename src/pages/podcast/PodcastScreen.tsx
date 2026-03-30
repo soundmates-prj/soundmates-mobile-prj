@@ -11,12 +11,14 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Animated as RNAnimated,
   Dimensions,
 } from 'react-native';
 import Animated, { 
+  Extrapolate,
   FadeInDown, 
   FadeInRight,
+  interpolate,
+  useAnimatedScrollHandler,
   useAnimatedStyle, 
   useSharedValue, 
   withSpring 
@@ -198,7 +200,19 @@ function PodcastCard({ podcast, onPress }: { podcast: PodcastVM; onPress: () => 
 
 // ─── Main Screen ─────────────────────────────────────────────────
 
-export default function PodcastScreen() {
+interface PodcastScreenProps {
+  paddingTop?: number;
+  paddingBottom?: number;
+  hideStickyHeader?: boolean;
+  onScroll?: any;
+}
+
+export default function PodcastScreen({
+  paddingTop = 0,
+  paddingBottom = 0,
+  hideStickyHeader = false,
+  onScroll
+}: PodcastScreenProps) {
   const { isDarkMode } = useTheme();
   const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
   const [activeCategory, setActiveCategory] = useState('Tất cả');
@@ -208,19 +222,12 @@ export default function PodcastScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const scrollY = useRef(new RNAnimated.Value(0)).current;
+  const scrollY = useSharedValue(0);
 
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, 50],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-
-  const headerTranslateY = scrollY.interpolate({
-    inputRange: [0, 50],
-    outputRange: [-10, 0],
-    extrapolate: 'clamp',
-  });
+  const headerAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, 50], [0, 1], Extrapolate.CLAMP),
+    transform: [{ translateY: interpolate(scrollY.value, [0, 50], [-10, 0], Extrapolate.CLAMP) }],
+  }));
 
   const fetchPodcasts = useCallback(async (isRefresh = false) => {
     try {
@@ -298,33 +305,31 @@ export default function PodcastScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: palette.background }]}> 
       {/* Animated Sticky Header */}
-      <RNAnimated.View style={[
-        styles.stickyHeader, 
-        { 
-          opacity: headerOpacity,
-          transform: [{ translateY: headerTranslateY }],
-          backgroundColor: palette.surface + 'CC'
-        }
-      ]}>
-        <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={isDarkMode ? 'dark' : 'light'} />
-        <View style={styles.headerContent}>
-          <Text style={[styles.headerTitle, { color: palette.textPrimary }]}>Podcast</Text>
-          <TouchableOpacity 
-            activeOpacity={0.7} 
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-          >
-            <Ionicons name="search" size={22} color={palette.textPrimary} />
-          </TouchableOpacity>
-        </View>
-      </RNAnimated.View>
+      {!hideStickyHeader && (
+        <Animated.View style={[
+          styles.stickyHeader, 
+          headerAnimatedStyle,
+          { backgroundColor: palette.surface + 'CC' }
+        ]}>
+          <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={isDarkMode ? 'dark' : 'light'} />
+          <View style={styles.headerContent}>
+            <Text style={[styles.headerTitle, { color: palette.textPrimary }]}>Podcast</Text>
+            <TouchableOpacity 
+              activeOpacity={0.7} 
+              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            >
+              <Ionicons name="search" size={22} color={palette.textPrimary} />
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      )}
 
-      <RNAnimated.ScrollView
+      <Animated.ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-        onScroll={RNAnimated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
-        )}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: 10 + paddingTop, paddingBottom: 120 + paddingBottom }]}
+        onScroll={onScroll || useAnimatedScrollHandler((e) => {
+          scrollY.value = e.contentOffset.y;
+        })}
         scrollEventThrottle={16}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[palette.primary]} tintColor={palette.primary} />
@@ -417,7 +422,7 @@ export default function PodcastScreen() {
             </View>
           )}
         </View>
-      </RNAnimated.ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }
@@ -454,18 +459,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   scrollContent: {
-    paddingTop: 60,
-    paddingBottom: 120,
   },
   topSection: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 12,
   },
   mainTitle: {
-    fontSize: 34,
+    fontSize: 28,
     fontWeight: '800',
     letterSpacing: -0.5,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   searchPlaceholder: {
     flexDirection: 'row',

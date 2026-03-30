@@ -13,6 +13,8 @@ import { BLOG_ENDPOINTS } from './config';
 export interface BlogPostResponse {
     id: string;
     userId: string;
+    userFullName?: string;
+    userAvatarUrl?: string;
     title: string;
     contentText: string;
     audioUrl?: string | null;
@@ -30,6 +32,8 @@ export interface BlogPostResponse {
 export interface TrendingPostResponse {
     id: string;
     userId: string;
+    userFullName?: string;
+    userAvatarUrl?: string;
     title: string;
     contentText: string;
     audioUrl?: string | null;
@@ -48,6 +52,8 @@ export interface TrendingPostResponse {
 export interface PopularPostResponse {
     id: string;
     userId: string;
+    userFullName?: string;
+    userAvatarUrl?: string;
     title: string;
     contentText: string;
     audioUrl?: string | null;
@@ -638,6 +644,36 @@ export const blogService = {
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể tải phản ứng',
+            };
+        }
+    },
+
+    /**
+     * Report a post for moderation
+     */
+    async reportPost(postId: string, reason: string, description?: string): Promise<{
+        success: boolean;
+        message?: string;
+    }> {
+        try {
+            const response = await authApiClient.post<ApiResponse<any>>(
+                `${BLOG_ENDPOINTS.REPORTS}`,
+                { 
+                    targetType: 'Post', 
+                    targetId: postId, 
+                    reason, 
+                    description 
+                }
+            );
+            return {
+                success: response.data.success,
+                message: response.data.message || 'Cảm ơn bạn đã báo cáo. Chúng tôi sẽ xem xét nội dung này.',
+            };
+        } catch (error: any) {
+            console.log('[BlogService] reportPost error:', error);
+            return {
+                success: false,
+                message: error.response?.data?.message || 'Không thể gửi báo cáo lúc này',
             };
         }
     },

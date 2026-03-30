@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import React, { useCallback, useState } from 'react';
 import {
+    Alert,
     Dimensions,
     Image,
     StyleSheet,
@@ -17,13 +18,18 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
+import { blogService } from '../../api';
 
 export interface DisplayPost {
     id: string;
     userId: string;
+    userFullName?: string;
+    userAvatarUrl?: string;
     title: string;
     contentText: string;
+    /** API may return 'imageUrl' or 'imgUrl' */
     imageUrl?: string | null;
+    imgUrl?: string | null;
     audioUrl?: string | null;
     moodTag?: string | null;
     status: string;
@@ -78,6 +84,10 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
     const [isLikedLocal, setIsLikedLocal] = useState(post.isLiked);
     const [likeCountLocal, setLikeCountLocal] = useState(post.reactionCount);
 
+    const displayName = post.userFullName || post.userId.substring(0, 10);
+    const avatarUri = post.userAvatarUrl
+        || `https://api.dicebear.com/7.x/initials/png?seed=${post.userId}&backgroundColor=55C5F1`;
+
     // Animation for like button
     const likeScale = useSharedValue(1);
 
@@ -91,6 +101,40 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
         onLike();
     }, [isLikedLocal, likeScale, onLike]);
 
+    const handleReport = useCallback(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        const reportReasons = [
+            'Nội dung nhạy cảm / NSFW',
+            'Spam / Quảng cáo',
+            'Quấy rối / Đe dọa',
+            'Thông tin sai lệch',
+            'Khác'
+        ];
+
+        Alert.alert(
+            'Báo cáo bài viết',
+            'Tại sao bạn muốn báo cáo bài viết này?',
+            [
+                ...reportReasons.map(reason => ({
+                    text: reason,
+                    onPress: async () => {
+                        try {
+                            const res = await blogService.reportPost(post.id, reason);
+                            if (res.success) {
+                                Alert.alert('Thành công', 'Cảm ơn bạn đã báo cáo. Chúng tôi sẽ xem xét nội dung này sớm nhất.');
+                            } else {
+                                Alert.alert('Lỗi', res.message);
+                            }
+                        } catch (err) {
+                            Alert.alert('Lỗi', 'Không thể gửi báo cáo lúc này.');
+                        }
+                    }
+                })),
+                { text: 'Hủy', style: 'cancel' }
+            ]
+        );
+    }, [post.id]);
+
     const likeAnimationStyle = useAnimatedStyle(() => ({
         transform: [{ scale: likeScale.value }],
     }));
@@ -101,21 +145,25 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
             <View style={styles.cardHeader}>
                 <View style={styles.userInfo}>
                     <Image
-                        source={{ uri: `https://api.dicebear.com/7.x/initials/png?seed=${post.userId}&backgroundColor=55C5F1` }}
+                        source={{ uri: avatarUri }}
                         style={styles.avatar}
                     />
                     <View>
                         <Text style={[styles.username, { color: palette.textPrimary }]}>
-                            {post.userId.substring(0, 10)}
+                            {displayName}
                         </Text>
                         <Text style={[styles.timeAgo, { color: palette.textMuted }]}>
                             {formatTimeAgo(post.publishedAt || post.createdAt)}
                         </Text>
                     </View>
                 </View>
-                {showOwnerActions && (
-                    <TouchableOpacity style={styles.moreButton}>
+                {showOwnerActions ? (
+                    <TouchableOpacity style={styles.moreButton} onPress={() => onEdit?.(post.id)}>
                         <Ionicons name="ellipsis-horizontal" size={20} color={palette.textMuted} />
+                    </TouchableOpacity>
+                ) : (
+                    <TouchableOpacity style={styles.moreButton} onPress={handleReport}>
+                        <Ionicons name="flag-outline" size={18} color={palette.textMuted} />
                     </TouchableOpacity>
                 )}
             </View>
@@ -126,9 +174,9 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
                 onPress={() => onNavigateToDetail?.(post.id)}
                 style={styles.contentContainer}
             >
-                {post.imageUrl ? (
+                {(post.imageUrl || post.imgUrl) ? (
                     <View style={styles.imageWrapper}>
-                        <Image source={{ uri: post.imageUrl }} style={styles.postImage} resizeMode="cover" />
+                        <Image source={{ uri: post.imageUrl || post.imgUrl! }} style={styles.postImage} resizeMode="cover" />
                         {post.moodTag && (
                             <BlurView intensity={60} tint="dark" style={styles.tagBadge}>
                                 <Text style={styles.tagText}>#{post.moodTag}</Text>
@@ -179,10 +227,10 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
                 <Text style={[styles.likesCount, { color: palette.textPrimary }]}>
                     {formatNumber(likeCountLocal)} lượt thích
                 </Text>
-                {post.imageUrl && (
+                {(post.imageUrl || post.imgUrl) && (
                     <View style={styles.captionRow}>
                         <Text style={[styles.captionUsername, { color: palette.textPrimary }]}>
-                            {post.userId.substring(0, 10)}{' '}
+                            {displayName}{' '}
                             <Text style={[styles.captionText, { color: palette.textSecondary }]}>
                                 {post.title}
                             </Text>

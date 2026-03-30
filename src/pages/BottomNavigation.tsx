@@ -1,21 +1,33 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
-import Animated, { 
-  useAnimatedStyle, 
-  useSharedValue, 
+import {
+  Image,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
   withSpring,
-  interpolate,
-  withTiming
+  withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SoundMateColors, SoundMateLightColors } from '../../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { useUser } from '../context/UserContext';
+import MiniPlayer from '../components/player/MiniPlayer';
+import { useAudioPlayer } from '../context/AudioPlayerContext';
 
 export type TabName = 'home' | 'blog' | 'live' | 'podcast' | 'profile';
+
+type MinimalPalette = {
+  primary: string;
+  textSecondary: string;
+};
 
 interface BottomNavigationProps {
   activeTab: TabName;
@@ -23,200 +35,184 @@ interface BottomNavigationProps {
   onLogout?: () => void;
 }
 
-const NavItem = ({ icon, iconActive, label, isActive, palette, onPress }: any) => {
-  const scale = useSharedValue(1);
-  const opacity = useSharedValue(0.6);
+interface TabConfig {
+  tab: TabName;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  iconActive: keyof typeof Ionicons.glyphMap;
+}
+
+const TABS: TabConfig[] = [
+  { tab: 'home', label: 'Home', icon: 'home-outline', iconActive: 'home' },
+  { tab: 'podcast', label: 'Podcast', icon: 'mic-outline', iconActive: 'mic' },
+  { tab: 'live', label: 'Live', icon: 'radio-outline', iconActive: 'radio' },
+  { tab: 'blog', label: 'Blog', icon: 'newspaper-outline', iconActive: 'newspaper' },
+  { tab: 'profile', label: 'Hồ sơ', icon: 'person-circle-outline', iconActive: 'person-circle' },
+];
+
+const TAB_HEIGHT = 50;
+
+function NavTab({
+  config, isActive, palette, onPress, userAvatar,
+}: {
+  config: TabConfig;
+  isActive: boolean;
+  palette: MinimalPalette;
+  onPress: () => void;
+  userAvatar?: string;
+}) {
+  const indicator = useSharedValue(isActive ? 1 : 0);
 
   useEffect(() => {
-    scale.value = withSpring(isActive ? 1.1 : 1);
-    opacity.value = withTiming(isActive ? 1 : 0.6);
+    indicator.value = withTiming(isActive ? 1 : 0, { duration: 180 });
   }, [isActive]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
+  const indicatorStyle = useAnimatedStyle(() => ({
+    opacity: indicator.value,
+    transform: [{ scaleX: withSpring(isActive ? 1 : 0.3, { damping: 18 }) }],
   }));
 
+  const iconScale = useSharedValue(1);
+  useEffect(() => {
+    if (isActive) {
+      iconScale.value = withSpring(1.12, { damping: 12 });
+    } else {
+      iconScale.value = withSpring(1, { damping: 14 });
+    }
+  }, [isActive]);
+  const iconStyle = useAnimatedStyle(() => ({ transform: [{ scale: iconScale.value }] }));
+
+  const isProfile = config.tab === 'profile';
+  const isLive = config.tab === 'live';
+
   return (
-    <TouchableOpacity 
-      style={styles.navItem} 
+    <TouchableOpacity
+      style={styles.tab}
       onPress={() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onPress();
-      }} 
-      activeOpacity={0.7}
+      }}
+      activeOpacity={0.75}
     >
-      <Animated.View style={[styles.iconContainer, animatedStyle]}>
-        <Ionicons 
-          name={isActive ? iconActive : icon} 
-          size={24} 
-          color={isActive ? palette.primary : palette.textSecondary} 
-        />
+      {/* Active indicator bar */}
+      <Animated.View style={[styles.indicator, { backgroundColor: palette.primary }, indicatorStyle]} />
+
+      <Animated.View style={[styles.iconWrap, iconStyle]}>
+        {isProfile && userAvatar ? (
+          <View style={[
+            styles.avatarBorder,
+            { borderColor: isActive ? palette.primary : 'transparent' },
+          ]}>
+            <Image source={{ uri: userAvatar }} style={styles.avatar} />
+          </View>
+        ) : isLive ? (
+          <View style={[
+            styles.liveChip,
+            { backgroundColor: isActive ? palette.primary : `${palette.primary}18` },
+          ]}>
+            <Ionicons name="radio" size={18} color={isActive ? '#FFF' : palette.primary} />
+          </View>
+        ) : (
+          <Ionicons
+            name={isActive ? config.iconActive : config.icon}
+            size={24}
+            color={isActive ? palette.primary : palette.textSecondary}
+          />
+        )}
       </Animated.View>
+
       <Text style={[
-        styles.navText, 
-        { color: isActive ? palette.primary : palette.textSecondary },
-        isActive && styles.navTextActive
+        styles.label,
+        { color: isActive ? palette.primary : palette.textSecondary,
+          fontWeight: isActive ? '600' : '400' },
       ]}>
-        {label}
+        {config.label}
       </Text>
     </TouchableOpacity>
   );
-};
+}
 
 export default function BottomNavigation({ activeTab, onTabPress }: BottomNavigationProps) {
   const { isDarkMode } = useTheme();
   const { user } = useUser();
+  const { activeSession } = useAudioPlayer();
+  const insets = useSafeAreaInsets();
   const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
 
+  const bottomPad = insets.bottom > 0 ? insets.bottom : 8;
+
   return (
-    <View style={styles.container}>
-      <BlurView 
-        intensity={Platform.OS === 'ios' ? 80 : 100} 
-        style={StyleSheet.absoluteFill} 
-        tint={isDarkMode ? 'dark' : 'light'} 
-      />
-      
-      <NavItem
-        icon="home-outline"
-        iconActive="home"
-        label="Home"
-        isActive={activeTab === 'home'}
-        palette={palette}
-        onPress={() => onTabPress('home')}
-      />
+    <View style={[
+      styles.wrapper,
+      {
+        backgroundColor: isDarkMode ? '#1C1C1E' : '#FFFFFF',
+        paddingBottom: bottomPad,
+        borderTopColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+      },
+    ]}>
+      {/* Spotify-style mini player */}
+      {!!activeSession && <MiniPlayer />}
 
-      <NavItem
-        icon="mic-outline"
-        iconActive="mic"
-        label="Podcast"
-        isActive={activeTab === 'podcast'}
-        palette={palette}
-        onPress={() => onTabPress('podcast')}
-      />
-
-      <View style={styles.centerBtnContainer}>
-        <TouchableOpacity 
-          style={styles.navItemCenter} 
-          onPress={() => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            onTabPress('live');
-          }} 
-          activeOpacity={0.8}
-        >
-          <LinearGradient 
-            colors={[palette.primary, '#2DD4BF']} 
-            style={styles.navItemCenterGradient}
-          >
-            <Ionicons name="radio" size={28} color="#FFFFFF" />
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
-
-      <NavItem
-        icon="newspaper-outline"
-        iconActive="newspaper"
-        label="Blog"
-        isActive={activeTab === 'blog'}
-        palette={palette}
-        onPress={() => onTabPress('blog')}
-      />
-
-      <TouchableOpacity 
-        style={styles.navItem} 
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          onTabPress('profile');
-        }} 
-        activeOpacity={0.7}
-      >
-        <View style={styles.avatarContainer}>
-          <Image 
-            source={{ uri: user?.profileImageUrl || 'https://i.pravatar.cc/150?img=10' }} 
-            style={[
-              styles.userAvatar, 
-              { borderColor: activeTab === 'profile' ? palette.primary : 'transparent' }
-            ]} 
+      {/* Tabs */}
+      <View style={styles.tabs}>
+        {TABS.map((cfg) => (
+          <NavTab
+            key={cfg.tab}
+            config={cfg}
+            isActive={activeTab === cfg.tab}
+            palette={palette}
+            onPress={() => onTabPress(cfg.tab)}
+            userAvatar={user?.profileImageUrl}
           />
-        </View>
-        <Text style={[
-          styles.navText, 
-          { color: activeTab === 'profile' ? palette.primary : palette.textSecondary },
-          activeTab === 'profile' && styles.navTextActive
-        ]}>
-          Hồ sơ
-        </Text>
-      </TouchableOpacity>
+        ))}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  wrapper: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    height: Platform.OS === 'ios' ? 90 : 70,
-    paddingBottom: Platform.OS === 'ios' ? 25 : 10,
-    paddingTop: 10,
-    paddingHorizontal: 10,
+    bottom: 0, left: 0, right: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(150,150,150,0.2)',
+  },
+  tabs: {
+    flexDirection: 'row',
+    height: TAB_HEIGHT,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 4,
+    gap: 2,
     overflow: 'hidden',
   },
-  navItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconContainer: {
+  indicator: {
+    position: 'absolute',
+    top: 0,
     width: 28,
-    height: 28,
+    height: 2.5,
+    borderRadius: 2,
+  },
+  iconWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  centerBtnContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navItemCenter: {
-    marginTop: -35,
-  },
-  navItemCenterGradient: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 10,
-    borderWidth: 4,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  navText: {
-    fontSize: 10,
     marginTop: 4,
-    fontWeight: '500',
   },
-  navTextActive: {
-    fontWeight: '700',
+  label: {
+    fontSize: 10.5,
+    letterSpacing: 0.1,
   },
-  avatarContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    overflow: 'hidden',
+  avatarBorder: {
+    width: 28, height: 28, borderRadius: 14,
+    borderWidth: 2, overflow: 'hidden',
   },
-  userAvatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 14,
-    borderWidth: 1.5,
+  avatar: {
+    width: '100%', height: '100%', borderRadius: 12,
+  },
+  liveChip: {
+    width: 38, height: 28, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
   },
 });

@@ -147,7 +147,7 @@ export default function OTPScreen({
     return (
         <View style={styles.container}>
             <LinearGradient
-                colors={isDarkMode ? ['#020617', '#0B1220', '#000000'] : ['#E0F7FF', '#FFFFFF', '#F0F9FF']}
+                colors={isDarkMode ? ['#050B18', '#0A1120', '#000000'] : ['#E0F7FF', '#FFFFFF', '#F0F9FF']}
                 style={StyleSheet.absoluteFill}
             />
 
@@ -202,7 +202,7 @@ export default function OTPScreen({
                                 activeOpacity={1}
                             >
                                 <LinearGradient
-                                    colors={[SoundMateLightColors.primary, SoundMateLightColors.primaryDark]}
+                                    colors={[palette.primary, palette.primaryDark]}
                                     start={{ x: 0, y: 0 }}
                                     end={{ x: 1, y: 1 }}
                                     style={styles.verifyButton}
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
+        shadowOpacity: 0.1,
         shadowRadius: 10,
         elevation: 2,
     },

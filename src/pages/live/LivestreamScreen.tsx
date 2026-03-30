@@ -1,49 +1,43 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
   Image,
-  Keyboard,
   Modal,
-  PanResponder,
+  Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  Dimensions,
-  Platform,
-  StatusBar,
 } from 'react-native';
 import Animated, {
   FadeInDown,
   FadeInUp,
+  interpolate,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   withRepeat,
   withSequence,
   withTiming,
-  interpolate,
-  Extrapolate
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { showToast } from '../../../components/ui/Toast';
+import { useAudioPlayer } from '../../context/AudioPlayerContext';
 import {
   livestreamService,
   type LiveSessionResult,
   type NowPlayingData,
   type TrackInfo,
 } from '../../api/livestreamService';
-import { useTheme } from '../../context/ThemeContext';
-import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -80,20 +74,12 @@ interface Story {
   likes: number;
 }
 
-interface NowPlayingItem {
-  id: string;
-  title: string;
-  artist: string;
-  duration: string;
-  isPlaying: boolean;
-}
-
 // ─── Mock Data ───────────────────────────────────────────────────
 
-const LIVE_SESSION: LiveSession = {
+const LIVE_SESSION_FALLBACK: LiveSession = {
   id: '1',
   title: 'Đêm nhạc bolero học',
-  host: '❤ Emily_vui',
+  host: 'Emily_vui',
   hostAvatar: 'https://i.pravatar.cc/100?img=5',
   category: 'Nhạc',
   isLive: true,
@@ -119,17 +105,6 @@ const INITIAL_MESSAGES: ChatMessage[] = [
     isHost: true,
     avatarColor: '#67f700',
   },
-];
-
-const NOW_PLAYING: NowPlayingItem[] = [
-  { id: '1', title: 'Lần Đầu', artist: 'Dung Ho', duration: '3:45', isPlaying: true },
-  { id: '2', title: 'Yêu Xa', artist: 'Vũ Cát Tường', duration: '4:12', isPlaying: false },
-  { id: '3', title: 'Em Của Ngày Hôm Qua', artist: 'Sơn Tùng M-TP', duration: '5:20', isPlaying: false },
-];
-
-const PODCASTS_QUEUE = [
-  { id: '1', title: 'Chuyện Tình Yêu', host: 'Minh Anh', duration: '15 mins' },
-  { id: '2', title: 'Kỷ Niệm Tuổi Học Trò', host: 'Lan Anh', duration: '12 mins' },
 ];
 
 const STORIES: Story[] = [
@@ -194,10 +169,9 @@ function LiveBadge() {
 }
 
 function StoryCard({ story }: { story: Story }) {
-  const { isDarkMode } = useTheme();
   return (
     <Animated.View entering={FadeInDown} style={styles.storyCard}>
-      <BlurView intensity={40} style={StyleSheet.absoluteFill} tint={isDarkMode ? 'dark' : 'light'} />
+      <BlurView intensity={40} style={StyleSheet.absoluteFill} tint="dark" />
       <View style={styles.storyBadgeRow}>
         <Ionicons name="radio" size={12} color="#55C5F1" />
         <Text style={styles.storyBadgeText}>ON AIR: STORY TIME</Text>
@@ -217,7 +191,6 @@ function StoryCard({ story }: { story: Story }) {
 }
 
 function ChatOverlay({ messages }: { messages: ChatMessage[] }) {
-  const { isDarkMode } = useTheme();
   const scrollRef = useRef<ScrollView>(null);
 
   const handleContentSizeChange = useCallback(() => {
@@ -242,7 +215,7 @@ function ChatOverlay({ messages }: { messages: ChatMessage[] }) {
           >
             <Image source={{ uri: msg.avatar }} style={styles.chatAvatar} />
             <View style={styles.chatBubbleWrapper}>
-              <BlurView intensity={25} style={styles.chatBubbleBlur} tint={isDarkMode ? 'dark' : 'light'}>
+              <BlurView intensity={25} style={styles.chatBubbleBlur} tint="dark">
                 <Text style={styles.chatAuthorText}>{msg.author}</Text>
                 <Text style={styles.chatMessageText}>{msg.message}</Text>
               </BlurView>
@@ -251,170 +224,6 @@ function ChatOverlay({ messages }: { messages: ChatMessage[] }) {
         ))}
       </ScrollView>
     </View>
-  );
-}
-
-<<<<<<< Updated upstream
-function ChatPanel({ messages }: { messages: ChatMessage[] }) {
-  const scrollRef = useRef<ScrollView>(null);
-  const handleContentSizeChange = useCallback(() => {
-    scrollRef.current?.scrollToEnd({ animated: false });
-  }, []);
-
-  return (
-    <ScrollView
-      ref={scrollRef}
-      style={styles.chatPanel}
-      contentContainerStyle={styles.chatPanelContent}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-      nestedScrollEnabled
-      onContentSizeChange={handleContentSizeChange}
-    >
-      {messages.map((msg) => {
-        const bubbleStyle = msg.isHost
-          ? styles.chatBubbleHost
-          : msg.isRequest
-          ? styles.chatBubbleRequest
-          : styles.chatBubble;
-
-        return (
-          <View key={msg.id} style={styles.chatRow}>
-            <Image
-              source={{ uri: msg.avatar }}
-              style={[styles.chatAvatar, { borderColor: msg.avatarColor || '#374151' }]}
-            />
-            <View style={[styles.chatBubbleBase, bubbleStyle]}>
-              <Text style={styles.chatAuthorText}>{msg.author}</Text>
-              {msg.isRequest && msg.requestSong && (
-                <View style={styles.chatRequestRow}>
-                  <Ionicons name="sparkles" size={10} color="#FFFFFF" />
-                  <Text style={styles.chatRequestText}>{`Requested: ${msg.requestSong}`}</Text>
-                </View>
-              )}
-              <Text style={styles.chatMessageText}>{msg.message}</Text>
-            </View>
-          </View>
-        );
-      })}
-    </ScrollView>
-  );
-}
-
-function SidebarMenu({
-  isOpen,
-  onClose,
-  nowPlayingItems,
-  isStreamMuted,
-  streamVolume,
-  onToggleMute,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  nowPlayingItems: NowPlayingItem[];
-  isStreamMuted: boolean;
-  streamVolume: number;
-  onToggleMute: () => void;
-}) {
-  const [activeTab, setActiveTab] = useState<'music' | 'podcast'>('music');
-
-  return (
-    <Modal visible={isOpen} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
-        <Pressable style={styles.modalBackdropTouchable} onPress={onClose} />
-        <View style={styles.sidebarPanel}>
-          <View style={styles.sidebarHeader}>
-            <Text style={styles.sidebarTitle}>Playlist Live</Text>
-            <TouchableOpacity onPress={onClose} style={styles.sidebarCloseButton}>
-              <Ionicons name="close" size={18} color="#1E293B" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.sidebarTabs}>
-            <TouchableOpacity
-              onPress={() => setActiveTab('music')}
-              style={[styles.sidebarTab, activeTab === 'music' && styles.sidebarTabActive]}
-            >
-              <Text style={[styles.sidebarTabText, activeTab === 'music' && styles.sidebarTabTextActive]}>
-                Nhạc phát
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setActiveTab('podcast')}
-              style={[styles.sidebarTab, activeTab === 'podcast' && styles.sidebarTabActive]}
-            >
-              <Text style={[styles.sidebarTabText, activeTab === 'podcast' && styles.sidebarTabTextActive]}>
-                Podcast
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.sidebarContent} showsVerticalScrollIndicator={false}>
-            {activeTab === 'music' ? (
-              <View>
-                <Text style={styles.sidebarSectionTitle}>Đang phát</Text>
-                {nowPlayingItems.map((song) => (
-                  <View
-                    key={song.id}
-                    style={[styles.sidebarSongRow, song.isPlaying && styles.sidebarSongRowActive]}
-                  >
-                    <View style={[styles.sidebarSongIcon, song.isPlaying && styles.sidebarSongIconActive]}>
-                      <Ionicons
-                        name={song.isPlaying ? 'pause' : 'play'}
-                        size={18}
-                        color={song.isPlaying ? '#FFFFFF' : '#6B7280'}
-                      />
-                    </View>
-                    <View style={styles.sidebarSongContent}>
-                      <Text style={styles.sidebarSongTitle} numberOfLines={1}>
-                        {song.title}
-                      </Text>
-                      <Text style={styles.sidebarSongArtist} numberOfLines={1}>
-                        {song.artist}
-                      </Text>
-                    </View>
-                    <Text style={styles.sidebarSongDuration}>{song.duration}</Text>
-                  </View>
-                ))}
-
-                <View style={styles.sidebarVolumeBox}>
-                  <View style={styles.sidebarVolumeRow}>
-                    <TouchableOpacity onPress={onToggleMute} style={styles.sidebarVolumeIconButton}>
-                      <Ionicons name={isStreamMuted ? 'volume-mute' : 'volume-high'} size={18} color="#6B7280" />
-                    </TouchableOpacity>
-                    <View style={styles.sidebarVolumeTrack}>
-                      <View style={[styles.sidebarVolumeFill, { width: `${Math.round(streamVolume * 100)}%` }]} />
-                    </View>
-                    <Text style={styles.sidebarVolumeText}>
-                      {isStreamMuted ? 'MUTE' : `${Math.round(streamVolume * 100)}%`}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            ) : (
-              <View>
-                <Text style={styles.sidebarSectionTitle}>Podcast đang chờ</Text>
-                {PODCASTS_QUEUE.map((podcast) => (
-                  <View key={podcast.id} style={styles.sidebarPodcastRow}>
-                    <View style={styles.sidebarPodcastIcon}>
-                      <Ionicons name="mic" size={18} color="#FFFFFF" />
-                    </View>
-                    <View style={styles.sidebarSongContent}>
-                      <Text style={styles.sidebarSongTitle} numberOfLines={1}>
-                        {podcast.title}
-                      </Text>
-                      <Text style={styles.sidebarSongArtist} numberOfLines={1}>
-                        {podcast.host} • {podcast.duration}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
   );
 }
 
@@ -466,7 +275,6 @@ function RequestSongModal({
 
   const loadCandidates = useCallback(async () => {
     setIsLoading(true);
-    // Live join flow no longer depends on station APIs, only keep local fallback list.
     setCandidates(buildFallbackCandidates(songHistory));
     setIsLoading(false);
   }, [songHistory]);
@@ -514,7 +322,7 @@ function RequestSongModal({
         <Pressable style={styles.modalBackdropTouchable} onPress={onClose} />
         <View style={styles.modalCard}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Request Bài Hát</Text>
+            <Text style={styles.modalTitle}>Yêu Cầu Bài Hát</Text>
             <TouchableOpacity onPress={onClose} style={styles.modalCloseButton}>
               <Ionicons name="close" size={18} color="#1E293B" />
             </TouchableOpacity>
@@ -565,7 +373,7 @@ function RequestSongModal({
                         onPress={() => handleRequestSong(song)}
                       >
                         <Text style={styles.requestItemButtonText}>
-                          {requested ? 'Đã gửi' : isSubmitting ? 'Đang gửi...' : 'Request'}
+                          {requested ? 'Đã gửi' : isSubmitting ? 'Đang gửi...' : 'Yêu cầu'}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -580,46 +388,15 @@ function RequestSongModal({
   );
 }
 
-function SendPodcastModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const [podcastContent, setPodcastContent] = useState('');
-
-  return (
-    <Modal visible={isOpen} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
-        <Pressable style={styles.modalBackdropTouchable} onPress={onClose} />
-        <View style={styles.modalCard}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Gửi Podcast</Text>
-            <TouchableOpacity onPress={onClose} style={styles.modalCloseButton}>
-              <Ionicons name="close" size={18} color="#1E293B" />
-            </TouchableOpacity>
-          </View>
-          <TextInput
-            value={podcastContent}
-            onChangeText={setPodcastContent}
-            placeholder="Nội dung podcast của bạn..."
-            placeholderTextColor="#9CA3AF"
-            multiline
-            style={[styles.modalInput, styles.modalTextarea]}
-          />
-          <TouchableOpacity
-            style={styles.modalPrimaryButton}
-            onPress={() => {
-              if (podcastContent.trim()) {
-                setPodcastContent('');
-                onClose();
-              }
-            }}
-          >
-            <Text style={styles.modalPrimaryText}>Gửi Podcast</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-function ReactionPicker({ isOpen, onClose, onSelect }: { isOpen: boolean; onClose: () => void; onSelect: (label: string) => void }) {
+function ReactionPicker({
+  isOpen,
+  onClose,
+  onSelect,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSelect: (label: string) => void;
+}) {
   const reactions = [
     { icon: 'heart', color: '#EF4444', label: 'Love' },
     { icon: 'thumbs-up', color: '#3B82F6', label: 'Like' },
@@ -649,51 +426,94 @@ function ReactionPicker({ isOpen, onClose, onSelect }: { isOpen: boolean; onClos
     </Modal>
   );
 }
-=======
+
 // ─── Main Screen ─────────────────────────────────────────────────
->>>>>>> Stashed changes
 
 export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
-  const { isDarkMode } = useTheme();
-  const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
+  // ── Audio from context ─────────────────────────────────────────
+  const {
+    isPlaying: isStreamPlaying,
+    isLoading: isStreamLoading,
+    isMuted: isStreamMuted,
+    nowPlaying,
+    displayElapsed,
+    loadSession: contextLoadSession,
+    togglePlayback,
+    toggleMute: handleMuteToggle,
+  } = useAudioPlayer();
 
-  const [nowPlaying, setNowPlaying] = useState<NowPlayingData | null>(null);
+  // ── State ──────────────────────────────────────────────────────
   const [activeSessions, setActiveSessions] = useState<LiveSessionResult[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [isSessionsLoading, setIsSessionsLoading] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [inputMessage, setInputMessage] = useState('');
-  const [isStreamPlaying, setIsStreamPlaying] = useState(false);
-  const [isStreamLoading, setIsStreamLoading] = useState(false);
-  const [isStreamMuted, setIsStreamMuted] = useState(false);
-  const [displayElapsed, setDisplayElapsed] = useState<number>(0);
-  const [streamAvailability, setStreamAvailability] = useState<'checking' | 'ready' | 'unavailable'>('checking');
   const [showRequestModal, setShowRequestModal] = useState(false);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
 
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const activeStreamUrlRef = useRef('');
-  const autoPlayedRef = useRef(false);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // ── Derived data ───────────────────────────────────────────────
   const currentLiveSession = useMemo(
-    () => activeSessions.find((session) => session.id === selectedSessionId) || activeSessions[0] || null,
-    [activeSessions, selectedSessionId],
+    () =>
+      activeSessions.find((s) => s.id === selectedSessionId) ||
+      activeSessions[0] ||
+      null,
+    [activeSessions, selectedSessionId]
   );
 
   const currentStreamUrl = useMemo(
-    () => livestreamService.getListenUrl(currentLiveSession?.streamUrl || undefined),
-    [currentLiveSession?.streamUrl],
+    () =>
+      livestreamService.getListenUrl(currentLiveSession?.streamUrl || undefined),
+    [currentLiveSession?.streamUrl]
   );
 
+  // Real album art from nowPlaying, fallback to session thumbnail, then mock
+  const albumArt = useMemo(() => {
+    if (nowPlaying?.currentTrack?.artUrl) return nowPlaying.currentTrack.artUrl;
+    if (currentLiveSession?.thumbnailUrl) return currentLiveSession.thumbnailUrl;
+    return LIVE_SESSION_FALLBACK.hostAvatar;
+  }, [nowPlaying, currentLiveSession]);
+
+  // Real listener count
+  const liveListeners = useMemo(() => {
+    if (nowPlaying?.totalListeners !== undefined) return nowPlaying.totalListeners;
+    if (currentLiveSession?.listenersCount !== undefined) return currentLiveSession.listenersCount;
+    return LIVE_SESSION_FALLBACK.listeners;
+  }, [nowPlaying, currentLiveSession]);
+
+  // Session title
+  const sessionTitle = useMemo(() => {
+    if (currentLiveSession?.sessionName) return currentLiveSession.sessionName;
+    return LIVE_SESSION_FALLBACK.title;
+  }, [currentLiveSession]);
+
+  // Session host name
+  const sessionHost = useMemo(() => {
+    if (currentLiveSession?.stationName) return currentLiveSession.stationName;
+    if (nowPlaying?.streamerName) return nowPlaying.streamerName;
+    return LIVE_SESSION_FALLBACK.host;
+  }, [currentLiveSession, nowPlaying]);
+
+  // Song history for request modal
+  const songHistory = useMemo(() => nowPlaying?.songHistory || [], [nowPlaying]);
+
+  // ── Fetch active sessions ──────────────────────────────────────
   const fetchActiveSessions = useCallback(async () => {
     try {
       const paged = await livestreamService.getLiveSessions({ pageNumber: 1, pageSize: 50 });
-      const liveSessions = (paged.items || []).filter(s => s.status?.toLowerCase() === 'live');
+      const liveOnes = (paged.items || []).filter(
+        (s) => s.status?.toLowerCase() === 'live'
+      );
 
       const detailedSessions = await Promise.all(
-        liveSessions.map(async (s) => {
-          try { return await livestreamService.getLiveSession(s.id); }
-          catch { return s; }
+        liveOnes.map(async (s) => {
+          try {
+            return await livestreamService.getLiveSession(s.id);
+          } catch {
+            return s;
+          }
         })
       );
 
@@ -702,129 +522,45 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
         setSelectedSessionId(detailedSessions[0].id);
       }
     } catch (error) {
-      console.log('Failed to fetch live sessions', error);
+      console.log('[Livestream] Failed to fetch live sessions', error);
     } finally {
       setIsSessionsLoading(false);
     }
-  }, [selectedSessionId]);
+  }, [selectedSessionId, contextLoadSession]);
 
+  // ── Boot effects ───────────────────────────────────────────────
   useEffect(() => {
     fetchActiveSessions();
-    const interval = setInterval(fetchActiveSessions, 15000);
-    return () => clearInterval(interval);
+
+    // Refresh sessions every 15s
+    const sessionInterval = setInterval(fetchActiveSessions, 15000);
+
+    return () => {
+      clearInterval(sessionInterval);
+      if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+    };
   }, [fetchActiveSessions]);
 
-<<<<<<< Updated upstream
-  useEffect(() => {
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
-    }).catch((error) => {
-      console.log('[LivestreamScreen] setAudioMode error:', error);
-    });
-  }, []);
-
-  const liveTitle = currentLiveSession?.sessionName || LIVE_SESSION.title;
-  const liveHost = currentLiveSession?.stationName || LIVE_SESSION.host;
-  const liveCategory = currentLiveSession?.genre || LIVE_SESSION.category;
-  const liveListeners = currentLiveSession?.listenersCount ?? LIVE_SESSION.listeners;
-  const isLiveSession = activeSessions.length > 0;
-  const hasLiveStream = streamAvailability === 'ready';
-  const currentStreamUrl = useMemo(
-    () => livestreamService.normalizeStreamUrl(currentLiveSession?.streamUrl || undefined),
-    [currentLiveSession?.streamUrl],
-  );
-  const elapsedToRender = nowPlaying?.currentTrack
-    ? displayElapsed
-    : 0;
+  // ── Session loading effect ─────────────────────────────────────
+  const lastLoadedSessionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!nowPlaying?.currentTrack) {
-      setDisplayElapsed(0);
-      return;
+    if (!selectedSessionId) return;
+    
+    // Only load if it's a different session than what we last triggered
+    if (selectedSessionId === lastLoadedSessionIdRef.current) return;
+    
+    const session = activeSessions.find((s) => s.id === selectedSessionId);
+    if (session) {
+      lastLoadedSessionIdRef.current = selectedSessionId;
+      contextLoadSession(session);
     }
+  }, [selectedSessionId, activeSessions, contextLoadSession]);
 
-    const baseElapsed = Math.max(0, Math.floor(nowPlaying.currentTrack.elapsed || 0));
-    const maxDuration = Math.max(0, Math.floor(nowPlaying.currentTrack.duration || 0));
-    const syncedAt = Date.now();
+  // ── Stream controls ─────────────────────────────────────────────
+  // Delegated to context: togglePlayback, handleMuteToggle
 
-    setDisplayElapsed(baseElapsed);
-
-    const intervalId = setInterval(() => {
-      const elapsedSeconds = Math.floor((Date.now() - syncedAt) / 1000);
-      const nextElapsed = baseElapsed + elapsedSeconds;
-      setDisplayElapsed(maxDuration > 0 ? Math.min(nextElapsed, maxDuration) : nextElapsed);
-    }, 1000);
-
-    return () => clearInterval(intervalId);
-  }, [
-    nowPlaying?.currentTrack?.shId,
-    nowPlaying?.currentTrack?.playedAt,
-    nowPlaying?.currentTrack?.elapsed,
-    nowPlaying?.currentTrack?.duration,
-  ]);
-
-=======
->>>>>>> Stashed changes
-  const unloadStream = useCallback(async () => {
-    if (soundRef.current) {
-      try {
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-        activeStreamUrlRef.current = '';
-      } catch (e) { }
-    }
-    setIsStreamPlaying(false);
-  }, []);
-
-  const startStream = useCallback(async () => {
-    if (!currentStreamUrl || isStreamLoading) return;
-
-    setIsStreamLoading(true);
-    try {
-      await unloadStream();
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: currentStreamUrl },
-        { shouldPlay: true, isMuted: isStreamMuted, volume: 1.0 },
-        (status) => {
-          if (status.isLoaded) setIsStreamPlaying(status.isPlaying);
-        }
-      );
-      soundRef.current = sound;
-      activeStreamUrlRef.current = currentStreamUrl;
-      setStreamAvailability('ready');
-    } catch (error) {
-      console.log('[Livestream] start error:', error);
-      setStreamAvailability('unavailable');
-    } finally {
-      setIsStreamLoading(false);
-    }
-  }, [currentStreamUrl, isStreamLoading, isStreamMuted, unloadStream]);
-
-  const togglePlayback = useCallback(async () => {
-    if (isStreamLoading) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    if (!soundRef.current) {
-      await startStream();
-      return;
-    }
-
-    try {
-      const status = await soundRef.current.getStatusAsync();
-      if (status.isLoaded) {
-        if (status.isPlaying) await soundRef.current.pauseAsync();
-        else await soundRef.current.playAsync();
-      }
-    } catch (e) {
-      await startStream();
-    }
-  }, [isStreamLoading, startStream]);
-
-  const handleSendMessage = () => {
+  const handleSendMessage = useCallback(() => {
     if (!inputMessage.trim()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -836,12 +572,40 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
       timestamp: 'Vừa xong',
     };
 
-    setMessages([...messages, newMessage]);
+    setMessages((prev) => [...prev, newMessage]);
     setInputMessage('');
-  };
+  }, [inputMessage]);
 
-  const albumArt = LIVE_SESSION.hostAvatar;
-  const liveListeners = LIVE_SESSION.listeners;
+  const handleReaction = useCallback((label: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        author: 'Bạn',
+        avatar: 'https://i.pravatar.cc/100?img=12',
+        message: `reacted ${label} ${label === 'Love' ? '❤️' : label === 'Like' ? '👍' : label === 'Haha' ? '😂' : '🎉'}`,
+        timestamp: 'Vừa xong',
+      },
+    ]);
+  }, []);
+
+  const handleRequestSuccess = useCallback((songTitle: string) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        author: 'Bạn',
+        avatar: 'https://i.pravatar.cc/100?img=12',
+        message: `Yêu cầu bài hát: ${songTitle} 🎵`,
+        timestamp: 'Vừa xong',
+        isRequest: true,
+        requestSong: songTitle,
+      },
+    ]);
+  }, []);
+
+  const isLive = currentLiveSession?.status?.toLowerCase() === 'live';
 
   return (
     <View style={styles.screen}>
@@ -859,16 +623,20 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.iconBtn}>
-          <Ionicons name="chevron-down" size={28} color="#FFFFFF" />
+          <Ionicons name="chevron-back" size={28} color="#FFFFFF" />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <LiveBadge />
-          <Text style={styles.headerTitle} numberOfLines={1}>{currentLiveSession?.sessionName || LIVE_SESSION.title}</Text>
+          {isLive && <LiveBadge />}
+          <Text style={styles.headerTitle} numberOfLines={1}>{sessionTitle}</Text>
         </View>
-        <TouchableOpacity style={styles.iconBtn}>
-          <Ionicons name="share-outline" size={24} color="#FFFFFF" />
+        <TouchableOpacity
+          style={styles.iconBtn}
+          onPress={() => setShowReactionPicker(true)}
+        >
+          <Ionicons name="happy-outline" size={24} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
+
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Main Player Area */}
@@ -882,19 +650,29 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
             )}
           </Animated.View>
 
+          {/* Track info from real nowPlaying */}
           <Animated.View entering={FadeInDown.delay(300)} style={styles.trackInfo}>
             <Text style={styles.trackTitle} numberOfLines={1}>
               {nowPlaying?.currentTrack?.title || 'Đang cập nhật...'}
             </Text>
             <Text style={styles.trackArtist} numberOfLines={1}>
-              {nowPlaying?.currentTrack?.artist || currentLiveSession?.stationName || 'SoundMate Live'}
+              {nowPlaying?.currentTrack?.artist || sessionHost}
             </Text>
+            {nowPlaying?.currentTrack && (
+              <Text style={styles.trackElapsed}>
+                {formatDuration(displayElapsed)} / {formatDuration(nowPlaying.currentTrack.duration)}
+              </Text>
+            )}
           </Animated.View>
 
           {/* Player Controls */}
           <Animated.View entering={FadeInDown.delay(400)} style={styles.controlsRow}>
-            <TouchableOpacity style={styles.sideControl}>
-              <Ionicons name="heart-outline" size={24} color="#FFFFFF" />
+            <TouchableOpacity style={styles.sideControl} onPress={handleMuteToggle}>
+              <Ionicons
+                name={isStreamMuted ? 'volume-mute' : 'volume-high'}
+                size={22}
+                color="#FFFFFF"
+              />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -906,13 +684,21 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
                 {isStreamLoading ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                  <Ionicons name={isStreamPlaying ? "pause" : "play"} size={36} color="#FFFFFF" style={!isStreamPlaying && { marginLeft: 4 }} />
+                  <Ionicons
+                    name={isStreamPlaying ? 'pause' : 'play'}
+                    size={36}
+                    color="#FFFFFF"
+                    style={!isStreamPlaying && { marginLeft: 4 }}
+                  />
                 )}
               </BlurView>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.sideControl} onPress={() => setShowRequestModal(true)}>
-              <Ionicons name="musical-notes-outline" size={24} color="#FFFFFF" />
+            <TouchableOpacity
+              style={styles.sideControl}
+              onPress={() => setShowRequestModal(true)}
+            >
+              <Ionicons name="musical-notes-outline" size={22} color="#FFFFFF" />
             </TouchableOpacity>
           </Animated.View>
 
@@ -925,16 +711,72 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Ionicons name="heart" size={14} color="#EF4444" />
-              <Text style={styles.statText}>{LIVE_SESSION.likes} thích</Text>
+              <Text style={styles.statText}>{LIVE_SESSION_FALLBACK.likes} thích</Text>
             </View>
+            {nowPlaying?.playingNext && (
+              <>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Ionicons name="play-forward" size={14} color="rgba(255,255,255,0.7)" />
+                  <Text style={styles.statText} numberOfLines={1}>
+                    Tiếp: {nowPlaying.playingNext.title}
+                  </Text>
+                </View>
+              </>
+            )}
           </Animated.View>
         </View>
+
+        {/* Now Playing mini-player */}
+        {nowPlaying?.currentTrack && (
+          <Animated.View entering={FadeInDown.delay(600)} style={styles.nowPlayingCard}>
+            <Text style={styles.nowPlayingLabel}>ĐANG PHÁT</Text>
+            <View style={styles.nowPlayingRow}>
+              <Image
+                source={{ uri: nowPlaying.currentTrack.artUrl }}
+                style={styles.nowPlayingArt}
+              />
+              <View style={styles.nowPlayingInfo}>
+                <Text style={styles.nowPlayingTitle} numberOfLines={1}>
+                  {nowPlaying.currentTrack.title}
+                </Text>
+                <Text style={styles.nowPlayingArtist} numberOfLines={1}>
+                  {nowPlaying.currentTrack.artist}
+                </Text>
+                {nowPlaying.currentTrack.album && (
+                  <Text style={styles.nowPlayingAlbum} numberOfLines={1}>
+                    Album: {nowPlaying.currentTrack.album}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.nowPlayingProgressWrap}>
+                <View
+                  style={[
+                    styles.nowPlayingProgress,
+                    {
+                      width: `${
+                        nowPlaying.currentTrack.duration > 0
+                          ? Math.min(
+                              (displayElapsed / nowPlaying.currentTrack.duration) * 100,
+                              100
+                            )
+                          : 0
+                      }%`,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          </Animated.View>
+        )}
 
         {/* Stories Section */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Tâm sự âm nhạc</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesScroll}>
-            {STORIES.map(s => <StoryCard key={s.id} story={s} />)}
+            {STORIES.map((s) => (
+              <StoryCard key={s.id} story={s} />
+            ))}
           </ScrollView>
         </View>
 
@@ -948,7 +790,7 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
       </ScrollView>
 
       {/* Message Input Footer */}
-      <BlurView intensity={40} style={styles.footer} tint={isDarkMode ? 'dark' : 'light'}>
+      <BlurView intensity={40} style={styles.footer} tint="dark">
         <View style={styles.inputWrapper}>
           <TextInput
             style={styles.input}
@@ -958,8 +800,12 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
             onChangeText={setInputMessage}
             onFocus={() => setIsInputFocused(true)}
             onBlur={() => setIsInputFocused(false)}
+            onSubmitEditing={handleSendMessage}
           />
-          <TouchableOpacity onPress={handleSendMessage} disabled={!inputMessage.trim()}>
+          <TouchableOpacity
+            onPress={handleSendMessage}
+            disabled={!inputMessage.trim()}
+          >
             <Ionicons
               name="send"
               size={22}
@@ -968,19 +814,39 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
           </TouchableOpacity>
         </View>
         <View style={styles.quickReactions}>
-          {['🔥', '❤️', '👏', '🎵'].map(emoji => (
-            <TouchableOpacity key={emoji} style={styles.emojiBtn} onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setInputMessage(prev => prev + emoji);
-            }}>
+          {['🔥', '❤️', '👏', '🎵'].map((emoji) => (
+            <TouchableOpacity
+              key={emoji}
+              style={styles.emojiBtn}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setInputMessage((prev) => prev + emoji);
+              }}
+            >
               <Text style={styles.emojiText}>{emoji}</Text>
             </TouchableOpacity>
           ))}
         </View>
       </BlurView>
+
+      {/* Modals */}
+      <RequestSongModal
+        isOpen={showRequestModal}
+        onClose={() => setShowRequestModal(false)}
+        songHistory={songHistory}
+        onRequestSuccess={handleRequestSuccess}
+      />
+
+      <ReactionPicker
+        isOpen={showReactionPicker}
+        onClose={() => setShowReactionPicker(false)}
+        onSelect={handleReaction}
+      />
     </View>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   screen: {
@@ -1042,6 +908,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
   },
+  sessionChipTextActive: {
+    color: '#FFFFFF',
+  },
   scrollContent: {
     paddingBottom: 160,
   },
@@ -1096,6 +965,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  trackElapsed: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    marginTop: 6,
+    fontWeight: '500',
+  },
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1131,22 +1006,82 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     marginTop: 40,
+    maxWidth: '90%',
   },
   statItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 1,
   },
   statText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
     marginLeft: 6,
+    flexShrink: 1,
   },
   statDivider: {
     width: 1,
     height: 12,
     backgroundColor: 'rgba(255,255,255,0.2)',
     marginHorizontal: 12,
+  },
+  nowPlayingCard: {
+    marginHorizontal: 20,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  nowPlayingLabel: {
+    color: '#55C5F1',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
+  nowPlayingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  nowPlayingArt: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  nowPlayingInfo: {
+    flex: 1,
+  },
+  nowPlayingTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  nowPlayingArtist: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  nowPlayingAlbum: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  nowPlayingProgressWrap: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 2,
+  },
+  nowPlayingProgress: {
+    height: '100%',
+    backgroundColor: '#55C5F1',
+    borderRadius: 2,
   },
   sectionContainer: {
     marginTop: 30,
@@ -1306,5 +1241,121 @@ const styles = StyleSheet.create({
   },
   emojiText: {
     fontSize: 22,
+  },
+  // Modal styles
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalBackdropTouchable: {
+    flex: 1,
+  },
+  modalCard: {
+    backgroundColor: '#1E293B',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalInput: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 44,
+    color: '#FFFFFF',
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  requestListContainer: {
+    marginTop: 12,
+    flex: 1,
+  },
+  requestList: {
+    maxHeight: 350,
+  },
+  requestEmptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 10,
+  },
+  requestEmptyText: {
+    color: '#94A3B8',
+    fontSize: 14,
+  },
+  requestItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+  },
+  requestItemMeta: {
+    flex: 1,
+    marginRight: 10,
+  },
+  requestItemTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  requestItemArtist: {
+    color: '#94A3B8',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  requestItemButton: {
+    backgroundColor: '#55C5F1',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  requestItemButtonDisabled: {
+    backgroundColor: 'rgba(85,197,241,0.4)',
+  },
+  requestItemButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  reactionPicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E293B',
+    marginHorizontal: 20,
+    marginBottom: 40,
+    borderRadius: 20,
+    padding: 16,
+    gap: 16,
+  },
+  reactionButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import {
     blogService,
@@ -32,6 +33,12 @@ import { useUser } from '../../context/UserContext';
 interface PostDetailScreenProps {
     postId: string;
     onBack: () => void;
+}
+
+const showToast = (message: string) => {
+    // Basic toast replacement using Alert for now
+    // In a real app, use a proper Toast library
+    console.log('[Toast]', message);
 }
 
 export default function PostDetailScreen({ postId, onBack }: PostDetailScreenProps) {
@@ -50,13 +57,151 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [replyingTo, setReplyingTo] = useState<{ commentId: string; username: string } | null>(null);
     const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+    const [isLiked, setIsLiked] = useState(false);
     const inputRef = React.useRef<TextInput>(null);
 
-    // Minimal no-op handlers to ensure compile-time safety
-    const handleReplyPress = (_commentId: string, _username: string) => { };
-    const handleEditPress = (_commentId: string, _content: string) => { };
-    const fetchData = (_refresh?: boolean) => { };
-    const handleComment = () => { };
+    const fetchData = useCallback(async (refresh = false) => {
+        if (!postId) return;
+        if (refresh) setIsRefreshing(true);
+        else setIsLoading(true);
+
+        try {
+            const [postRes, statsRes, commentsRes] = await Promise.all([
+                blogService.getPostById(postId),
+                blogService.getPostStats(postId),
+                blogService.getPostComments(postId)
+            ]);
+
+            if (postRes.success && postRes.data) {
+                setPost(postRes.data);
+            }
+            if (statsRes.success && statsRes.data) setStats(statsRes.data);
+            if (commentsRes.success && commentsRes.data) setComments(commentsRes.data.items || []);
+        } catch (error) {
+            console.error('Fetch post detail error:', error);
+        } finally {
+            setIsLoading(false);
+            setIsRefreshing(false);
+        }
+    }, [postId]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    const handleLike = async () => {
+        if (!post) return;
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        const newLikedState = !isLiked;
+        setIsLiked(newLikedState);
+        setStats(prev => prev ? { ...prev, reactionCount: newLikedState ? prev.reactionCount + 1 : prev.reactionCount - 1 } : null);
+
+        try {
+            await blogService.addReaction(postId, 'like');
+        } catch (error) {
+            // Rollback on error
+            setIsLiked(!newLikedState);
+            setStats(prev => prev ? { ...prev, reactionCount: !newLikedState ? prev.reactionCount + 1 : prev.reactionCount - 1 } : null);
+        }
+    };
+
+    const handleReport = useCallback(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        const reportReasons = [
+            'Nội dung nhạy cảm / NSFW',
+            'Spam / Quảng cáo',
+            'Quấy rối / Đe dọa',
+            'Thông tin sai lệch',
+            'Khác'
+        ];
+
+        Alert.alert(
+            'Báo cáo bài viết',
+            'Tại sao bạn muốn báo cáo bài viết này?',
+            [
+                ...reportReasons.map(reason => ({
+                    text: reason,
+                    onPress: async () => {
+                        try {
+                            const res = await blogService.reportPost(postId, reason);
+                            if (res.success) {
+                                Alert.alert('Thành công', 'Cảm ơn bạn đã báo cáo. Chúng tôi sẽ xem xét nội dung này sớm nhất.');
+                            } else {
+                                Alert.alert('Lỗi', res.message);
+                            }
+                        } catch (err) {
+                            Alert.alert('Lỗi', 'Không thể gửi báo cáo lúc này.');
+                        }
+                    }
+                })),
+                { text: 'Hủy', style: 'cancel' }
+            ]
+        );
+    }, [postId]);
+
+    const handleComment = async () => {
+        if (!commentText.trim() || isSubmitting) return;
+        
+        setIsSubmitting(true);
+        try {
+            let res;
+            if (editingCommentId) {
+                res = await blogService.updateComment(editingCommentId, commentText);
+            } else if (replyingTo) {
+                res = await blogService.replyComment(replyingTo.commentId, commentText);
+            } else {
+                res = await blogService.createComment(postId, commentText);
+            }
+
+            if (res.success) {
+                setCommentText('');
+                setReplyingTo(null);
+                setEditingCommentId(null);
+                Keyboard.dismiss();
+                fetchData(true); // Refresh comments and stats
+                showToast(editingCommentId ? 'Đã cập nhật bình luận' : 'Đã đăng bình luận');
+            }
+        } catch (error) {
+            Alert.alert('Lỗi', 'Không thể gửi bình luận. Vui lòng thử lại.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleReplyPress = (commentId: string, username: string) => {
+        setReplyingTo({ commentId, username });
+        setEditingCommentId(null);
+        setCommentText('');
+        inputRef.current?.focus();
+    };
+
+    const handleEditPress = (commentId: string, content: string) => {
+        setEditingCommentId(commentId);
+        setReplyingTo(null);
+        setCommentText(content);
+        inputRef.current?.focus();
+    };
+
+    const handleDeleteComment = async (commentId: string) => {
+        Alert.alert('Xóa bình luận', 'Bạn có chắc chắn muốn xóa bình luận này?', [
+            { text: 'Hủy', style: 'cancel' },
+            { 
+                text: 'Xóa', 
+                style: 'destructive', 
+                onPress: async () => {
+                    try {
+                        const res = await blogService.deleteComment(commentId);
+                        if (res.success) {
+                            fetchData(true);
+                            showToast('Đã xóa bình luận');
+                        }
+                    } catch (error) {
+                        showToast('Không thể xóa bình luận');
+                    }
+                }
+            }
+        ]);
+    };
 
     const renderComment = (comment: CommentResponse, isReply = false) => {
         return (
@@ -87,9 +232,14 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                                 <Text style={[styles.commentActionText, { color: palette.textMuted }]}>Phản hồi</Text>
                             </TouchableOpacity>
                             {user?.userId === comment.userId && (
-                                <TouchableOpacity onPress={() => handleEditPress(comment.id, comment.content)}>
-                                    <Text style={[styles.commentActionText, { color: palette.textMuted }]}>Sửa</Text>
-                                </TouchableOpacity>
+                                <>
+                                    <TouchableOpacity onPress={() => handleEditPress(comment.id, comment.content)}>
+                                        <Text style={[styles.commentActionText, { color: palette.textMuted }]}>Sửa</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={() => handleDeleteComment(comment.id)}>
+                                        <Text style={[styles.commentActionText, { color: '#FF4B2B' }]}>Xóa</Text>
+                                    </TouchableOpacity>
+                                </>
                             )}
                         </View>
                     </View>
@@ -123,8 +273,8 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                     <Ionicons name="chevron-back" size={28} color={palette.textPrimary} />
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: palette.textPrimary }]}>Bài viết</Text>
-                <TouchableOpacity style={styles.moreButton}>
-                    <Ionicons name="ellipsis-horizontal" size={24} color={palette.textPrimary} />
+                <TouchableOpacity style={styles.moreButton} onPress={handleReport}>
+                    <Ionicons name="flag-outline" size={22} color={palette.textPrimary} />
                 </TouchableOpacity>
             </View>
 
@@ -157,10 +307,10 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                         )}
 
                         <View style={styles.statsBar}>
-                            <View style={styles.statItem}>
-                                <Ionicons name="heart-outline" size={24} color={palette.textPrimary} />
-                                <Text style={[styles.statText, { color: palette.textPrimary }]}>{stats?.reactionCount || 0}</Text>
-                            </View>
+                            <TouchableOpacity style={styles.statItem} onPress={handleLike} activeOpacity={0.7}>
+                                <Ionicons name={isLiked ? "heart" : "heart-outline"} size={24} color={isLiked ? "#FF4B2B" : palette.textPrimary} />
+                                <Text style={[styles.statText, { color: isLiked ? "#FF4B2B" : palette.textPrimary }]}>{stats?.reactionCount || 0}</Text>
+                            </TouchableOpacity>
                             <View style={styles.statItem}>
                                 <Ionicons name="chatbubble-outline" size={22} color={palette.textPrimary} />
                                 <Text style={[styles.statText, { color: palette.textPrimary }]}>{stats?.commentCount || 0}</Text>

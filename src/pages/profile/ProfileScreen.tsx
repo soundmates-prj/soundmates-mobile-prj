@@ -16,7 +16,6 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Animated as RNAnimated,
   Platform,
 } from 'react-native';
 import Animated, {
@@ -27,7 +26,8 @@ import Animated, {
   withSpring,
   withTiming,
   interpolate,
-  Extrapolate
+  Extrapolate,
+  useAnimatedScrollHandler
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { showToast } from '../../../components/ui/Toast';
@@ -41,7 +41,6 @@ import CreatePostScreen, { EditablePostDraft } from '../blog/CreatePostScreen';
 import PostDetailScreen from '../blog/PostDetailScreen';
 import AccountInfoScreen from './AccountInfoScreen';
 import ChangePasswordScreen from './ChangePasswordScreen';
-import EditProfileScreen from './EditProfileScreen';
 import SubscriptionDetailsScreen from './SubscriptionDetailsScreen';
 
 const { width, height } = Dimensions.get('window');
@@ -84,7 +83,7 @@ function MenuCard({ icon, label, subtitle, color, badge, onPress, palette, isDar
 
 // ─── Main ProfileScreen ─────────────────────────────────
 
-export default function ProfileScreen({ onBackToHome, onLogout }: any) {
+export default function ProfileScreen({ onBackToHome, onLogout, onNavigateToEditProfile }: any) {
   const { user, saveUser, refreshUser } = useUser();
   const { isDarkMode, themePreference, setThemePreference, effectiveTheme } = useTheme();
   const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
@@ -94,16 +93,38 @@ export default function ProfileScreen({ onBackToHome, onLogout }: any) {
   const [isPostsLoading, setIsPostsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [showCreatePost, setShowCreatePost] = useState(false);
   const [subscriptionPlanName, setSubscriptionPlanName] = useState('Premium');
 
-  const scrollY = useRef(new RNAnimated.Value(0)).current;
+  const scrollY = useSharedValue(0);
+  const headerTranslateY = useSharedValue(0);
+  const lastScrollY = useSharedValue(0);
 
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [100, 200],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      const currentY = event.contentOffset.y;
+      const diff = currentY - lastScrollY.value;
+      
+      if (currentY > 10) {
+        const newVal = headerTranslateY.value - diff;
+        headerTranslateY.value = Math.max(-100, Math.min(0, newVal));
+      } else {
+        headerTranslateY.value = 0;
+      }
+      
+      scrollY.value = currentY;
+      lastScrollY.value = currentY;
+    },
+    onBeginDrag: (event) => {
+      lastScrollY.value = event.contentOffset.y;
+    }
   });
+
+  const headerAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: headerTranslateY.value }],
+    opacity: interpolate(scrollY.value, [0, 20], [0, 1], Extrapolate.CLAMP),
+  }));
 
   const fetchMyPosts = useCallback(async (refresh = false) => {
     if (!user?.userId) return;
@@ -141,25 +162,41 @@ export default function ProfileScreen({ onBackToHome, onLogout }: any) {
     ]);
   };
 
+  const handleLikePost = async (postId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setMyPosts(prev => prev.map(p => {
+      if (p.id === postId) {
+        const newIsLiked = !p.isLiked;
+        return {
+          ...p,
+          isLiked: newIsLiked,
+          reactionCount: newIsLiked ? p.reactionCount + 1 : p.reactionCount - 1
+        };
+      }
+      return p;
+    }));
+
+    try {
+      await blogService.addReaction(postId, 'like');
+    } catch (e) {
+      console.log('Toggle like error', e);
+    }
+  };
+
   const albumArt = user?.profileImageUrl || defaultAvatarUrl;
 
   return (
     <View style={[styles.screen, { backgroundColor: palette.background }]}>
       {/* Animated Sticky Header */}
-      <RNAnimated.View style={[styles.stickyHeader, { opacity: headerOpacity, backgroundColor: palette.surface + 'E6' }]}>
-        <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={isDarkMode ? 'dark' : 'light'} />
-        <View style={styles.headerContent}>
-          <Text style={[styles.stickyTitle, { color: palette.textPrimary }]}>{user?.username || 'Profile'}</Text>
-        </View>
-      </RNAnimated.View>
+      <Animated.View style={[styles.stickyHeader, { backgroundColor: palette.surface + 'E6' }, headerAnimatedStyle]}>
+        <BlurView intensity={90} style={StyleSheet.absoluteFill} tint={isDarkMode ? 'dark' : 'light'} />
+        <View style={styles.headerContent} />
+      </Animated.View>
 
-      <RNAnimated.ScrollView
+      <Animated.ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
-        onScroll={RNAnimated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
-        )}
+        onScroll={scrollHandler}
         scrollEventThrottle={16}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={() => fetchMyPosts(true)} colors={[palette.primary]} />
@@ -173,7 +210,7 @@ export default function ProfileScreen({ onBackToHome, onLogout }: any) {
             </LinearGradient>
             <TouchableOpacity
               style={[styles.editBadge, { backgroundColor: palette.primary }]}
-              onPress={() => setShowEditProfile(true)}
+              onPress={onNavigateToEditProfile}
             >
               <Ionicons name="camera" size={14} color="#FFFFFF" />
             </TouchableOpacity>
@@ -196,13 +233,13 @@ export default function ProfileScreen({ onBackToHome, onLogout }: any) {
 
           <Animated.View entering={FadeInDown.delay(500)} style={styles.headerActions}>
             <TouchableOpacity
-              onPress={() => setShowEditProfile(true)}
+              onPress={onNavigateToEditProfile}
               style={[styles.primaryActionBtn, { backgroundColor: palette.primary }]}
             >
               <Text style={styles.primaryActionText}>Chỉnh sửa hồ sơ</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => setShowSettings(true)}
+              onPress={() => Linking.openSettings()}
               style={[styles.secondaryActionBtn, { backgroundColor: palette.surface, borderColor: palette.border }]}
             >
               <Ionicons name="settings-outline" size={20} color={palette.textPrimary} />
@@ -235,7 +272,11 @@ export default function ProfileScreen({ onBackToHome, onLogout }: any) {
                 ) : myPosts.length > 0 ? (
                   myPosts.map((post, idx) => (
                     <Animated.View key={post.id} entering={FadeInUp.delay(idx * 100)}>
-                      <BlogPostCard post={post} onLike={() => { }} onNavigateToDetail={() => { }} />
+                       <BlogPostCard 
+                          post={post} 
+                          onLike={() => handleLikePost(post.id)} 
+                          onNavigateToDetail={() => setSelectedPostId(post.id)} 
+                        />
                     </Animated.View>
                   ))
                 ) : (
@@ -289,12 +330,25 @@ export default function ProfileScreen({ onBackToHome, onLogout }: any) {
             <Text style={styles.logoutText}>Đăng xuất</Text>
           </TouchableOpacity>
         </View>
-      </RNAnimated.ScrollView>
+      </Animated.ScrollView>
 
-      {/* Modals */}
-      <Modal visible={showEditProfile} animationType="slide" transparent>
-        <EditProfileScreen onBack={() => setShowEditProfile(false)} />
-      </Modal>
+      {selectedPostId && (
+        <Modal visible={!!selectedPostId} animationType="slide">
+          <PostDetailScreen postId={selectedPostId} onBack={() => setSelectedPostId(null)} />
+        </Modal>
+      )}
+
+      {showCreatePost && (
+        <Modal visible={showCreatePost} animationType="slide">
+          <CreatePostScreen 
+            onBack={() => setShowCreatePost(false)} 
+            onPostCreated={() => {
+              setShowCreatePost(false);
+              fetchMyPosts(true);
+            }} 
+          />
+        </Modal>
+      )}
     </View>
   );
 }
@@ -308,16 +362,16 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 100,
+    height: 60,
     zIndex: 10,
-    justifyContent: 'flex-end',
-    paddingBottom: 12,
   },
   headerContent: {
     alignItems: 'center',
+    height: '100%',
+    justifyContent: 'center',
   },
   stickyTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
   },
   scrollContent: {
@@ -325,9 +379,9 @@ const styles = StyleSheet.create({
   },
   profileHeader: {
     alignItems: 'center',
-    paddingTop: 80,
+    paddingTop: 20,
     paddingHorizontal: 20,
-    marginBottom: 30,
+    marginBottom: 20,
   },
   avatarWrapper: {
     position: 'relative',

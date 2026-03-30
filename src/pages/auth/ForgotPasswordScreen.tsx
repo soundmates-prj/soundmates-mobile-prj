@@ -240,7 +240,7 @@ export default function ForgotPasswordScreen({ onBack, prefillEmail }: ForgotPas
     return (
       <View style={styles.container}>
         <LinearGradient
-          colors={isDarkMode ? ['#020617', '#0B1220', '#000000'] : ['#E0F7FF', '#FFFFFF', '#F0F9FF']}
+          colors={isDarkMode ? ['#050B18', '#0A1120', '#000000'] : ['#E0F7FF', '#FFFFFF', '#F0F9FF']}
           style={StyleSheet.absoluteFill}
         />
         <View style={styles.successContainer}>
@@ -248,15 +248,15 @@ export default function ForgotPasswordScreen({ onBack, prefillEmail }: ForgotPas
             <Ionicons name="checkmark-circle" size={80} color={palette.success} />
           </Animated.View>
           <Animated.View entering={FadeInDown.delay(200).duration(800)}>
-            <Text style={styles.title}>Thành công!</Text>
-            <Text style={styles.subtitle}>Mật khẩu của bạn đã được cập nhật thành công.</Text>
+            <Text style={[styles.title, { color: palette.textPrimary }]}>Thành công!</Text>
+            <Text style={[styles.subtitle, { color: palette.textSecondary }]}>Mật khẩu của bạn đã được cập nhật thành công.</Text>
             <AnimatedTouchableOpacity
               style={[styles.submitButtonWrapper, buttonAnimatedStyle]}
               onPressIn={handlePressIn}
               onPressOut={handlePressOut}
               onPress={onBack}
             >
-              <LinearGradient colors={[SoundMateLightColors.primary, SoundMateLightColors.primaryDark]} style={styles.submitButton}>
+              <LinearGradient colors={[palette.primary, palette.primaryDark]} style={styles.submitButton}>
                 <Text style={styles.submitButtonText}>Quay lại đăng nhập</Text>
               </LinearGradient>
             </AnimatedTouchableOpacity>
@@ -269,15 +269,15 @@ export default function ForgotPasswordScreen({ onBack, prefillEmail }: ForgotPas
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={isDarkMode ? ['#020617', '#0B1220', '#000000'] : ['#E0F7FF', '#FFFFFF', '#F0F9FF']}
+        colors={isDarkMode ? ['#050B18', '#0A1120', '#000000'] : ['#E0F7FF', '#FFFFFF', '#F0F9FF']}
         style={StyleSheet.absoluteFill}
       />
 
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
+        <TouchableOpacity onPress={handleGoBack} style={[styles.backButton, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           <Ionicons name="chevron-back" size={24} color={palette.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Quên mật khẩu</Text>
+        <Text style={[styles.headerTitle, { color: palette.textPrimary }]}>Quên mật khẩu</Text>
       </View>
 
       <StepIndicator currentStep={step} />
@@ -288,19 +288,19 @@ export default function ForgotPasswordScreen({ onBack, prefillEmail }: ForgotPas
           {step === 'email' && (
             <Animated.View entering={FadeInDown.duration(600)}>
               <View style={styles.illustrationContainer}>
-                <View style={styles.iconCircle}>
-                  <Ionicons name="mail-open" size={40} color={SoundMateLightColors.primary} />
+                <View style={[styles.iconCircle, { backgroundColor: palette.surface }]}>
+                  <Ionicons name="mail-open" size={40} color={palette.primary} />
                 </View>
-                <Text style={styles.title}>Nhập email</Text>
-                <Text style={styles.subtitle}>Chúng tôi sẽ gửi mã xác thực đến email của bạn</Text>
+                <Text style={[styles.title, { color: palette.textPrimary }]}>Nhập email</Text>
+                <Text style={[styles.subtitle, { color: palette.textSecondary }]}>Chúng tôi sẽ gửi mã xác thực đến email của bạn</Text>
               </View>
 
-              <BlurView intensity={60} tint="light" style={styles.inputWrapper}>
-                <Ionicons name="mail-outline" size={20} color={SoundMateLightColors.primary} style={styles.inputIcon} />
+              <BlurView intensity={70} tint={isDarkMode ? 'dark' : 'light'} style={[styles.inputWrapper, { borderColor: palette.border }]}>
+                <Ionicons name="mail-outline" size={20} color={palette.primary} style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { color: palette.textPrimary }]}
                   placeholder="Email đăng ký"
-                  placeholderTextColor={SoundMateLightColors.textMuted}
+                  placeholderTextColor={palette.textMuted}
                   value={email}
                   onChangeText={setEmail}
                   keyboardType="email-address"
@@ -315,7 +315,7 @@ export default function ForgotPasswordScreen({ onBack, prefillEmail }: ForgotPas
                 onPress={handleSendOTP}
                 disabled={!isValidEmail || isLoading}
               >
-                <LinearGradient colors={[SoundMateLightColors.primary, SoundMateLightColors.primaryDark]} style={styles.submitButton}>
+                <LinearGradient colors={[palette.primary, palette.primaryDark]} style={styles.submitButton}>
                   <Text style={styles.submitButtonText}>{isLoading ? 'Đang gửi...' : 'Tiếp tục'}</Text>
                 </LinearGradient>
               </AnimatedTouchableOpacity>
@@ -325,18 +325,18 @@ export default function ForgotPasswordScreen({ onBack, prefillEmail }: ForgotPas
           {step === 'otp' && (
             <Animated.View entering={FadeInDown.duration(600)}>
               <View style={styles.illustrationContainer}>
-                <View style={styles.iconCircle}>
-                  <Ionicons name="shield-checkmark" size={40} color={SoundMateLightColors.primary} />
+                <View style={[styles.iconCircle, { backgroundColor: palette.surface }]}>
+                  <Ionicons name="shield-checkmark" size={40} color={palette.primary} />
                 </View>
-                <Text style={styles.title}>Xác thực</Text>
-                <Text style={styles.subtitle}>Nhập mã 6 số đã được gửi đến {maskEmail(email)}</Text>
+                <Text style={[styles.title, { color: palette.textPrimary }]}>Xác thực</Text>
+                <Text style={[styles.subtitle, { color: palette.textSecondary }]}>Nhập mã 6 số đã được gửi đến {maskEmail(email)}</Text>
               </View>
 
-              <BlurView intensity={60} tint="light" style={styles.inputWrapper}>
+              <BlurView intensity={70} tint={isDarkMode ? 'dark' : 'light'} style={[styles.inputWrapper, { borderColor: palette.border }]}>
                 <TextInput
-                  style={[styles.input, { textAlign: 'center', fontSize: 24, letterSpacing: 10 }]}
+                  style={[styles.input, { textAlign: 'center', fontSize: 24, letterSpacing: 10, color: palette.textPrimary }]}
                   placeholder="000000"
-                  placeholderTextColor={SoundMateLightColors.textMuted}
+                  placeholderTextColor={palette.textMuted}
                   value={otp}
                   onChangeText={setOtp}
                   keyboardType="number-pad"
@@ -350,7 +350,7 @@ export default function ForgotPasswordScreen({ onBack, prefillEmail }: ForgotPas
                 onPressOut={handlePressOut}
                 onPress={handleVerifyOTP}
               >
-                <LinearGradient colors={[SoundMateLightColors.primary, SoundMateLightColors.primaryDark]} style={styles.submitButton}>
+                <LinearGradient colors={[palette.primary, palette.primaryDark]} style={styles.submitButton}>
                   <Text style={styles.submitButtonText}>Xác nhận</Text>
                 </LinearGradient>
               </AnimatedTouchableOpacity>
@@ -366,37 +366,39 @@ export default function ForgotPasswordScreen({ onBack, prefillEmail }: ForgotPas
           {step === 'newPassword' && (
             <Animated.View entering={FadeInDown.duration(600)}>
               <View style={styles.illustrationContainer}>
-                <View style={styles.iconCircle}>
-                  <Ionicons name="lock-open" size={40} color={SoundMateLightColors.primary} />
+                <View style={[styles.iconCircle, { backgroundColor: palette.surface }]}>
+                  <Ionicons name="lock-open" size={40} color={palette.primary} />
                 </View>
-                <Text style={styles.title}>Mật khẩu mới</Text>
-                <Text style={styles.subtitle}>Tạo mật khẩu mới an toàn hơn</Text>
+                <Text style={[styles.title, { color: palette.textPrimary }]}>Mật khẩu mới</Text>
+                <Text style={[styles.subtitle, { color: palette.textSecondary }]}>Tạo mật khẩu mới an toàn hơn</Text>
               </View>
 
               <View style={{ gap: 12 }}>
-                <BlurView intensity={60} tint="light" style={styles.inputWrapper}>
+                <BlurView intensity={70} tint={isDarkMode ? 'dark' : 'light'} style={[styles.inputWrapper, { borderColor: palette.border }]}>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, { color: palette.textPrimary }]}
                     placeholder="Mật khẩu mới"
+                    placeholderTextColor={palette.textMuted}
                     secureTextEntry={!showNewPassword}
                     value={newPassword}
                     onChangeText={setNewPassword}
                   />
                   <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)}>
-                    <Ionicons name={showNewPassword ? "eye-outline" : "eye-off-outline"} size={20} color={SoundMateLightColors.textMuted} />
+                    <Ionicons name={showNewPassword ? "eye-outline" : "eye-off-outline"} size={20} color={palette.textMuted} />
                   </TouchableOpacity>
                 </BlurView>
 
-                <BlurView intensity={60} tint="light" style={styles.inputWrapper}>
+                <BlurView intensity={70} tint={isDarkMode ? 'dark' : 'light'} style={[styles.inputWrapper, { borderColor: palette.border }]}>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, { color: palette.textPrimary }]}
                     placeholder="Xác nhận mật khẩu"
+                    placeholderTextColor={palette.textMuted}
                     secureTextEntry={!showConfirmPassword}
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
                   />
                   <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-                    <Ionicons name={showConfirmPassword ? "eye-outline" : "eye-off-outline"} size={20} color={SoundMateLightColors.textMuted} />
+                    <Ionicons name={showConfirmPassword ? "eye-outline" : "eye-off-outline"} size={20} color={palette.textMuted} />
                   </TouchableOpacity>
                 </BlurView>
               </View>
@@ -408,7 +410,7 @@ export default function ForgotPasswordScreen({ onBack, prefillEmail }: ForgotPas
                 onPress={handleResetPassword}
                 disabled={!allRulesPassed || !passwordsMatch || isLoading}
               >
-                <LinearGradient colors={[SoundMateLightColors.primary, SoundMateLightColors.primaryDark]} style={styles.submitButton}>
+                <LinearGradient colors={[palette.primary, palette.primaryDark]} style={styles.submitButton}>
                   <Text style={styles.submitButtonText}>{isLoading ? 'Đang cập nhật...' : 'Đổi mật khẩu'}</Text>
                 </LinearGradient>
               </AnimatedTouchableOpacity>
