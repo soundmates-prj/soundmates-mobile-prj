@@ -20,6 +20,7 @@ export interface BlogPostResponse {
     isActive: boolean;
     privacyScope?: string | null;
     moodTag?: string | null;
+    shareMusic?: SharedMusicResponse | null;
     status: string; // 'Draft' | 'Published' | 'Archived'
     isGenerated: boolean;
     createdAt: string;
@@ -36,6 +37,7 @@ export interface TrendingPostResponse {
     imgUrl?: string | null;
     privacyScope?: string | null;
     moodTag?: string | null;
+    shareMusic?: SharedMusicResponse | null;
     status: string;
     isGenerated: boolean;
     createdAt: string;
@@ -54,6 +56,7 @@ export interface PopularPostResponse {
     imgUrl?: string | null;
     privacyScope?: string | null;
     moodTag?: string | null;
+    shareMusic?: SharedMusicResponse | null;
     status: string;
     isGenerated: boolean;
     createdAt: string;
@@ -69,6 +72,15 @@ export interface PostStatsResponse {
     commentCount: number;
     viewCount: number;
     publishedAt?: string | null;
+}
+
+export interface SharedMusicResponse {
+    trackId: string;
+    title: string;
+    artist: string;
+    albumImage?: string | null;
+    previewUrl?: string | null;
+    template?: string | null;
 }
 
 export interface CommentResponse {

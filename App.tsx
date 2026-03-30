@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { registerRootComponent } from 'expo';
 import React, { useCallback, useEffect, useState } from 'react';
-import { StatusBar, StyleSheet } from 'react-native';
+import { ActivityIndicator, Image, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { SoundMateColors, SoundMateLightColors } from './constants/theme';
@@ -51,10 +51,32 @@ enum Screen {
 
 type HomeEntryTab = Extract<TabName, 'home' | 'blog' | 'podcast'>;
 
+function AppLoadingScreen({ isDarkMode }: { isDarkMode: boolean }) {
+    const backgroundColor = isDarkMode ? SoundMateColors.background : SoundMateLightColors.background;
+    const textColor = isDarkMode ? '#E6EAF4' : '#1E2434';
+
+    return (
+        <View style={[styles.loadingContainer, { backgroundColor }]}> 
+            <Image
+                source={isDarkMode ? require('./assets/dark_logo.png') : require('./assets/light_logo.png')}
+                style={styles.loadingLogo}
+                resizeMode="contain"
+            />
+            <ActivityIndicator
+                size="small"
+                color={isDarkMode ? '#F8FAFC' : '#0F172A'}
+                style={styles.loadingIndicator}
+            />
+            <Text style={[styles.loadingText, { color: textColor }]}>Đang tải dữ liệu...</Text>
+        </View>
+    );
+}
+
 function AppContent() {
-    const { clearUser, refreshUser } = useUser();
+    const { clearUser, refreshUser, isLoading } = useUser();
     const { isDarkMode } = useTheme();
     const [currentScreen, setCurrentScreen] = useState<Screen>(Screen.LOGIN);
+    const [isBootstrapping, setIsBootstrapping] = useState(true);
     const [userEmail, setUserEmail] = useState<string>('');
     const [pendingPassword, setPendingPassword] = useState<string>('');
     const [isNewRegistration, setIsNewRegistration] = useState<boolean>(false);
@@ -66,24 +88,43 @@ function AppContent() {
     const useDarkThemeShell = isDarkMode && currentScreen !== Screen.LIVE;
     const appBackground = useDarkThemeShell ? SoundMateColors.background : SoundMateLightColors.background;
 
-    // Check for saved tokens on app start
+    // Bootstrap app state before rendering the main navigation flow.
     useEffect(() => {
-        const checkAuth = async () => {
+        let isMounted = true;
+
+        const bootstrapApp = async () => {
             try {
-                const token = await AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+                const [token] = await Promise.all([
+                    AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN),
+                    livestreamService.initializeStationContext(),
+                ]);
+
+                if (!isMounted) {
+                    return;
+                }
+
                 if (token) {
-                    // User has a valid token, go to home
                     setCurrentScreen(Screen.HOME);
+                } else {
+                    setCurrentScreen(Screen.LOGIN);
                 }
             } catch (error) {
                 console.log('Error checking auth:', error);
+                if (isMounted) {
+                    setCurrentScreen(Screen.LOGIN);
+                }
+            } finally {
+                if (isMounted) {
+                    setIsBootstrapping(false);
+                }
             }
         };
-        checkAuth();
-    }, []);
 
-    useEffect(() => {
-        void livestreamService.initializeStationContext();
+        void bootstrapApp();
+
+        return () => {
+            isMounted = false;
+        };
     }, []);
 
     // Save authentication tokens only
@@ -412,6 +453,10 @@ function AppContent() {
     }, [clearAuthTokens]);
 
     const renderScreen = () => {
+        if (isBootstrapping || isLoading) {
+            return <AppLoadingScreen isDarkMode={isDarkMode} />;
+        }
+
         switch (currentScreen) {
             case Screen.LOGIN:
                 return (
@@ -527,6 +572,25 @@ function AppContent() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    loadingContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 24,
+    },
+    loadingLogo: {
+        width: 220,
+        height: 220,
+    },
+    loadingIndicator: {
+        marginTop: 8,
+    },
+    loadingText: {
+        marginTop: 14,
+        fontSize: 14,
+        fontWeight: '600',
+        letterSpacing: 0.3,
     },
     placeholder: {
         flex: 1,

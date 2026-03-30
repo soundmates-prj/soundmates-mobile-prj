@@ -4,19 +4,19 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Image,
-  Linking,
-  Modal,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    Image,
+    Linking,
+    Modal,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { authService, BlogPostResponse, blogService, paymentService, ReactionResponse, UpdateProfileRequest } from '../../api';
@@ -139,6 +139,7 @@ function mapMyPostToDisplayPost(post: BlogPostResponse): DisplayPost {
     imageUrl: post.imageUrl,
     audioUrl: post.audioUrl,
     moodTag: post.moodTag,
+    shareMusic: post.shareMusic || null,
     status: post.status,
     createdAt: post.createdAt,
     publishedAt: post.publishedAt,

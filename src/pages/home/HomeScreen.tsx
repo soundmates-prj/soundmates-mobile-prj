@@ -306,22 +306,36 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
         try {
             const result = await blogService.getPopularPosts({ page: 1, pageSize: 10 });
             if (result.success && result.data?.items) {
-                const mappedPosts = result.data.items.map((post: PopularPostResponse) => ({
-                    id: post.id,
-                    userId: post.userId,
-                    title: post.title,
-                    contentText: post.contentText,
-                    imageUrl: post.imgUrl || null,
-                    audioUrl: post.audioUrl || null,
-                    moodTag: post.moodTag,
-                    status: post.status,
-                    createdAt: post.createdAt,
-                    publishedAt: post.publishedAt,
-                    reactionCount: post.reactionCount,
-                    commentCount: post.commentCount,
-                    viewCount: 0,
-                    isLiked: false,
-                }));
+                const mappedPosts = result.data.items.map((post: PopularPostResponse) => {
+                    const candidateShareMusic = (
+                        (post as PopularPostResponse & { share_music?: unknown; sharedMusic?: unknown }).shareMusic
+                        || (post as PopularPostResponse & { share_music?: unknown; sharedMusic?: unknown }).share_music
+                        || (post as PopularPostResponse & { share_music?: unknown; sharedMusic?: unknown }).sharedMusic
+                    );
+
+                    const normalizedShareMusic = candidateShareMusic
+                        && typeof candidateShareMusic === 'object'
+                        ? (candidateShareMusic as DisplayPost['shareMusic'])
+                        : null;
+
+                    return {
+                        id: post.id,
+                        userId: post.userId,
+                        title: post.title,
+                        contentText: post.contentText,
+                        imageUrl: post.imgUrl || null,
+                        audioUrl: post.audioUrl || null,
+                        moodTag: post.moodTag,
+                        shareMusic: normalizedShareMusic,
+                        status: post.status,
+                        createdAt: post.createdAt,
+                        publishedAt: post.publishedAt,
+                        reactionCount: post.reactionCount,
+                        commentCount: post.commentCount,
+                        viewCount: 0,
+                        isLiked: false,
+                    };
+                });
                 setCommunityPosts(mappedPosts);
             } else {
                 setCommunityPosts([]);
