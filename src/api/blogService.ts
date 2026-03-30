@@ -20,6 +20,7 @@ export interface BlogPostResponse {
     isActive: boolean;
     privacyScope?: string | null;
     moodTag?: string | null;
+    postType?: string | null;
     shareMusic?: SharedMusicResponse | null;
     status: string; // 'Draft' | 'Published' | 'Archived'
     isGenerated: boolean;
@@ -37,6 +38,7 @@ export interface TrendingPostResponse {
     imgUrl?: string | null;
     privacyScope?: string | null;
     moodTag?: string | null;
+    postType?: string | null;
     shareMusic?: SharedMusicResponse | null;
     status: string;
     isGenerated: boolean;
@@ -56,6 +58,7 @@ export interface PopularPostResponse {
     imgUrl?: string | null;
     privacyScope?: string | null;
     moodTag?: string | null;
+    postType?: string | null;
     shareMusic?: SharedMusicResponse | null;
     status: string;
     isGenerated: boolean;
@@ -127,6 +130,15 @@ export interface UpdatePostRequest {
     imageUrl?: string;
     privacyScope?: string;
     moodTag?: string;
+}
+
+export interface ShareMusicPostRequest {
+    trackId: string;
+    title: string;
+    artist: string;
+    albumImage: string;
+    previewUrl: string;
+    template: string;
 }
 
 export interface PaginationParams {
@@ -358,6 +370,33 @@ export const blogService = {
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể tạo bài viết',
+            };
+        }
+    },
+
+    /**
+     * Share a music track as a post
+     */
+    async shareMusicPost(request: ShareMusicPostRequest): Promise<{
+        success: boolean;
+        data?: BlogPostResponse;
+        message?: string;
+    }> {
+        try {
+            const response = await authApiClient.post<ApiResponse<BlogPostResponse>>(
+                BLOG_ENDPOINTS.POSTS_SHARE_MUSIC,
+                request,
+            );
+            return {
+                success: response.data.success,
+                data: response.data.data,
+                message: response.data.message,
+            };
+        } catch (error: any) {
+            console.log('[BlogService] shareMusicPost error:', error);
+            return {
+                success: false,
+                message: error.response?.data?.message || 'Không thể chia sẻ bài nhạc',
             };
         }
     },

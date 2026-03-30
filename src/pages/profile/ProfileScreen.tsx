@@ -4,22 +4,22 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Image,
-    Linking,
-    Modal,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  Linking,
+  Modal,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
-import { authService, BlogPostResponse, blogService, paymentService, ReactionResponse, UpdateProfileRequest } from '../../api';
+import { authService, BlogPostResponse, blogService, FavoriteItemResponse, favoriteService, paymentService, ReactionResponse, UpdateProfileRequest } from '../../api';
 import { BlogPostCard, DisplayPost } from '../../components/blog/BlogPostCard';
 import { showToast } from '../../components/ui/Toast';
 import { ThemePreference, useTheme } from '../../context/ThemeContext';
@@ -139,6 +139,7 @@ function mapMyPostToDisplayPost(post: BlogPostResponse): DisplayPost {
     imageUrl: post.imageUrl,
     audioUrl: post.audioUrl,
     moodTag: post.moodTag,
+    postType: post.postType || null,
     shareMusic: post.shareMusic || null,
     status: post.status,
     createdAt: post.createdAt,
@@ -150,7 +151,64 @@ function mapMyPostToDisplayPost(post: BlogPostResponse): DisplayPost {
   };
 }
 
-function PostComposer({ onPress, avatarUrl }: { onPress: () => void; avatarUrl?: string }) {
+function sortPostsNewestFirst(posts: DisplayPost[]): DisplayPost[] {
+  return [...posts].sort((a, b) => {
+    const timeA = new Date(a.publishedAt || a.createdAt).getTime();
+    const timeB = new Date(b.publishedAt || b.createdAt).getTime();
+    return timeB - timeA;
+  });
+}
+
+interface ShareableFavoriteTrack {
+  id: string;
+  trackId: string;
+  title: string;
+  artist: string;
+  albumImage: string;
+  previewUrl: string;
+  template: string;
+}
+
+const parseTrackFromRawJson = (rawJson?: string) => {
+  if (!rawJson) return null;
+  try {
+    const parsed = JSON.parse(rawJson);
+    if (parsed && typeof parsed === 'object') {
+      return parsed as Record<string, any>;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+};
+
+function normalizeFavoriteTrack(item: FavoriteItemResponse): ShareableFavoriteTrack | null {
+  const rawTrack = parseTrackFromRawJson(item.rawJson);
+  const trackId = item.itemId || rawTrack?.id || rawTrack?.trackId;
+  const title = item.name || rawTrack?.name || rawTrack?.title;
+  const artist = item.artistName || rawTrack?.artists?.map?.((artist: any) => artist?.name).filter(Boolean).join(', ') || rawTrack?.artist || '';
+  const albumImage = item.imgUrl
+    || rawTrack?.album?.images?.[0]?.url
+    || rawTrack?.albumImage
+    || '';
+  const previewUrl = item.previewUrl || rawTrack?.preview_url || rawTrack?.previewUrl || '';
+
+  if (!trackId || !title || !artist) {
+    return null;
+  }
+
+  return {
+    id: item.id || `${item.source}-${trackId}`,
+    trackId,
+    title,
+    artist,
+    albumImage,
+    previewUrl,
+    template: 'gradient',
+  };
+}
+
+function PostComposer({ onPress, onShareMusic, avatarUrl }: { onPress: () => void; onShareMusic?: () => void; avatarUrl?: string }) {
   return (
     <View style={styles.composerContainer}>
       <TouchableOpacity activeOpacity={0.75} onPress={onPress} style={styles.composerCard}>
@@ -166,9 +224,16 @@ function PostComposer({ onPress, avatarUrl }: { onPress: () => void; avatarUrl?:
             <View style={[styles.composerQuickIcon, { backgroundColor: '#10B9811A' }]}>
               <Ionicons name="image-outline" size={18} color="#10B981" />
             </View>
-            <View style={[styles.composerQuickIcon, { backgroundColor: '#55C5F11A' }]}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={(event) => {
+                event.stopPropagation();
+                onShareMusic?.();
+              }}
+              style={[styles.composerQuickIcon, { backgroundColor: '#55C5F11A' }]}
+            >
               <Ionicons name="musical-notes-outline" size={18} color="#55C5F1" />
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
       </TouchableOpacity>
@@ -359,6 +424,10 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
   const [previewImageUrl, setPreviewImageUrl] = useState('');
   const [previewImageTarget, setPreviewImageTarget] = useState<'avatar' | 'cover'>('avatar');
   const [showThemePickerPopup, setShowThemePickerPopup] = useState(false);
+  const [showShareMusicModal, setShowShareMusicModal] = useState(false);
+  const [favoriteSpotifyTracks, setFavoriteSpotifyTracks] = useState<ShareableFavoriteTrack[]>([]);
+  const [isFavoriteTracksLoading, setIsFavoriteTracksLoading] = useState(false);
+  const [sharingTrackId, setSharingTrackId] = useState<string | null>(null);
   const [subscriptionPlanName, setSubscriptionPlanName] = useState('Premium');
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null);
 
@@ -673,9 +742,9 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
         );
 
         if (pageNum === 1) {
-          setMyPosts(enhancedPosts);
+          setMyPosts(sortPostsNewestFirst(enhancedPosts));
         } else {
-          setMyPosts((prev) => [...prev, ...enhancedPosts]);
+          setMyPosts((prev) => sortPostsNewestFirst([...prev, ...enhancedPosts]));
         }
 
         setPostsPage(pageNum);
@@ -712,6 +781,70 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
 
   const handlePostsRefresh = useCallback(() => {
     fetchMyPosts(1, true);
+  }, [fetchMyPosts]);
+
+  const fetchFavoriteSpotifyTracks = useCallback(async () => {
+    setIsFavoriteTracksLoading(true);
+    try {
+      const result = await favoriteService.getFavorites({
+        itemType: 'track',
+        source: 'spotify',
+        page: 1,
+        pageSize: 50,
+      });
+
+      if (!result.success) {
+        showToast.error('Không tải được danh sách yêu thích', result.message || 'Vui lòng thử lại sau');
+        setFavoriteSpotifyTracks([]);
+        return;
+      }
+
+      const normalizedTracks = (result.data || [])
+        .map(normalizeFavoriteTrack)
+        .filter((track): track is ShareableFavoriteTrack => !!track);
+
+      setFavoriteSpotifyTracks(normalizedTracks);
+    } catch (error) {
+      console.log('[ProfileScreen] fetchFavoriteSpotifyTracks error:', error);
+      setFavoriteSpotifyTracks([]);
+      showToast.error('Không tải được danh sách yêu thích', 'Vui lòng thử lại sau');
+    } finally {
+      setIsFavoriteTracksLoading(false);
+    }
+  }, []);
+
+  const handleOpenShareMusicModal = useCallback(() => {
+    setShowShareMusicModal(true);
+    void fetchFavoriteSpotifyTracks();
+  }, [fetchFavoriteSpotifyTracks]);
+
+  const handleShareFavoriteTrack = useCallback(async (track: ShareableFavoriteTrack) => {
+    setSharingTrackId(track.id);
+    try {
+      const result = await blogService.shareMusicPost({
+        trackId: track.trackId,
+        title: track.title,
+        artist: track.artist,
+        albumImage: track.albumImage || '',
+        previewUrl: track.previewUrl || '',
+        template: track.template || 'gradient',
+      });
+
+      if (!result.success) {
+        showToast.error('Chia sẻ thất bại', result.message || 'Không thể chia sẻ bài nhạc này');
+        return;
+      }
+
+      showToast.success('Đã chia sẻ bài nhạc', 'Bài viết nhạc đã được đăng lên trang cá nhân');
+      setShowShareMusicModal(false);
+      setActiveTab('posts');
+      fetchMyPosts(1, true);
+    } catch (error) {
+      console.log('[ProfileScreen] handleShareFavoriteTrack error:', error);
+      showToast.error('Chia sẻ thất bại', 'Vui lòng thử lại sau');
+    } finally {
+      setSharingTrackId(null);
+    }
   }, [fetchMyPosts]);
 
   const handleLikePost = useCallback(async (postId: string) => {
@@ -997,7 +1130,28 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
         {/* ── Tab Content ── */}
         {activeTab === 'posts' ? (
           <>
-            <PostComposer onPress={handleOpenCreatePost} avatarUrl={user?.profileImageUrl} />
+            <PostComposer onPress={handleOpenCreatePost} onShareMusic={handleOpenShareMusicModal} avatarUrl={user?.profileImageUrl} />
+
+            <View style={[styles.shareMusicSection, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+              <View style={styles.shareMusicSectionHeader}>
+                <View style={[styles.shareMusicSectionIcon, { backgroundColor: isDarkMode ? '#1E3A8A33' : '#DBEAFE' }]}>
+                  <Ionicons name="musical-notes" size={18} color="#1DB954" />
+                </View>
+                <View style={styles.shareMusicSectionInfo}>
+                  <Text style={[styles.shareMusicSectionTitle, { color: palette.textPrimary }]}>Chia sẻ nhạc yêu thích</Text>
+                  <Text style={[styles.shareMusicSectionDesc, { color: palette.textSecondary }]}>Đăng nhanh bài nhạc đã thêm vào yêu thích</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={[styles.shareMusicOpenButton, { backgroundColor: palette.primary }]}
+                onPress={handleOpenShareMusicModal}
+              >
+                <Ionicons name="musical-notes" size={14} color="#FFFFFF" />
+                <Text style={styles.shareMusicOpenButtonText}>Chọn bài để chia sẻ</Text>
+              </TouchableOpacity>
+            </View>
 
             {isPostsLoading ? (
               <View style={styles.postsLoadingContainer}>
@@ -1136,6 +1290,70 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
           </View>
         </View>
       )}
+
+      <Modal
+        visible={showShareMusicModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowShareMusicModal(false)}
+      >
+        <View style={styles.popupOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowShareMusicModal(false)} />
+
+          <View style={[styles.shareMusicModalCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+            <View style={[styles.popupHeader, { borderBottomColor: palette.border }]}>
+              <Text style={[styles.popupTitle, { color: palette.textPrimary }]}>Chia sẻ từ nhạc yêu thích</Text>
+              <TouchableOpacity onPress={() => setShowShareMusicModal(false)}>
+                <Ionicons name="close" size={18} color={palette.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {isFavoriteTracksLoading ? (
+              <View style={styles.shareMusicLoadingWrap}>
+                <ActivityIndicator size="small" color={palette.primary} />
+                <Text style={[styles.shareMusicHintText, { color: palette.textSecondary }]}>Đang tải danh sách nhạc yêu thích...</Text>
+              </View>
+            ) : favoriteSpotifyTracks.length === 0 ? (
+              <View style={styles.shareMusicEmptyWrap}>
+                <Ionicons name="musical-notes-outline" size={22} color={palette.textMuted} />
+                <Text style={[styles.shareMusicHintText, { color: palette.textSecondary }]}>Bạn chưa có bài nhạc yêu thích từ Spotify.</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.shareMusicList} contentContainerStyle={styles.shareMusicListContent}>
+                {favoriteSpotifyTracks.map((track) => (
+                  <View key={track.id} style={[styles.shareMusicItemRow, { borderBottomColor: palette.border }]}> 
+                    {track.albumImage ? (
+                      <Image source={{ uri: track.albumImage }} style={styles.shareMusicItemImage} />
+                    ) : (
+                      <View style={[styles.shareMusicItemFallback, { backgroundColor: isDarkMode ? '#1F2937' : '#E2E8F0' }]}>
+                        <Ionicons name="musical-note" size={16} color={palette.textSecondary} />
+                      </View>
+                    )}
+
+                    <View style={styles.shareMusicItemInfo}>
+                      <Text numberOfLines={1} style={[styles.shareMusicItemTitle, { color: palette.textPrimary }]}>{track.title}</Text>
+                      <Text numberOfLines={1} style={[styles.shareMusicItemArtist, { color: palette.textSecondary }]}>{track.artist}</Text>
+                    </View>
+
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      style={[styles.shareMusicItemButton, { backgroundColor: palette.primary }]}
+                      onPress={() => void handleShareFavoriteTrack(track)}
+                      disabled={sharingTrackId === track.id}
+                    >
+                      {sharingTrackId === track.id ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.shareMusicItemButtonText}>Chia sẻ</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={showImagePreviewPopup}
@@ -1682,6 +1900,125 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  shareMusicSection: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+  },
+  shareMusicSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  shareMusicSectionIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  shareMusicSectionInfo: {
+    flex: 1,
+  },
+  shareMusicSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  shareMusicSectionDesc: {
+    marginTop: 2,
+    fontSize: 12,
+  },
+  shareMusicOpenButton: {
+    marginTop: 12,
+    borderRadius: 10,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  shareMusicOpenButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  shareMusicModalCard: {
+    width: '92%',
+    maxHeight: '75%',
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  shareMusicLoadingWrap: {
+    paddingVertical: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shareMusicEmptyWrap: {
+    paddingVertical: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  shareMusicHintText: {
+    marginTop: 8,
+    fontSize: 13,
+    textAlign: 'center',
+    paddingHorizontal: 16,
+  },
+  shareMusicList: {
+    width: '100%',
+  },
+  shareMusicListContent: {
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+  },
+  shareMusicItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  shareMusicItemImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+  },
+  shareMusicItemFallback: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shareMusicItemInfo: {
+    flex: 1,
+    marginLeft: 10,
+    marginRight: 10,
+  },
+  shareMusicItemTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  shareMusicItemArtist: {
+    marginTop: 2,
+    fontSize: 12,
+  },
+  shareMusicItemButton: {
+    minWidth: 78,
+    height: 34,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  shareMusicItemButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   composerExpanded: {
     padding: 16,

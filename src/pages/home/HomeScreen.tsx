@@ -326,6 +326,7 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
                         imageUrl: post.imgUrl || null,
                         audioUrl: post.audioUrl || null,
                         moodTag: post.moodTag,
+                        postType: post.postType || null,
                         shareMusic: normalizedShareMusic,
                         status: post.status,
                         createdAt: post.createdAt,

@@ -22,6 +22,7 @@ export interface DisplayPost {
     imageUrl?: string | null;
     audioUrl?: string | null;
     moodTag?: string | null;
+    postType?: string | null;
     shareMusic?: SharedMusic | null;
     status: string;
     createdAt: string;
@@ -69,38 +70,47 @@ export interface BlogPostCardProps {
     onDelete?: (postId: string) => void;
 }
 
-function parseMoodTagInfo(moodTag?: string | null, hasShareMusicData?: boolean): { label: string | null; isShareMusicTag: boolean } {
-    const rawTag = (moodTag || '').trim();
+function parseMoodTagLabel(moodTag?: string | null): string | null {
+    if (!moodTag) {
+        return null;
+    }
+
+    const rawTag = moodTag.trim();
     const normalizedTag = rawTag.toLowerCase();
-    const isShareMusicTag = normalizedTag.startsWith('share-music');
-
-    if (!rawTag && !hasShareMusicData) {
-        return { label: null, isShareMusicTag: false };
-    }
-
-    if (isShareMusicTag) {
+    if (normalizedTag.startsWith('share-music')) {
         const template = normalizedTag.split(':')[1];
-        return {
-            label: template ? `share music ${template}` : 'share music',
-            isShareMusicTag: true,
-        };
+        return template ? `share music ${template}` : 'share music';
     }
 
-    if (hasShareMusicData) {
-        return { label: 'share music', isShareMusicTag: true };
-    }
-
-    return { label: moodTag || null, isShareMusicTag: false };
+    return rawTag;
 }
 
 export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerActions = false, onEdit, onDelete }: BlogPostCardProps) {
     const { isDarkMode } = useTheme();
     const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
     const [showOwnerMenu, setShowOwnerMenu] = React.useState(false);
-    const hasShareMusicData = !!post.shareMusic;
-    const moodTagInfo = parseMoodTagInfo(post.moodTag, hasShareMusicData);
-    const hasShareMusic = hasShareMusicData || moodTagInfo.isShareMusicTag;
-    const moodTagLabel = moodTagInfo.label;
+    const [postImageAspectRatio, setPostImageAspectRatio] = React.useState(16 / 9);
+    const isShareMusicPost = (post.postType || '').trim().toLowerCase() === 'share-music';
+    const moodTagLabel = parseMoodTagLabel(post.moodTag);
+
+    React.useEffect(() => {
+        if (!post.imageUrl) {
+            setPostImageAspectRatio(16 / 9);
+            return;
+        }
+
+        Image.getSize(
+            post.imageUrl,
+            (width, height) => {
+                if (width > 0 && height > 0) {
+                    setPostImageAspectRatio(width / height);
+                }
+            },
+            () => {
+                setPostImageAspectRatio(16 / 9);
+            },
+        );
+    }, [post.imageUrl]);
 
     const handleOpenOwnerMenu = () => {
         if (!showOwnerActions) return;
@@ -127,18 +137,63 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
         onDelete?.(post.id);
     };
 
-    return (
-        <View style={[styles.postCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+    const renderShareMusicBody = () => (
+        <TouchableOpacity activeOpacity={0.8} onPress={handleNavigateDetail}>
+            <Text style={[styles.postTitle, { color: palette.textPrimary }]} numberOfLines={2}>
+                {post.title}
+            </Text>
+
+            <LinearGradient
+                colors={isDarkMode ? ['#1D4ED8', '#7C3AED'] : ['#DBEAFE', '#EDE9FE']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.shareMusicCard}
+            >
+                {post.shareMusic?.albumImage ? (
+                    <Image source={{ uri: post.shareMusic.albumImage }} style={styles.shareMusicAlbumImage} />
+                ) : (
+                    <View style={[styles.shareMusicAlbumFallback, { backgroundColor: isDarkMode ? '#0F172A66' : '#FFFFFF99' }]}>
+                        <Ionicons name="musical-notes" size={20} color={isDarkMode ? '#F8FAFC' : '#334155'} />
+                    </View>
+                )}
+
+                <View style={styles.shareMusicInfo}>
+                    <Text style={[styles.shareMusicTitle, { color: isDarkMode ? '#F8FAFC' : '#1E293B' }]} numberOfLines={1}>
+                        {post.shareMusic?.title || 'Bản nhạc được chia sẻ'}
+                    </Text>
+                    <Text style={[styles.shareMusicArtist, { color: isDarkMode ? '#E2E8F0' : '#475569' }]} numberOfLines={1}>
+                        {post.shareMusic?.artist || 'Unknown Artist'}
+                    </Text>
+                </View>
+
+                <View style={[styles.shareMusicBadge, { backgroundColor: isDarkMode ? '#FFFFFF22' : '#1E293B1A' }]}>
+                    <Ionicons name="musical-note" size={14} color={isDarkMode ? '#F8FAFC' : '#1E293B'} />
+                </View>
+            </LinearGradient>
+        </TouchableOpacity>
+    );
+
+    const renderNormalBody = () => (
+        <TouchableOpacity activeOpacity={0.8} onPress={handleNavigateDetail}>
+            <Text style={[styles.postTitle, { color: palette.textPrimary }]} numberOfLines={2}>
+                {post.title}
+            </Text>
+
+            <Text style={[styles.postExcerpt, { color: palette.textSecondary }]} numberOfLines={2}>
+                {post.contentText}
+            </Text>
+
+            {moodTagLabel && (
+                <View style={styles.moodTagChipWrap}>
+                    <View style={[styles.moodTagChip, { backgroundColor: isDarkMode ? '#1F2937' : '#EEF2FF' }]}>
+                        <Text style={[styles.moodTagChipText, { color: isDarkMode ? '#C7D2FE' : '#4F46E5' }]}>#{moodTagLabel}</Text>
+                    </View>
+                </View>
+            )}
+
             {post.imageUrl ? (
-                <View style={styles.postImageWrap}>
-                    <Image source={{ uri: post.imageUrl }} style={styles.postImage} />
-                    {moodTagLabel && (
-                        <View style={styles.postTypeTagWrap}>
-                            <View style={[styles.postTypeTag, { backgroundColor: palette.primary }]}>
-                                <Text style={styles.postTypeTagText}>#{moodTagLabel}</Text>
-                            </View>
-                        </View>
-                    )}
+                <View style={styles.postImageWrapInline}>
+                    <Image source={{ uri: post.imageUrl }} style={[styles.postImage, { aspectRatio: postImageAspectRatio }]} resizeMode="contain" />
                     {post.audioUrl && (
                         <TouchableOpacity activeOpacity={0.8} style={styles.postPlayButton}>
                             <Ionicons name="play" size={18} color={palette.textPrimary} style={styles.postPlayIcon} />
@@ -146,7 +201,11 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
                     )}
                 </View>
             ) : null}
+        </TouchableOpacity>
+    );
 
+    return (
+        <View style={[styles.postCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
             <View style={styles.postContent}>
                 <View style={styles.postAuthorRow}>
                     <Image
@@ -197,51 +256,7 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
                     </View>
                 </View>
 
-                <TouchableOpacity activeOpacity={0.8} onPress={handleNavigateDetail}>
-                    <Text style={[styles.postTitle, { color: palette.textPrimary }]} numberOfLines={2}>
-                        {post.title}
-                    </Text>
-
-                    {hasShareMusic ? (
-                        <LinearGradient
-                            colors={isDarkMode ? ['#1D4ED8', '#7C3AED'] : ['#DBEAFE', '#EDE9FE']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={styles.shareMusicCard}
-                        >
-                            {post.shareMusic?.albumImage ? (
-                                <Image source={{ uri: post.shareMusic.albumImage }} style={styles.shareMusicAlbumImage} />
-                            ) : (
-                                <View style={[styles.shareMusicAlbumFallback, { backgroundColor: isDarkMode ? '#0F172A66' : '#FFFFFF99' }]}>
-                                    <Ionicons name="musical-notes" size={20} color={isDarkMode ? '#F8FAFC' : '#334155'} />
-                                </View>
-                            )}
-
-                            <View style={styles.shareMusicInfo}>
-                                <Text style={[styles.shareMusicTitle, { color: isDarkMode ? '#F8FAFC' : '#1E293B' }]} numberOfLines={1}>
-                                    {post.shareMusic?.title || 'Bản nhạc được chia sẻ'}
-                                </Text>
-                                <Text style={[styles.shareMusicArtist, { color: isDarkMode ? '#E2E8F0' : '#475569' }]} numberOfLines={1}>
-                                    {post.shareMusic?.artist || 'Unknown Artist'}
-                                </Text>
-                            </View>
-
-                            <View style={[styles.shareMusicBadge, { backgroundColor: isDarkMode ? '#FFFFFF22' : '#1E293B1A' }]}>
-                                <Ionicons name="musical-note" size={14} color={isDarkMode ? '#F8FAFC' : '#1E293B'} />
-                            </View>
-                        </LinearGradient>
-                    ) : (
-                        <Text style={[styles.postExcerpt, { color: palette.textSecondary }]} numberOfLines={2}>
-                            {post.contentText}
-                        </Text>
-                    )}
-                </TouchableOpacity>
-
-                {moodTagLabel && !post.imageUrl && (
-                    <View style={[styles.postCategoryWrap, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}>
-                        <Text style={[styles.postCategoryText, { color: palette.textSecondary }]}>#{moodTagLabel}</Text>
-                    </View>
-                )}
+                {isShareMusicPost ? renderShareMusicBody() : renderNormalBody()}
 
                 <View style={[styles.postActionsRow, { borderTopColor: palette.border }]}> 
                     <View style={styles.postStatsRow}>
@@ -294,24 +309,15 @@ const styles = StyleSheet.create({
     postImageWrap: {
         position: 'relative',
     },
+    postImageWrapInline: {
+        position: 'relative',
+        marginBottom: 12,
+        borderRadius: 12,
+        overflow: 'hidden',
+        backgroundColor: '#0F172A14',
+    },
     postImage: {
         width: '100%',
-        height: 180,
-    },
-    postTypeTagWrap: {
-        position: 'absolute',
-        top: 12,
-        left: 12,
-    },
-    postTypeTag: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 8,
-    },
-    postTypeTagText: {
-        color: '#FFFFFF',
-        fontSize: 11,
-        fontWeight: '700',
     },
     postPlayButton: {
         position: 'absolute',
@@ -471,18 +477,18 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    postCategoryWrap: {
+    moodTagChipWrap: {
         marginBottom: 12,
         alignSelf: 'flex-start',
-        backgroundColor: '#F3F4F6',
+    },
+    moodTagChip: {
         borderRadius: 999,
         paddingHorizontal: 10,
-        paddingVertical: 4,
+        paddingVertical: 5,
     },
-    postCategoryText: {
-        color: '#6B7280',
-        fontSize: 11,
-        fontWeight: '500',
+    moodTagChipText: {
+        fontSize: 12,
+        fontWeight: '600',
     },
     postActionsRow: {
         borderTopWidth: 1,

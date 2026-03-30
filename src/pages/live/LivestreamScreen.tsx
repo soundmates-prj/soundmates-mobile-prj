@@ -1140,6 +1140,28 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
     showToast.info('Đã gửi cảm xúc', label);
   };
 
+  const isInitialLiveLoading = isSessionsLoading && !currentLiveSession;
+
+  if (isInitialLiveLoading) {
+    return (
+      <LinearGradient colors={['#1E293B', '#334155', '#475569']} style={styles.container}>
+        <View style={styles.liveLoadingTopBar}>
+          <TouchableOpacity onPress={onBack} style={styles.headerButton}>
+            <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.liveLoadingContainer}>
+          <View style={styles.liveLoadingCard}>
+            <ActivityIndicator size="large" color="#7DD3FC" />
+            <Text style={styles.liveLoadingTitle}>Đang vào phòng live</Text>
+            <Text style={styles.liveLoadingText}>Vui lòng đợi trong giây lát...</Text>
+          </View>
+        </View>
+      </LinearGradient>
+    );
+  }
+
   return (
     <LinearGradient colors={['#1E293B', '#334155', '#475569']} style={styles.container}>
       {/* <SafeAreaView style={styles.safeArea} edges={['top']}> */}
@@ -1430,6 +1452,39 @@ const styles = StyleSheet.create({
   headerOverlay: {
     paddingHorizontal: 16,
     paddingTop: 8,
+  },
+  liveLoadingTopBar: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  liveLoadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  liveLoadingCard: {
+    width: '100%',
+    maxWidth: 320,
+    borderRadius: 18,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    backgroundColor: 'rgba(15,23,42,0.46)',
+    borderWidth: 1,
+    borderColor: 'rgba(125,211,252,0.35)',
+  },
+  liveLoadingTitle: {
+    marginTop: 12,
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  liveLoadingText: {
+    marginTop: 6,
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 13,
+    textAlign: 'center',
   },
   headerRow: {
     flexDirection: 'row',

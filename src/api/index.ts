@@ -22,10 +22,10 @@ export type {
 export { blogService } from './blogService';
 export type {
     BlogPostResponse, CommentResponse, CreatePostRequest, PaginationParams, PaginationResponse, PopularPostResponse,
-    PostStatsResponse, ReactionResponse, TrendingPostResponse, UpdatePostRequest
+    PostStatsResponse, ReactionResponse, ShareMusicPostRequest, TrendingPostResponse, UpdatePostRequest
 } from './blogService';
 export { favoriteService } from './favoriteService';
-export type { AddFavoriteRequest } from './favoriteService';
+export type { AddFavoriteRequest, FavoriteItemResponse, FavoriteListQuery } from './favoriteService';
 export { livestreamService } from './livestreamService';
 export type { LiveSessionResult, NowPlayingData, SongRequestItem, TrackInfo } from './livestreamService';
 export { paymentService } from './paymentService';
