@@ -15,8 +15,8 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { showToast } from '../../../components/ui/Toast';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
+import { showToast } from '../../components/ui/Toast';
 import { useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
 

@@ -15,7 +15,7 @@ import {
     View,
 } from 'react-native';
 import Toast, { ToastConfig, ToastConfigParams } from 'react-native-toast-message';
-import { SoundMateColors, SoundMateDarkColors, SoundMateLightColors } from '../../constants/theme';
+import { SoundMateColors, SoundMateDarkColors, SoundMateLightColors } from '../../../constants/theme';
 
 const { width } = Dimensions.get('window');
 
@@ -53,7 +53,7 @@ const CustomToastComponent: React.FC<ToastConfigParams<any> & { type: ToastType 
     text2,
 }) => {
     const config = TOAST_CONFIG[type];
-    
+
     return (
         <View style={styles.outerContainer}>
             <BlurView

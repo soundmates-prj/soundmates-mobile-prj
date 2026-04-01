@@ -4,7 +4,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    FlatList,
     RefreshControl,
     StyleSheet,
     Text,
@@ -34,8 +33,8 @@ interface BlogScreenProps {
     onScroll?: any;
 }
 
-export default function BlogScreen({ 
-    onNavigateToCreatePost, 
+export default function BlogScreen({
+    onNavigateToCreatePost,
     onNavigateToPostDetail,
     paddingTop = 0,
     paddingBottom = 0,
@@ -54,7 +53,6 @@ export default function BlogScreen({
     const scrollHandler = useAnimatedScrollHandler({
         onScroll: (event) => {
             if (onScroll) {
-                // If external onScroll is provided (from HomeScreen), let it handle the event
                 onScroll.onScroll(event);
             }
             scrollY.value = event.contentOffset.y;
@@ -107,44 +105,13 @@ export default function BlogScreen({
     const handleLike = async (postId: string) => {
         try {
             await blogService.addReaction(postId, 'like');
-            // In a real app, you'd update the local state too
         } catch (error) {
             console.error('Like post error:', error);
         }
     };
 
-    const renderHeader = () => (
-        <View style={styles.listHeader}>
-            <View style={styles.featuredSection}>
-                <Text style={[styles.screenTitle, { color: palette.textPrimary }]}>Cộng đồng</Text>
-                <Text style={[styles.screenSubtitle, { color: palette.textMuted }]}>Khám phá âm nhạc & câu chuyện mới</Text>
-            </View>
-
-            <View style={styles.tabsWrapper}>
-                {(['trending', 'newest', 'following'] as TabType[]).map((tab) => (
-                    <TouchableOpacity
-                        key={tab}
-                        onPress={() => handleTabChange(tab)}
-                        style={[
-                            styles.tabItem,
-                            activeTab === tab && { backgroundColor: palette.primary }
-                        ]}
-                    >
-                        <Text style={[
-                            styles.tabText,
-                            { color: activeTab === tab ? '#FFF' : palette.textMuted }
-                        ]}>
-                            {tab === 'trending' ? 'Thịnh hành' : tab === 'newest' ? 'Mới nhất' : 'Đang theo dõi'}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
-        </View>
-    );
-
     return (
         <View style={[styles.container, { backgroundColor: palette.background }]}>
-            {/* Sticky Blurred Header */}
             {!hideStickyHeader && (
                 <Animated.View style={[styles.stickyHeader, headerAnimatedStyle]}>
                     <BlurView intensity={80} tint={isDarkMode ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
@@ -208,7 +175,6 @@ export default function BlogScreen({
                 }
             />
 
-            {/* Modern FAB */}
             <TouchableOpacity
                 style={[styles.fab, { backgroundColor: palette.primary, bottom: 100 + paddingBottom }]}
                 onPress={onNavigateToCreatePost}

@@ -1,19 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo, useState } from 'react';
 import {
-  Dimensions,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    Dimensions,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { showToast } from '../../../components/ui/Toast';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
+import FormTextField from '../../components/ui/FormTextField';
+import { showToast } from '../../components/ui/Toast';
 import { useTheme } from '../../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
@@ -66,9 +66,6 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -191,26 +188,21 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
                 errors.currentPassword && touched.currentPassword && styles.inputContainerError,
               ]}
             >
-              <Ionicons name="lock-closed-outline" size={18} color={palette.textMuted} style={styles.inputIcon} />
-              <TextInput
+              <FormTextField
+                inputContainerStyle={styles.inputReset}
+                style={[styles.input, { color: palette.textPrimary }]}
+                leftIconName="lock-closed-outline"
+                leftIconSize={18}
+                leftIconColor={palette.textMuted}
                 value={currentPassword}
                 onChangeText={setCurrentPassword}
                 onBlur={() => handleBlur('currentPassword')}
                 placeholder="Nhập mật khẩu hiện tại"
                 placeholderTextColor={palette.textMuted}
-                secureTextEntry={!showCurrentPassword}
-                style={[styles.input, { color: palette.textPrimary }]}
+                secureTextEntry
+                showPasswordToggle
+                passwordIconColor={palette.textMuted}
               />
-              <TouchableOpacity
-                onPress={() => setShowCurrentPassword(!showCurrentPassword)}
-                style={styles.eyeButton}
-              >
-                <Ionicons
-                  name={showCurrentPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={18}
-                  color={palette.textMuted}
-                />
-              </TouchableOpacity>
             </View>
             {errors.currentPassword && touched.currentPassword && (
               <View style={styles.errorContainer}>
@@ -237,25 +229,20 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
           <View style={styles.fieldContainer}>
             <Text style={[styles.label, { color: palette.textSecondary }]}>MẬT KHẨU MỚI</Text>
             <View style={[styles.inputContainer, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-              <Ionicons name="lock-closed-outline" size={18} color={palette.textMuted} style={styles.inputIcon} />
-              <TextInput
+              <FormTextField
+                inputContainerStyle={styles.inputReset}
+                style={[styles.input, { color: palette.textPrimary }]}
+                leftIconName="lock-closed-outline"
+                leftIconSize={18}
+                leftIconColor={palette.textMuted}
                 value={newPassword}
                 onChangeText={setNewPassword}
                 placeholder="Nhập mật khẩu mới"
                 placeholderTextColor={palette.textMuted}
-                secureTextEntry={!showNewPassword}
-                style={[styles.input, { color: palette.textPrimary }]}
+                secureTextEntry
+                showPasswordToggle
+                passwordIconColor={palette.textMuted}
               />
-              <TouchableOpacity
-                onPress={() => setShowNewPassword(!showNewPassword)}
-                style={styles.eyeButton}
-              >
-                <Ionicons
-                  name={showNewPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={18}
-                  color={palette.textMuted}
-                />
-              </TouchableOpacity>
             </View>
 
             {/* Strength bar */}
@@ -312,35 +299,30 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
                 confirmPassword && passwordsMatch && styles.inputContainerSuccess,
               ]}
             >
-              <Ionicons name="lock-closed-outline" size={18} color={palette.textMuted} style={styles.inputIcon} />
-              <TextInput
+              <FormTextField
+                inputContainerStyle={styles.inputReset}
+                style={[styles.input, { color: palette.textPrimary }]}
+                leftIconName="lock-closed-outline"
+                leftIconSize={18}
+                leftIconColor={palette.textMuted}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 onBlur={() => handleBlur('confirmPassword')}
                 placeholder="Nhập lại mật khẩu mới"
                 placeholderTextColor={palette.textMuted}
-                secureTextEntry={!showConfirmPassword}
-                style={[styles.input, { color: palette.textPrimary }]}
+                secureTextEntry
+                showPasswordToggle
+                passwordIconColor={palette.textMuted}
+                rightElement={confirmPassword.length > 0 ? (
+                  <View style={styles.matchIndicator}>
+                    <Ionicons
+                      name={passwordsMatch ? 'checkmark-circle' : 'close-circle'}
+                      size={18}
+                      color={passwordsMatch ? '#10B981' : '#EF4444'}
+                    />
+                  </View>
+                ) : null}
               />
-              {confirmPassword.length > 0 && (
-                <View style={styles.matchIndicator}>
-                  <Ionicons
-                    name={passwordsMatch ? 'checkmark-circle' : 'close-circle'}
-                    size={18}
-                    color={passwordsMatch ? '#10B981' : '#EF4444'}
-                  />
-                </View>
-              )}
-              <TouchableOpacity
-                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                style={styles.eyeButton}
-              >
-                <Ionicons
-                  name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={18}
-                  color={palette.textMuted}
-                />
-              </TouchableOpacity>
             </View>
             {errors.confirmPassword && touched.confirmPassword && (
               <View style={styles.errorContainer}>
@@ -543,6 +525,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: '#1E293B',
+  },
+  inputReset: {
+    flex: 1,
   },
   eyeButton: {
     padding: 4,

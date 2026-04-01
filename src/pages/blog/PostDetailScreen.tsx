@@ -6,14 +6,11 @@ import {
     Alert,
     Image,
     Keyboard,
-    KeyboardAvoidingView,
-    KeyboardEvent,
-    Platform,
     RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
+    TextInput as RNTextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
@@ -36,8 +33,6 @@ interface PostDetailScreenProps {
 }
 
 const showToast = (message: string) => {
-    // Basic toast replacement using Alert for now
-    // In a real app, use a proper Toast library
     console.log('[Toast]', message);
 }
 
@@ -47,7 +42,6 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
     const { isDarkMode } = useTheme();
     const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
 
-    const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [post, setPost] = useState<any | null>(null);
     const [stats, setStats] = useState<PostStatsResponse | null>(null);
     const [comments, setComments] = useState<CommentResponse[]>([]);
@@ -58,7 +52,7 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
     const [replyingTo, setReplyingTo] = useState<{ commentId: string; username: string } | null>(null);
     const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
     const [isLiked, setIsLiked] = useState(false);
-    const inputRef = React.useRef<TextInput>(null);
+    const inputRef = React.useRef<RNTextInput>(null);
 
     const fetchData = useCallback(async (refresh = false) => {
         if (!postId) return;
@@ -99,7 +93,6 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
         try {
             await blogService.addReaction(postId, 'like');
         } catch (error) {
-            // Rollback on error
             setIsLiked(!newLikedState);
             setStats(prev => prev ? { ...prev, reactionCount: !newLikedState ? prev.reactionCount + 1 : prev.reactionCount - 1 } : null);
         }
@@ -141,7 +134,7 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
 
     const handleComment = async () => {
         if (!commentText.trim() || isSubmitting) return;
-        
+
         setIsSubmitting(true);
         try {
             let res;
@@ -158,7 +151,7 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                 setReplyingTo(null);
                 setEditingCommentId(null);
                 Keyboard.dismiss();
-                fetchData(true); // Refresh comments and stats
+                fetchData(true);
                 showToast(editingCommentId ? 'Đã cập nhật bình luận' : 'Đã đăng bình luận');
             }
         } catch (error) {
@@ -185,9 +178,9 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
     const handleDeleteComment = async (commentId: string) => {
         Alert.alert('Xóa bình luận', 'Bạn có chắc chắn muốn xóa bình luận này?', [
             { text: 'Hủy', style: 'cancel' },
-            { 
-                text: 'Xóa', 
-                style: 'destructive', 
+            {
+                text: 'Xóa',
+                style: 'destructive',
                 onPress: async () => {
                     try {
                         const res = await blogService.deleteComment(commentId);
@@ -262,10 +255,7 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
     }
 
     return (
-        <KeyboardAvoidingView
-            style={[styles.screen, { backgroundColor: palette.background }]}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        <View style={[styles.screen, { backgroundColor: palette.background }]}>
             {/* Immersive Header */}
             <View style={styles.header}>
                 <BlurView intensity={80} tint={isDarkMode ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
@@ -357,7 +347,7 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                         source={{ uri: `https://api.dicebear.com/7.x/initials/png?seed=me&backgroundColor=55C5F1` }}
                         style={styles.inputAvatar}
                     />
-                    <TextInput
+                    <RNTextInput
                         ref={inputRef}
                         style={[styles.textInput, { color: palette.textPrimary, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}
                         placeholder="Thêm bình luận..."
@@ -375,7 +365,7 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                     </TouchableOpacity>
                 </View>
             </BlurView>
-        </KeyboardAvoidingView>
+        </View>
     );
 }
 

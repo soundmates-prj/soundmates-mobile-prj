@@ -32,7 +32,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { livestreamService, type LiveSessionResult, type NowPlayingData, type TrackInfo } from '../../api/livestreamService';
 import { useTheme } from '../../context/ThemeContext';
-import { showToast } from '../../../components/ui/Toast';
+import { showToast } from '../../components/ui/Toast';
 
 const { width, height } = Dimensions.get('window');
 

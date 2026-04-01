@@ -24,7 +24,7 @@ import Animated, {
     withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { showToast } from '../../../components/ui/Toast';
+import { showToast } from '../../components/ui/Toast';
 import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/theme';
 import { authService } from '../../api';
 import { useTheme } from '../../context/ThemeContext';
@@ -165,10 +165,10 @@ export default function OTPScreen({
                         </Animated.View>
 
                         <Animated.View entering={FadeInDown.delay(400).duration(800)}>
-                            <Text style={styles.title}>Xác thực OTP</Text>
-                            <Text style={styles.subtitle}>
+                            <Text style={[styles.title, { color: isDarkMode ? '#FFFFFF' : '#1A1A1A' }]}>Xác thực OTP</Text>
+                            <Text style={[styles.subtitle, { color: isDarkMode ? palette.textSecondary : '#666' }]}>
                                 Chúng tôi đã gửi mã xác thực đến{'\n'}
-                                <Text style={styles.emailText}>{maskedEmail}</Text>
+                                <Text style={[styles.emailText, { color: palette.primary }]}>{maskedEmail}</Text>
                             </Text>
                         </Animated.View>
 
@@ -283,20 +283,17 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 32,
         fontWeight: '800',
-        color: '#1A1A1A',
         textAlign: 'center',
         marginBottom: 10,
         letterSpacing: -0.5,
     },
     subtitle: {
         fontSize: 16,
-        color: '#666',
         textAlign: 'center',
         marginBottom: 40,
         lineHeight: 24,
     },
     emailText: {
-        color: SoundMateLightColors.primary,
         fontWeight: '700',
     },
     otpContainer: {

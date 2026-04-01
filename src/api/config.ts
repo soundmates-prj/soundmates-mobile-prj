@@ -78,6 +78,7 @@ export const USER_ENDPOINTS = {
 export const BLOG_ENDPOINTS = {
     // Posts
     POSTS: '/posts',
+    POSTS_SHARE_MUSIC: '/posts/share-music',
     POSTS_PUBLISHED: '/posts/published',
     POSTS_TRENDING: '/posts/trending',
     POSTS_POPULAR: '/posts/popular',

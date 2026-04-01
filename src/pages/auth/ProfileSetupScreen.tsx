@@ -24,7 +24,7 @@ import Animated, {
     withSpring,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { showToast } from '../../../components/ui/Toast';
+import { showToast } from '../../components/ui/Toast';
 import { SoundMateLightColors } from '../../../constants/theme';
 import { authService } from '../../api';
 
@@ -123,11 +123,11 @@ export default function ProfileSetupScreen({
     return (
         <View style={styles.container}>
             <LinearGradient colors={['#E0F7FF', '#FFFFFF', '#F0F9FF']} style={StyleSheet.absoluteFill} />
-            
+
             <Pressable style={styles.content} onPress={Keyboard.dismiss}>
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
                     <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                        
+
                         <Animated.View entering={FadeInUp.delay(200).duration(800)} style={styles.header}>
                             <TouchableOpacity onPress={onNavigateBack} style={styles.backButton}>
                                 <Ionicons name="chevron-back" size={24} color={SoundMateLightColors.primary} />
@@ -173,8 +173,8 @@ export default function ProfileSetupScreen({
                             {showGenderPicker && (
                                 <View style={styles.genderOptions}>
                                     {['male', 'female', 'other'].map((g: any) => (
-                                        <TouchableOpacity 
-                                            key={g} 
+                                        <TouchableOpacity
+                                            key={g}
                                             onPress={() => { setGender(g); setShowGenderPicker(false); }}
                                             style={[styles.genderOption, gender === g && styles.genderOptionActive]}
                                         >

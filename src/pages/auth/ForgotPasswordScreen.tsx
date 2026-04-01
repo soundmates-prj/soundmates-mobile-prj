@@ -21,10 +21,11 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { showToast } from '../../../components/ui/Toast';
+import { showToast } from '../../components/ui/Toast';
 import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/theme';
 import { authService } from '../../api';
 import { useTheme } from '../../context/ThemeContext';
+import OtpCodeInput, { type OtpCodeInputRef } from '../../components/ui/OtpCodeInput';
 
 interface ForgotPasswordScreenProps {
   onBack: () => void;
@@ -153,16 +154,18 @@ function StepIndicator({ currentStep }: { currentStep: Step }) {
 export default function ForgotPasswordScreen({ onBack, prefillEmail }: ForgotPasswordScreenProps) {
   const { isDarkMode } = useTheme();
   const palette = isDarkMode ? SoundMateDarkColors : SoundMateLightColors;
+  const otpInputRef = useRef<OtpCodeInputRef>(null);
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState(prefillEmail || '');
   const [otp, setOtp] = useState('');
+  const [otpError, setOtpError] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const buttonScale = useSharedValue(1);
 
@@ -215,6 +218,25 @@ export default function ForgotPasswordScreen({ onBack, prefillEmail }: ForgotPas
       return;
     }
     setStep('newPassword');
+  };
+
+  const handleResendOTP = async () => {
+    if (resendTimer > 0) return;
+    setIsLoading(true);
+
+    const result = await authService.forgotPassword(email);
+
+    setIsLoading(false);
+
+    if (result.success) {
+      showToast.success('Đã gửi lại mã OTP', 'Vui lòng kiểm tra email của bạn');
+      setOtp('');
+      setOtpError('');
+      setResendTimer(60);
+      otpInputRef.current?.focus(0);
+    } else {
+      showToast.error('Lỗi', result.message || 'Không thể gửi lại mã OTP');
+    }
   };
 
   const handleResetPassword = async () => {
@@ -332,17 +354,26 @@ export default function ForgotPasswordScreen({ onBack, prefillEmail }: ForgotPas
                 <Text style={[styles.subtitle, { color: palette.textSecondary }]}>Nhập mã 6 số đã được gửi đến {maskEmail(email)}</Text>
               </View>
 
-              <BlurView intensity={70} tint={isDarkMode ? 'dark' : 'light'} style={[styles.inputWrapper, { borderColor: palette.border }]}>
-                <TextInput
-                  style={[styles.input, { textAlign: 'center', fontSize: 24, letterSpacing: 10, color: palette.textPrimary }]}
-                  placeholder="000000"
-                  placeholderTextColor={palette.textMuted}
+              <View style={styles.otpWrapper}>
+                <OtpCodeInput
+                  ref={otpInputRef}
                   value={otp}
-                  onChangeText={setOtp}
-                  keyboardType="number-pad"
-                  maxLength={6}
+                  onChange={(val) => { setOtp(val); setOtpError(''); }}
+                  length={6}
+                  autoFocus
+                  containerStyle={styles.otpContainer}
+                  inputStyle={styles.otpInput}
+                  filledInputStyle={styles.otpInputFilled}
+                  editable={!isLoading}
                 />
-              </BlurView>
+              </View>
+
+              {otpError ? (
+                <View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={14} color="#EF4444" />
+                  <Text style={styles.errorText}>{otpError}</Text>
+                </View>
+              ) : null}
 
               <AnimatedTouchableOpacity
                 style={[styles.submitButtonWrapper, buttonAnimatedStyle]}
@@ -574,7 +605,40 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: '#1A1A1A',
-    fontWeight: '500',
+  },
+  otpWrapper: {
+    marginBottom: 20,
+  },
+  otpContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  otpInput: {
+    flex: 1,
+    height: 56,
+    textAlign: 'center',
+    fontSize: 22,
+    fontWeight: 'bold',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    backgroundColor: 'white',
+    color: '#1E293B',
+    marginHorizontal: 4,
+  },
+  otpInputFilled: {
+    borderColor: SoundMateLightColors.primary,
+    backgroundColor: SoundMateLightColors.primary + '0D',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 16,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#EF4444',
   },
   submitButtonWrapper: {
     marginTop: 10,
@@ -615,5 +679,3 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
 });
-
-// Removed duplicate styles block that caused "Duplicate identifier 'styles'"

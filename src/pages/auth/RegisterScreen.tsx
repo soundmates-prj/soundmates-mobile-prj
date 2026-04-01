@@ -23,7 +23,7 @@ import Animated, {
     withSpring,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { showToast } from '../../../components/ui/Toast';
+import { showToast } from '../../components/ui/Toast';
 import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/theme';
 import { authService } from '../../api';
 import { useTheme } from '../../context/ThemeContext';

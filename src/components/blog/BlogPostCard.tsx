@@ -1,15 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import React, { useCallback, useState } from 'react';
-import {
-    Alert,
-    Dimensions,
-    Image,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-} from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
     useAnimatedStyle,
     useSharedValue,
@@ -19,6 +11,15 @@ import * as Haptics from 'expo-haptics';
 import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import { blogService } from '../../api';
+
+export interface SharedMusic {
+    trackId: string;
+    title: string;
+    artist: string;
+    albumImage?: string | null;
+    previewUrl?: string | null;
+    template?: string | null;
+}
 
 export interface DisplayPost {
     id: string;
@@ -32,6 +33,8 @@ export interface DisplayPost {
     imgUrl?: string | null;
     audioUrl?: string | null;
     moodTag?: string | null;
+    postType?: string | null;
+    shareMusic?: SharedMusic | null;
     status: string;
     createdAt: string;
     publishedAt?: string | null;
@@ -101,40 +104,6 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
         onLike();
     }, [isLikedLocal, likeScale, onLike]);
 
-    const handleReport = useCallback(() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-        const reportReasons = [
-            'Nội dung nhạy cảm / NSFW',
-            'Spam / Quảng cáo',
-            'Quấy rối / Đe dọa',
-            'Thông tin sai lệch',
-            'Khác'
-        ];
-
-        Alert.alert(
-            'Báo cáo bài viết',
-            'Tại sao bạn muốn báo cáo bài viết này?',
-            [
-                ...reportReasons.map(reason => ({
-                    text: reason,
-                    onPress: async () => {
-                        try {
-                            const res = await blogService.reportPost(post.id, reason);
-                            if (res.success) {
-                                Alert.alert('Thành công', 'Cảm ơn bạn đã báo cáo. Chúng tôi sẽ xem xét nội dung này sớm nhất.');
-                            } else {
-                                Alert.alert('Lỗi', res.message);
-                            }
-                        } catch (err) {
-                            Alert.alert('Lỗi', 'Không thể gửi báo cáo lúc này.');
-                        }
-                    }
-                })),
-                { text: 'Hủy', style: 'cancel' }
-            ]
-        );
-    }, [post.id]);
-
     const likeAnimationStyle = useAnimatedStyle(() => ({
         transform: [{ scale: likeScale.value }],
     }));
@@ -162,7 +131,7 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
                         <Ionicons name="ellipsis-horizontal" size={20} color={palette.textMuted} />
                     </TouchableOpacity>
                 ) : (
-                    <TouchableOpacity style={styles.moreButton} onPress={handleReport}>
+                    <TouchableOpacity style={styles.moreButton}>
                         <Ionicons name="flag-outline" size={18} color={palette.textMuted} />
                     </TouchableOpacity>
                 )}

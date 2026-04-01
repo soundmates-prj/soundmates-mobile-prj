@@ -7,9 +7,9 @@ import { NavigationContainer, useNavigationContainerRef } from '@react-navigatio
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
-import { showToast, toastConfig } from './components/ui/Toast';
 import { SoundMateDarkColors, SoundMateLightColors } from './constants/theme';
 import { authService, livestreamService, registerUnauthorizedHandler } from './src/api';
+import { showToast, toastConfig } from './src/components/ui/Toast';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { UserProvider, useUser } from './src/context/UserContext';
 import { AudioPlayerProvider } from './src/context/AudioPlayerContext';
@@ -81,9 +81,11 @@ function AppContent() {
     const useDarkThemeShell = isDarkMode && currentRouteName !== 'Live';
     const appBackground = useDarkThemeShell ? SoundMateDarkColors.background : SoundMateLightColors.background;
 
-    // Check for saved tokens on app start
+    // Bootstrap app state before rendering the main navigation flow.
     useEffect(() => {
-        const checkAuth = async () => {
+        let isMounted = true;
+
+        const bootstrapApp = async () => {
             try {
                 const token = await AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
                 setIsAuthenticated(Boolean(token));
@@ -94,11 +96,12 @@ function AppContent() {
                 setIsAuthChecked(true);
             }
         };
-        checkAuth();
-    }, []);
 
-    useEffect(() => {
-        void livestreamService.initializeStationContext();
+        void bootstrapApp();
+
+        return () => {
+            isMounted = false;
+        };
     }, []);
 
     // Save authentication tokens only
@@ -280,7 +283,7 @@ function AppContent() {
                         showToast.success('Xác thực thành công!', 'Hãy hoàn thiện hồ sơ của bạn');
                         navigationRef.navigate('ProfileSetup');
                     } else {
-                        showToast.success('Đăng nhập thành công!', 'Chào mừng bạn quay trở lại!');
+                        showToast.success('�ăng nhập thành công!', 'Chào mừng bạn quay trở lại!');
                         setIsAuthenticated(true);
                     }
                 } else {
@@ -592,6 +595,25 @@ function AppContent() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    loadingContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 24,
+    },
+    loadingLogo: {
+        width: 220,
+        height: 220,
+    },
+    loadingIndicator: {
+        marginTop: 8,
+    },
+    loadingText: {
+        marginTop: 14,
+        fontSize: 14,
+        fontWeight: '600',
+        letterSpacing: 0.3,
     },
     placeholder: {
         flex: 1,

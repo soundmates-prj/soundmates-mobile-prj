@@ -20,7 +20,7 @@ import {
 import Animated, { FadeInDown, FadeInUp, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { livestreamService, type LiveSessionResult } from '../../api/livestreamService';
-import { showToast } from '../../../components/ui/Toast';
+import { showToast } from '../../components/ui/Toast';
 
 const { width } = Dimensions.get('window');
 
