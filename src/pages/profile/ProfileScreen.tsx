@@ -19,7 +19,7 @@ import {
   View
 } from 'react-native';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
-import { authService, BlogPostResponse, blogService, FavoriteItemResponse, favoriteService, paymentService, ReactionResponse, UpdateProfileRequest } from '../../api';
+import { authService, BlogPostResponse, blogService, paymentService, ReactionResponse, UpdateProfileRequest } from '../../api';
 import { BlogPostCard, DisplayPost } from '../../components/blog/BlogPostCard';
 import { showToast } from '../../components/ui/Toast';
 import { ThemePreference, useTheme } from '../../context/ThemeContext';
@@ -76,56 +76,19 @@ const uploadToCloudinary = async (asset: ImagePicker.ImagePickerAsset): Promise<
 
 // ─── Data ───────────────────────────────────────────────
 
-const FAVORITE_PLAYLISTS = [
-  {
-    id: '1',
-    title: 'Chill Vibes',
-    songs: 24,
-    image:
-      'https://images.unsplash.com/photo-1735748917428-be035e873f97?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb25jZXJ0JTIwY3Jvd2QlMjBuaWdodCUyMGxpZ2h0c3xlbnwxfHx8fDE3NzMxMTQ3NDN8MA&ixlib=rb-4.1.0&q=80&w=400',
-  },
-  {
-    id: '2',
-    title: 'Acoustic Morning',
-    songs: 18,
-    image:
-      'https://images.unsplash.com/photo-1758610605872-3195caed0bdd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxndWl0YXIlMjBhY291c3RpYyUyMHdvb2RlbiUyMHdhcm18ZW58MXx8fHwxNzczMTM0ODgxfDA&ixlib=rb-4.1.0&q=80&w=400',
-  },
-  {
-    id: '3',
-    title: 'EDM Party',
-    songs: 42,
-    image:
-      'https://images.unsplash.com/photo-1616709309768-cdb92831d728?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxlbGVjdHJvbmljJTIwbXVzaWMlMjBkaiUyMG5lb258ZW58MXx8fHwxNzczMDI1MjQyfDA&ixlib=rb-4.1.0&q=80&w=400',
-  },
-];
-
 const MENU_ITEMS = [
   {
     group: 'Tài khoản',
     items: [
       { icon: 'person-outline', label: 'Thông tin tài khoản', color: '#55C5F1' },
       { icon: 'card-outline', label: 'Gói đăng ký', color: '#A78BFA', badge: 'Premium' },
-      { icon: 'bookmark-outline', label: 'Bài viết đã lưu', color: '#10B981' },
-      { icon: 'lock-closed-outline', label: 'Đổi mật khẩu', color: '#6366F1' },
     ],
   },
   {
     group: 'Cài đặt hệ thống',
     items: [
-      { icon: 'notifications-outline', label: 'Thông báo', color: '#F59E0B' },
-      { icon: 'globe-outline', label: 'Ngôn ngữ', color: '#3B82F6', subtitle: 'Tiếng Việt' },
       { icon: 'moon-outline', label: 'Giao diện', color: '#6366F1', subtitle: 'Sáng' },
-      { icon: 'shield-checkmark-outline', label: 'Bảo mật & Quyền riêng tư', color: '#EF4444' },
-    ],
-  },
-  {
-    group: 'Khác',
-    items: [
-      { icon: 'help-circle-outline', label: 'Trợ giúp & Hỗ trợ', color: '#55C5F1' },
-      { icon: 'star-outline', label: 'Đánh giá ứng dụng', color: '#F59E0B' },
-      { icon: 'share-social-outline', label: 'Chia sẻ ứng dụng', color: '#10B981' },
-      { icon: 'flag-outline', label: 'Báo cáo sự cố', color: '#9CA3AF' },
+      { icon: 'lock-closed-outline', label: 'Đổi mật khẩu', color: '#6366F1' },
     ],
   },
 ];
@@ -157,88 +120,6 @@ function sortPostsNewestFirst(posts: DisplayPost[]): DisplayPost[] {
     const timeB = new Date(b.publishedAt || b.createdAt).getTime();
     return timeB - timeA;
   });
-}
-
-interface ShareableFavoriteTrack {
-  id: string;
-  trackId: string;
-  title: string;
-  artist: string;
-  albumImage: string;
-  previewUrl: string;
-  template: string;
-}
-
-const parseTrackFromRawJson = (rawJson?: string) => {
-  if (!rawJson) return null;
-  try {
-    const parsed = JSON.parse(rawJson);
-    if (parsed && typeof parsed === 'object') {
-      return parsed as Record<string, any>;
-    }
-  } catch {
-    return null;
-  }
-  return null;
-};
-
-function normalizeFavoriteTrack(item: FavoriteItemResponse): ShareableFavoriteTrack | null {
-  const rawTrack = parseTrackFromRawJson(item.rawJson);
-  const trackId = item.itemId || rawTrack?.id || rawTrack?.trackId;
-  const title = item.name || rawTrack?.name || rawTrack?.title;
-  const artist = item.artistName || rawTrack?.artists?.map?.((artist: any) => artist?.name).filter(Boolean).join(', ') || rawTrack?.artist || '';
-  const albumImage = item.imgUrl
-    || rawTrack?.album?.images?.[0]?.url
-    || rawTrack?.albumImage
-    || '';
-  const previewUrl = item.previewUrl || rawTrack?.preview_url || rawTrack?.previewUrl || '';
-
-  if (!trackId || !title || !artist) {
-    return null;
-  }
-
-  return {
-    id: item.id || `${item.source}-${trackId}`,
-    trackId,
-    title,
-    artist,
-    albumImage,
-    previewUrl,
-    template: 'gradient',
-  };
-}
-
-function PostComposer({ onPress, onShareMusic, avatarUrl }: { onPress: () => void; onShareMusic?: () => void; avatarUrl?: string }) {
-  return (
-    <View style={styles.composerContainer}>
-      <TouchableOpacity activeOpacity={0.75} onPress={onPress} style={styles.composerCard}>
-        <View style={styles.composerCollapsed}>
-          <Image
-            source={{ uri: avatarUrl || 'https://i.pravatar.cc/150?img=10' }}
-            style={styles.composerAvatar}
-          />
-          <View style={styles.composerPlaceholder}>
-            <Text style={styles.composerPlaceholderText}>Bạn đang nghĩ gì?</Text>
-          </View>
-          <View style={styles.composerQuickActions}>
-            <View style={[styles.composerQuickIcon, { backgroundColor: '#10B9811A' }]}>
-              <Ionicons name="image-outline" size={18} color="#10B981" />
-            </View>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={(event) => {
-                event.stopPropagation();
-                onShareMusic?.();
-              }}
-              style={[styles.composerQuickIcon, { backgroundColor: '#55C5F11A' }]}
-            >
-              <Ionicons name="musical-notes-outline" size={18} color="#55C5F1" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </TouchableOpacity>
-    </View>
-  );
 }
 
 // ─── Settings Drawer ────────────────────────────────────
@@ -406,7 +287,6 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
   const [showSubscriptionDetails, setShowSubscriptionDetails] = useState(false);
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [editingPost, setEditingPost] = useState<EditablePostDraft | null>(null);
-  const [activeTab, setActiveTab] = useState<'posts' | 'playlists'>('posts');
   const [activeBottomTab, setActiveBottomTab] = useState<TabName>('profile');
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [myPosts, setMyPosts] = useState<DisplayPost[]>([]);
@@ -424,10 +304,6 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
   const [previewImageUrl, setPreviewImageUrl] = useState('');
   const [previewImageTarget, setPreviewImageTarget] = useState<'avatar' | 'cover'>('avatar');
   const [showThemePickerPopup, setShowThemePickerPopup] = useState(false);
-  const [showShareMusicModal, setShowShareMusicModal] = useState(false);
-  const [favoriteSpotifyTracks, setFavoriteSpotifyTracks] = useState<ShareableFavoriteTrack[]>([]);
-  const [isFavoriteTracksLoading, setIsFavoriteTracksLoading] = useState(false);
-  const [sharingTrackId, setSharingTrackId] = useState<string | null>(null);
   const [subscriptionPlanName, setSubscriptionPlanName] = useState('Premium');
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null);
 
@@ -769,82 +645,18 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
   }, [user]);
 
   useEffect(() => {
-    if (activeTab === 'posts' && user?.userId) {
+    if (user?.userId) {
       fetchMyPosts(1);
-    } else if (!user?.userId) {
+    } else {
       setMyPosts([]);
       setTotalMyPosts(0);
       setPostsPage(1);
       setPostsTotalPages(1);
     }
-  }, [activeTab, fetchMyPosts, user?.userId]);
+  }, [fetchMyPosts, user?.userId]);
 
   const handlePostsRefresh = useCallback(() => {
     fetchMyPosts(1, true);
-  }, [fetchMyPosts]);
-
-  const fetchFavoriteSpotifyTracks = useCallback(async () => {
-    setIsFavoriteTracksLoading(true);
-    try {
-      const result = await favoriteService.getFavorites({
-        itemType: 'track',
-        source: 'spotify',
-        page: 1,
-        pageSize: 50,
-      });
-
-      if (!result.success) {
-        showToast.error('Không tải được danh sách yêu thích', result.message || 'Vui lòng thử lại sau');
-        setFavoriteSpotifyTracks([]);
-        return;
-      }
-
-      const normalizedTracks = (result.data || [])
-        .map(normalizeFavoriteTrack)
-        .filter((track): track is ShareableFavoriteTrack => !!track);
-
-      setFavoriteSpotifyTracks(normalizedTracks);
-    } catch (error) {
-      console.log('[ProfileScreen] fetchFavoriteSpotifyTracks error:', error);
-      setFavoriteSpotifyTracks([]);
-      showToast.error('Không tải được danh sách yêu thích', 'Vui lòng thử lại sau');
-    } finally {
-      setIsFavoriteTracksLoading(false);
-    }
-  }, []);
-
-  const handleOpenShareMusicModal = useCallback(() => {
-    setShowShareMusicModal(true);
-    void fetchFavoriteSpotifyTracks();
-  }, [fetchFavoriteSpotifyTracks]);
-
-  const handleShareFavoriteTrack = useCallback(async (track: ShareableFavoriteTrack) => {
-    setSharingTrackId(track.id);
-    try {
-      const result = await blogService.shareMusicPost({
-        trackId: track.trackId,
-        title: track.title,
-        artist: track.artist,
-        albumImage: track.albumImage || '',
-        previewUrl: track.previewUrl || '',
-        template: track.template || 'gradient',
-      });
-
-      if (!result.success) {
-        showToast.error('Chia sẻ thất bại', result.message || 'Không thể chia sẻ bài nhạc này');
-        return;
-      }
-
-      showToast.success('Đã chia sẻ bài nhạc', 'Bài viết nhạc đã được đăng lên trang cá nhân');
-      setShowShareMusicModal(false);
-      setActiveTab('posts');
-      fetchMyPosts(1, true);
-    } catch (error) {
-      console.log('[ProfileScreen] handleShareFavoriteTrack error:', error);
-      showToast.error('Chia sẻ thất bại', 'Vui lòng thử lại sau');
-    } finally {
-      setSharingTrackId(null);
-    }
   }, [fetchMyPosts]);
 
   const handleLikePost = useCallback(async (postId: string) => {
@@ -937,7 +749,6 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
   const handlePostCreated = useCallback(() => {
     setShowCreatePost(false);
     setEditingPost(null);
-    setActiveTab('posts');
     fetchMyPosts(1, true);
   }, [fetchMyPosts]);
 
@@ -970,9 +781,7 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          activeTab === 'posts'
-            ? <RefreshControl refreshing={isPostsRefreshing} onRefresh={handlePostsRefresh} colors={[palette.primary]} tintColor={palette.primary} />
-            : undefined
+          <RefreshControl refreshing={isPostsRefreshing} onRefresh={handlePostsRefresh} colors={[palette.primary]} tintColor={palette.primary} />
         }
       >
         {/* ── Profile Card ── */}
@@ -1051,165 +860,54 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
                 </View>
               )}
             </View>
-            <View style={[styles.profileStats, { backgroundColor: palette.surface }]}> 
+            <View style={[styles.profileStats, { backgroundColor: palette.surface }]}>
               <View style={styles.profileStatItem}>
-                <Text style={[styles.profileStatValue, { color: palette.textPrimary }]}>{totalMyPosts}</Text>
+                <Text style={[styles.profileStatValue, { color: palette.primary }]}>{totalMyPosts}</Text>
                 <Text style={[styles.profileStatLabel, { color: palette.textSecondary }]}>Bài viết</Text>
               </View>
-              <View style={styles.profileStatItem}>
-                <Text style={[styles.profileStatValue, { color: palette.textPrimary }]}>128</Text>
-                <Text style={[styles.profileStatLabel, { color: palette.textSecondary }]}>Playlist</Text>
-              </View>
-              <View style={styles.profileStatItem}>
-                <Text style={[styles.profileStatValue, { color: palette.textPrimary }]}>1.2K</Text>
-                <Text style={[styles.profileStatLabel, { color: palette.textSecondary }]}>Người theo dõi</Text>
-              </View>
-              <View style={styles.profileStatItem}>
-                <Text style={[styles.profileStatValue, { color: palette.textPrimary }]}>856</Text>
-                <Text style={[styles.profileStatLabel, { color: palette.textSecondary }]}>Đang theo dõi</Text>
-              </View>
             </View>
           </View>
         </View>
 
-        {/* ── Quick Stats Cards ── */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsContainer}>
-          <View style={[styles.statsCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
-            <View style={[styles.statsIcon, { backgroundColor: '#55C5F1' + '1A' }]}>
-              <Ionicons name="headset-outline" size={20} color="#55C5F1" />
-            </View>
-            <Text style={[styles.statsValue, { color: palette.textPrimary }]}>234</Text>
-            <Text style={[styles.statsLabel, { color: palette.textSecondary }]}>Giờ nghe</Text>
+        {/* ── Post List ── */}
+        {isPostsLoading ? (
+          <View style={styles.postsLoadingContainer}>
+            <ActivityIndicator size="large" color={palette.primary} />
+            <Text style={[styles.postsLoadingText, { color: palette.textSecondary }]}>Đang tải bài viết...</Text>
           </View>
-
-          <View style={[styles.statsCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
-            <View style={[styles.statsIcon, { backgroundColor: '#10B981' + '1A' }]}>
-              <Ionicons name="people-outline" size={20} color="#10B981" />
+        ) : myPosts.length === 0 ? (
+          <View style={styles.emptyState}>
+            <View style={[styles.emptyStateIcon, { backgroundColor: palette.primary + '1A' }]}>
+              <Ionicons name="create-outline" size={28} color={palette.primary} />
             </View>
-            <Text style={[styles.statsValue, { color: palette.textPrimary }]}>56</Text>
-            <Text style={[styles.statsLabel, { color: palette.textSecondary }]}>Phòng live</Text>
+            <Text style={[styles.emptyStateTitle, { color: palette.textPrimary }]}>Bạn chưa có bài viết nào</Text>
+            <Text style={[styles.emptyStateSubtitle, { color: palette.textSecondary }]}>Hãy đăng bài đầu tiên để chia sẻ với cộng đồng!</Text>
           </View>
-
-          <View style={[styles.statsCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
-            <View style={[styles.statsIcon, { backgroundColor: '#F59E0B' + '1A' }]}>
-              <Ionicons name="trophy-outline" size={20} color="#F59E0B" />
-            </View>
-            <Text style={[styles.statsValue, { color: palette.textPrimary }]}>12</Text>
-            <Text style={[styles.statsLabel, { color: palette.textSecondary }]}>Huy hiệu</Text>
-          </View>
-
-          <View style={[styles.statsCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
-            <View style={[styles.statsIcon, { backgroundColor: '#A78BFA' + '1A' }]}>
-              <Ionicons name="heart-outline" size={20} color="#A78BFA" />
-            </View>
-            <Text style={[styles.statsValue, { color: palette.textPrimary }]}>3.4K</Text>
-            <Text style={[styles.statsLabel, { color: palette.textSecondary }]}>Lượt thích</Text>
-          </View>
-        </ScrollView>
-
-        {/* ── Tabs: Bài viết / Playlist yêu thích ── */}
-        <View style={[styles.tabsContainer, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
-          <TouchableOpacity
-            onPress={() => setActiveTab('posts')}
-            style={[styles.tabButton, activeTab === 'posts' && [styles.tabButtonActive, { backgroundColor: palette.primary }]]}
-          >
-            <Text style={[styles.tabButtonText, { color: activeTab === 'posts' ? '#FFFFFF' : palette.textSecondary }, activeTab === 'posts' && styles.tabButtonTextActive]}>
-              Bài viết
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setActiveTab('playlists')}
-            style={[styles.tabButton, activeTab === 'playlists' && [styles.tabButtonActive, { backgroundColor: palette.primary }]]}
-          >
-            <Text style={[styles.tabButtonText, { color: activeTab === 'playlists' ? '#FFFFFF' : palette.textSecondary }, activeTab === 'playlists' && styles.tabButtonTextActive]}>
-              Playlist yêu thích
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* ── Tab Content ── */}
-        {activeTab === 'posts' ? (
+        ) : (
           <>
-            <PostComposer onPress={handleOpenCreatePost} onShareMusic={handleOpenShareMusicModal} avatarUrl={user?.profileImageUrl} />
-
-            <View style={[styles.shareMusicSection, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
-              <View style={styles.shareMusicSectionHeader}>
-                <View style={[styles.shareMusicSectionIcon, { backgroundColor: isDarkMode ? '#1E3A8A33' : '#DBEAFE' }]}>
-                  <Ionicons name="musical-notes" size={18} color="#1DB954" />
-                </View>
-                <View style={styles.shareMusicSectionInfo}>
-                  <Text style={[styles.shareMusicSectionTitle, { color: palette.textPrimary }]}>Chia sẻ nhạc yêu thích</Text>
-                  <Text style={[styles.shareMusicSectionDesc, { color: palette.textSecondary }]}>Đăng nhanh bài nhạc đã thêm vào yêu thích</Text>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={[styles.shareMusicOpenButton, { backgroundColor: palette.primary }]}
-                onPress={handleOpenShareMusicModal}
-              >
-                <Ionicons name="musical-notes" size={14} color="#FFFFFF" />
-                <Text style={styles.shareMusicOpenButtonText}>Chọn bài để chia sẻ</Text>
-              </TouchableOpacity>
-            </View>
-
-            {isPostsLoading ? (
-              <View style={styles.postsLoadingContainer}>
-                <ActivityIndicator size="large" color={palette.primary} />
-                <Text style={[styles.postsLoadingText, { color: palette.textSecondary }]}>Đang tải bài viết của bạn...</Text>
-              </View>
-            ) : myPosts.length === 0 ? (
-              <View style={styles.emptyState}>
-                <View style={styles.emptyStateIcon}>
-                  <Ionicons name="create-outline" size={28} color="#55C5F1" />
-                </View>
-                <Text style={styles.emptyStateTitle}>Bạn chưa có bài viết nào</Text>
-                <Text style={styles.emptyStateSubtitle}>Hãy đăng bài đầu tiên để chia sẻ với cộng đồng!</Text>
-              </View>
-            ) : (
-              myPosts.map((post) => (
-                <BlogPostCard
-                  key={post.id}
-                  post={post}
-                  onLike={() => handleLikePost(post.id)}
-                  onNavigateToDetail={(postId) => setSelectedPostId(postId)}
-                  showOwnerActions
-                  onEdit={() => handleEditPost(post)}
-                  onDelete={() => handleDeletePost(post.id)}
-                />
-              ))
-            )}
+            {myPosts.map((post) => (
+              <BlogPostCard
+                key={post.id}
+                post={post}
+                onLike={() => handleLikePost(post.id)}
+                onNavigateToDetail={(postId) => setSelectedPostId(postId)}
+                showOwnerActions
+                onEdit={() => handleEditPost(post)}
+                onDelete={() => handleDeletePost(post.id)}
+              />
+            ))}
 
             {!isPostsLoading && postsPage < postsTotalPages && myPosts.length > 0 && (
               <TouchableOpacity
-                style={styles.loadMoreButton}
+                style={[styles.loadMoreButton, { backgroundColor: palette.surface, borderColor: palette.border }]}
                 activeOpacity={0.8}
                 onPress={() => fetchMyPosts(postsPage + 1)}
               >
-                <Text style={styles.loadMoreText}>Tải thêm bài viết</Text>
-                <Ionicons name="chevron-down" size={16} color="#55C5F1" />
+                <Text style={[styles.loadMoreText, { color: palette.primary }]}>Tải thêm bài viết</Text>
+                <Ionicons name="chevron-down" size={16} color={palette.primary} />
               </TouchableOpacity>
             )}
           </>
-        ) : (
-          /* Playlist grid */
-          <View style={styles.playlistGrid}>
-            {FAVORITE_PLAYLISTS.map((item) => (
-              <View key={item.id} style={styles.playlistCard}>
-                <Image source={{ uri: item.image }} style={styles.playlistImage} />
-                <LinearGradient
-                  colors={['transparent', 'rgba(0,0,0,0.8)']}
-                  style={styles.playlistGradient}
-                >
-                  <Text style={styles.playlistTitle}>{item.title}</Text>
-                  <Text style={styles.playlistSongs}>{item.songs} bài hát</Text>
-                </LinearGradient>
-                <TouchableOpacity style={styles.playlistPlayButton}>
-                  <Ionicons name="play" size={18} color="white" />
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
         )}
 
         {/* Bottom spacer */}
@@ -1290,70 +988,6 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
           </View>
         </View>
       )}
-
-      <Modal
-        visible={showShareMusicModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowShareMusicModal(false)}
-      >
-        <View style={styles.popupOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowShareMusicModal(false)} />
-
-          <View style={[styles.shareMusicModalCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
-            <View style={[styles.popupHeader, { borderBottomColor: palette.border }]}>
-              <Text style={[styles.popupTitle, { color: palette.textPrimary }]}>Chia sẻ từ nhạc yêu thích</Text>
-              <TouchableOpacity onPress={() => setShowShareMusicModal(false)}>
-                <Ionicons name="close" size={18} color={palette.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            {isFavoriteTracksLoading ? (
-              <View style={styles.shareMusicLoadingWrap}>
-                <ActivityIndicator size="small" color={palette.primary} />
-                <Text style={[styles.shareMusicHintText, { color: palette.textSecondary }]}>Đang tải danh sách nhạc yêu thích...</Text>
-              </View>
-            ) : favoriteSpotifyTracks.length === 0 ? (
-              <View style={styles.shareMusicEmptyWrap}>
-                <Ionicons name="musical-notes-outline" size={22} color={palette.textMuted} />
-                <Text style={[styles.shareMusicHintText, { color: palette.textSecondary }]}>Bạn chưa có bài nhạc yêu thích từ Spotify.</Text>
-              </View>
-            ) : (
-              <ScrollView style={styles.shareMusicList} contentContainerStyle={styles.shareMusicListContent}>
-                {favoriteSpotifyTracks.map((track) => (
-                  <View key={track.id} style={[styles.shareMusicItemRow, { borderBottomColor: palette.border }]}> 
-                    {track.albumImage ? (
-                      <Image source={{ uri: track.albumImage }} style={styles.shareMusicItemImage} />
-                    ) : (
-                      <View style={[styles.shareMusicItemFallback, { backgroundColor: isDarkMode ? '#1F2937' : '#E2E8F0' }]}>
-                        <Ionicons name="musical-note" size={16} color={palette.textSecondary} />
-                      </View>
-                    )}
-
-                    <View style={styles.shareMusicItemInfo}>
-                      <Text numberOfLines={1} style={[styles.shareMusicItemTitle, { color: palette.textPrimary }]}>{track.title}</Text>
-                      <Text numberOfLines={1} style={[styles.shareMusicItemArtist, { color: palette.textSecondary }]}>{track.artist}</Text>
-                    </View>
-
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      style={[styles.shareMusicItemButton, { backgroundColor: palette.primary }]}
-                      onPress={() => void handleShareFavoriteTrack(track)}
-                      disabled={sharingTrackId === track.id}
-                    >
-                      {sharingTrackId === track.id ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                      ) : (
-                        <Text style={styles.shareMusicItemButtonText}>Chia sẻ</Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      </Modal>
 
       <Modal
         visible={showImagePreviewPopup}

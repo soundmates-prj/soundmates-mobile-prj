@@ -22,6 +22,7 @@ import {
     type NowPlayingData,
     type TrackInfo,
 } from '../../api/livestreamService';
+import { useUser } from '../../context/UserContext';
 import FormTextField from '../../components/ui/FormTextField';
 import { showToast } from '../../components/ui/Toast';
 
@@ -648,10 +649,12 @@ function ReactionPicker({ isOpen, onClose, onSelect }: { isOpen: boolean; onClos
 }
 
 export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
+  const { user } = useUser();
   const [nowPlaying, setNowPlaying] = useState<NowPlayingData | null>(null);
   const [activeSessions, setActiveSessions] = useState<LiveSessionResult[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [isSessionsLoading, setIsSessionsLoading] = useState(true);
+  const [isNowPlayingLoading, setIsNowPlayingLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [inputMessage, setInputMessage] = useState('');
   const [showReactions, setShowReactions] = useState(false);
@@ -686,6 +689,25 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
     () => activeSessions.find((session) => session.id === selectedSessionId) || activeSessions[0] || null,
     [activeSessions, selectedSessionId],
   );
+
+  const currentStationUuid = useMemo(
+    () => currentLiveSession?.stationId || undefined,
+    [currentLiveSession?.stationId],
+  );
+
+  const fetchNowPlaying = useCallback(async (stationUuid?: string) => {
+    setIsNowPlayingLoading(true);
+    try {
+      const nowPlayingData = await livestreamService.getNowPlaying(stationUuid);
+      if (nowPlayingData) {
+        setNowPlaying(nowPlayingData);
+      }
+    } catch (error) {
+      console.log('[LivestreamScreen] getNowPlaying error:', error);
+    } finally {
+      setIsNowPlayingLoading(false);
+    }
+  }, []);
 
   const fetchActiveSessions = useCallback(async () => {
     try {
@@ -724,12 +746,10 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
         if (prev && detailedLiveSessions.some((session) => session.id === prev)) return prev;
         return detailedLiveSessions[0].id;
       });
-      setNowPlaying(null);
     } catch (error) {
       console.log('Failed to fetch live sessions', error);
       setActiveSessions([]);
       setSelectedSessionId(null);
-      setNowPlaying(null);
     } finally {
       setIsSessionsLoading(false);
     }
@@ -740,6 +760,15 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
     const interval = setInterval(fetchActiveSessions, 15000);
     return () => clearInterval(interval);
   }, [fetchActiveSessions]);
+
+  // Fetch nowPlaying whenever the selected station changes
+  useEffect(() => {
+    void fetchNowPlaying(currentStationUuid);
+    const pollInterval = setInterval(() => {
+      void fetchNowPlaying(currentStationUuid);
+    }, 8000);
+    return () => clearInterval(pollInterval);
+  }, [currentStationUuid, fetchNowPlaying]);
 
   useEffect(() => {
     Audio.setAudioModeAsync({
@@ -753,10 +782,11 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
     });
   }, []);
 
-  const liveTitle = currentLiveSession?.sessionName || LIVE_SESSION.title;
-  const liveHost = currentLiveSession?.stationName || LIVE_SESSION.host;
-  const liveCategory = currentLiveSession?.genre || LIVE_SESSION.category;
-  const liveListeners = currentLiveSession?.listenersCount ?? LIVE_SESSION.listeners;
+  const liveTitle = currentLiveSession?.sessionName || nowPlaying?.stationName || LIVE_SESSION.title;
+  const liveHost = nowPlaying?.streamerName || currentLiveSession?.stationName || LIVE_SESSION.host;
+  const liveCategory = nowPlaying?.currentTrack?.genre || currentLiveSession?.genre || LIVE_SESSION.category;
+  const liveListeners = nowPlaying?.totalListeners ?? currentLiveSession?.listenersCount ?? LIVE_SESSION.listeners;
+  const currentArtUrl = nowPlaying?.currentTrack?.artUrl || null;
   const isLiveSession = activeSessions.length > 0;
   const hasLiveStream = streamAvailability === 'ready';
   const currentStreamUrl = useMemo(
@@ -1217,7 +1247,10 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
         <View style={styles.titleSection}>
           <Text style={styles.liveTitle}>{liveTitle}</Text>
           <View style={styles.hostRow}>
-            <Image source={{ uri: LIVE_SESSION.hostAvatar }} style={styles.hostAvatar} />
+            <Image
+              source={{ uri: user?.profileImageUrl || LIVE_SESSION.hostAvatar }}
+              style={styles.hostAvatar}
+            />
             <Text style={styles.hostName}>{liveHost}</Text>
             <View style={styles.categoryBadge}>
               <Text style={styles.categoryText}>{liveCategory}</Text>
@@ -1270,21 +1303,32 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
                 <Ionicons name="radio" size={12} color="#55C5F1" />
                 <Text style={styles.currentTrackBadgeText}>Đang phát</Text>
               </View>
-              <Text style={styles.currentTrackTitle} numberOfLines={1}>
-                {nowPlaying.currentTrack.title || 'Unknown Track'}
-              </Text>
-              <Text style={styles.currentTrackArtist} numberOfLines={1}>
-                {nowPlaying.currentTrack.artist || 'Unknown Artist'}
-              </Text>
-              <View style={styles.currentTrackMetaRow}>
-                <Text style={styles.currentTrackMetaText}>
-                  {formatDuration(elapsedToRender)} / {formatDuration(nowPlaying.currentTrack.duration)}
-                </Text>
-                {nowPlaying.playingNext?.title ? (
-                  <Text style={styles.currentTrackMetaText} numberOfLines={1}>
-                    Tiếp theo: {nowPlaying.playingNext.title}
+              <View style={styles.currentTrackRow}>
+                {currentArtUrl ? (
+                  <Image source={{ uri: currentArtUrl }} style={styles.currentTrackArt} />
+                ) : (
+                  <View style={[styles.currentTrackArt, styles.currentTrackArtFallback]}>
+                    <Ionicons name="musical-notes" size={20} color="#55C5F1" />
+                  </View>
+                )}
+                <View style={styles.currentTrackInfo}>
+                  <Text style={styles.currentTrackTitle} numberOfLines={1}>
+                    {nowPlaying.currentTrack.title || 'Unknown Track'}
                   </Text>
-                ) : null}
+                  <Text style={styles.currentTrackArtist} numberOfLines={1}>
+                    {nowPlaying.currentTrack.artist || 'Unknown Artist'}
+                  </Text>
+                  <View style={styles.currentTrackMetaRow}>
+                    <Text style={styles.currentTrackMetaText}>
+                      {formatDuration(elapsedToRender)} / {formatDuration(nowPlaying.currentTrack.duration)}
+                    </Text>
+                    {nowPlaying.playingNext?.title ? (
+                      <Text style={styles.currentTrackMetaText} numberOfLines={1}>
+                        Tiếp theo: {nowPlaying.playingNext.title}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
               </View>
             </View>
           )}
@@ -1697,6 +1741,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  currentTrackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  currentTrackArt: {
+    width: 52,
+    height: 52,
+    borderRadius: 8,
+    flexShrink: 0,
+  },
+  currentTrackArtFallback: {
+    backgroundColor: 'rgba(85,197,241,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  currentTrackInfo: {
+    flex: 1,
+    minWidth: 0,
   },
   currentTrackBadgeText: {
     color: '#BAE6FD',
