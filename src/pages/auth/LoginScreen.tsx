@@ -1,7 +1,8 @@
+import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
-    Animated,
     Image,
     Keyboard,
     KeyboardAvoidingView,
@@ -10,13 +11,22 @@ import {
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
-import { SoundMateLightColors } from '../../../constants/theme';
-import { authService } from '../../api';
-import FormTextField from '../../components/ui/FormTextField';
+import Animated, {
+    FadeInDown,
+    FadeInUp,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { showToast } from '../../components/ui/Toast';
+import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/theme';
+import { authService } from '../../api';
+import { useTheme } from '../../context/ThemeContext';
 
 interface LoginScreenProps {
     navigation?: any;
@@ -26,46 +36,48 @@ interface LoginScreenProps {
     onNavigateToForgotPassword?: () => void;
 }
 
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+
 export default function LoginScreen({
-    navigation,
     onLoginSuccess,
     onNavigateToRegister,
     onUnverifiedEmail,
     onNavigateToForgotPassword,
 }: LoginScreenProps) {
+    const { isDarkMode } = useTheme();
+    const palette = isDarkMode ? SoundMateDarkColors : SoundMateLightColors;
     const [emailOrUsername, setEmailOrUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
     // Animation values
-    const buttonScale = useRef(new Animated.Value(1)).current;
+    const buttonScale = useSharedValue(1);
 
     const handlePressIn = useCallback(() => {
-        Animated.spring(buttonScale, {
-            toValue: 0.97,
-            useNativeDriver: true,
-        }).start();
+        buttonScale.value = withSpring(0.96);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }, [buttonScale]);
 
     const handlePressOut = useCallback(() => {
-        Animated.spring(buttonScale, {
-            toValue: 1,
-            friction: 3,
-            tension: 40,
-            useNativeDriver: true,
-        }).start();
+        buttonScale.value = withSpring(1);
     }, [buttonScale]);
+
+    const buttonAnimatedStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: buttonScale.value }],
+    }));
 
     const dismissKeyboard = useCallback(() => {
         Keyboard.dismiss();
     }, []);
 
+    const toggleShowPassword = useCallback(() => {
+        setShowPassword(prev => !prev);
+        Haptics.selectionAsync();
+    }, []);
+
     const isUnverifiedEmailMessage = useCallback((message: string) => {
         const normalizedMessage = (message || '').toLowerCase();
-        if (!normalizedMessage) {
-            return false;
-        }
-
         return normalizedMessage.includes('not verified')
             || normalizedMessage.includes('chưa xác thực')
             || normalizedMessage.includes('please verify')
@@ -75,7 +87,6 @@ export default function LoginScreen({
     }, []);
 
     const handleLogin = useCallback(async () => {
-        // Validation
         if (!emailOrUsername.trim()) {
             showToast.warning('Thiếu thông tin', 'Vui lòng nhập email hoặc tên đăng nhập');
             return;
@@ -86,6 +97,7 @@ export default function LoginScreen({
         }
 
         setIsLoading(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
         try {
             const response = await authService.login({
@@ -95,41 +107,21 @@ export default function LoginScreen({
 
             if (response.success && response.data) {
                 showToast.success('Đăng nhập thành công!', `Chào mừng bạn quay trở lại!`);
-
-                if (onLoginSuccess) {
-                    console.log('[LoginScreen] Calling onLoginSuccess with response.data:', response.data);
-                    onLoginSuccess(response.data);
-                }
+                onLoginSuccess?.(response.data);
             } else {
                 const errorMessage = response.message || '';
                 if (isUnverifiedEmailMessage(errorMessage) && onUnverifiedEmail) {
-                    showToast.warning(
-                        'Email chưa xác thực',
-                        errorMessage || 'Vui lòng xác thực email để tiếp tục.'
-                    );
+                    showToast.warning('Email chưa xác thực', errorMessage);
                     onUnverifiedEmail(emailOrUsername.trim().toLowerCase(), password);
                 } else {
-                    // Show error for other login failures (e.g., invalid credentials)
-                    showToast.error('Đăng nhập thất bại', response.message || 'Email hoặc mật khẩu không đúng');
+                    showToast.error('Đăng nhập thất bại', 'Email hoặc mật khẩu không đúng');
                 }
             }
         } catch (error: any) {
-            console.log('Login error:', error);
-
-            const errorMessage = error?.response?.data?.message
-                || error?.response?.data?.Message
-                || error?.message
-                || 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.';
-
-            // Check for 403 error in axios response
+            const errorMessage = error?.response?.data?.message || error?.message || 'Lỗi kết nối';
             if ((error?.response?.status === 403 || isUnverifiedEmailMessage(errorMessage)) && onUnverifiedEmail) {
-                showToast.warning(
-                    'Email chưa xác thực',
-                    errorMessage || 'Vui lòng xác thực email để tiếp tục.'
-                );
                 onUnverifiedEmail(emailOrUsername.trim().toLowerCase(), password);
             } else {
-                // Show error message from API or generic error
                 showToast.error('Lỗi đăng nhập', errorMessage);
             }
         } finally {
@@ -137,213 +129,195 @@ export default function LoginScreen({
         }
     }, [emailOrUsername, isUnverifiedEmailMessage, onLoginSuccess, onUnverifiedEmail, password]);
 
-    const handleForgotPassword = useCallback(() => {
-        if (onNavigateToForgotPassword) {
-            onNavigateToForgotPassword();
-        } else {
-            showToast.info('Quên mật khẩu', 'Tính năng đang được phát triển');
-        }
-    }, [onNavigateToForgotPassword]);
-
-    const handleCreateAccount = useCallback(() => {
-        if (onNavigateToRegister) {
-            onNavigateToRegister();
-        }
-    }, [onNavigateToRegister]);
-
-    const handleGoogleLogin = useCallback(() => {
-        showToast.info('Đăng nhập Google', 'Tính năng đang được phát triển');
-    }, []);
-
-    const handleFacebookLogin = useCallback(() => {
-        showToast.info('Đăng nhập Facebook', 'Tính năng đang được phát triển');
-    }, []);
-
-    // Memoized button transform style
-    const buttonTransformStyle = useMemo(() => ({
-        transform: [{ scale: buttonScale }]
-    }), [buttonScale]);
-
     return (
-        <Pressable style={styles.container} onPress={dismissKeyboard}>
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                style={styles.keyboardView}
-            >
-                <ScrollView
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
-                    keyboardShouldPersistTaps="handled"
+        <View style={styles.container}>
+            {/* Background Gradient */}
+            <LinearGradient
+                colors={isDarkMode ? ['#050B18', '#0A1120', '#000000'] : ['#E0F7FF', '#FFFFFF', '#F0F9FF']}
+                style={StyleSheet.absoluteFill}
+            />
+
+            <Pressable style={styles.content} onPress={dismissKeyboard}>
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.keyboardView}
                 >
-                    {/* Logo Section */}
-                    <View style={styles.logoSection}>
-                        <Image
-                            source={require('../../../assets/light_logo.png')}
-                            style={{ width: 130, height: 130 }}
-                            resizeMode="contain"
-                        />
-                    </View>
-
-                    {/* Title */}
-                    <Text style={styles.title}>Đăng nhập</Text>
-
-                    {/* Login Form */}
-                    <View style={styles.formContainer}>
-                        {/* Email Input */}
-                        <FormTextField
-                            inputContainerStyle={styles.inputContainer}
-                            style={styles.input}
-                            leftIconName="mail-outline"
-                            leftIconSize={22}
-                            leftIconColor={SoundMateLightColors.textPrimary}
-                            placeholder="Email"
-                            placeholderTextColor={SoundMateLightColors.textPrimary}
-                            value={emailOrUsername}
-                            onChangeText={setEmailOrUsername}
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                            keyboardType="email-address"
-                            returnKeyType="next"
-                        />
-
-                        {/* Password Input */}
-                        <FormTextField
-                            inputContainerStyle={styles.inputContainer}
-                            style={styles.input}
-                            leftIconName="lock-closed-outline"
-                            leftIconSize={22}
-                            leftIconColor={SoundMateLightColors.textPrimary}
-                            placeholder="Mật khẩu"
-                            placeholderTextColor={SoundMateLightColors.textPrimary}
-                            value={password}
-                            onChangeText={setPassword}
-                            secureTextEntry
-                            showPasswordToggle
-                            passwordIconColor={SoundMateLightColors.textMuted}
-                            returnKeyType="done"
-                            onSubmitEditing={handleLogin}
-                        />
-
-                        {/* Login Button */}
-                        <Animated.View style={[styles.loginButtonWrapper, buttonTransformStyle]}>
-                            <TouchableOpacity
-                                onPressIn={handlePressIn}
-                                onPressOut={handlePressOut}
-                                onPress={handleLogin}
-                                disabled={isLoading}
-                                activeOpacity={0.9}
-                            >
-                                <LinearGradient
-                                    colors={[SoundMateLightColors.primaryLight, SoundMateLightColors.primary]}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 0 }}
-                                    style={styles.loginButton}
-                                >
-                                    {isLoading ? (
-                                        <View style={styles.loadingContainer}>
-                                            <Text style={styles.loginButtonText}>Đang đăng nhập...</Text>
-                                        </View>
-                                    ) : (
-                                        <Text style={styles.loginButtonText}>Đăng nhập</Text>
-                                    )}
-                                </LinearGradient>
-                            </TouchableOpacity>
-                        </Animated.View>
-
-                        {/* Forgot Password with dividers below */}
-                        <View style={styles.forgotPasswordContainer}>
-                            <TouchableOpacity onPress={handleForgotPassword}>
-                                <Text style={styles.forgotPasswordText}>Quên mật khẩu ?</Text>
-                            </TouchableOpacity>
-                            <View style={styles.dividerRow}>
-                                <View style={styles.divider} />
-                                <View style={styles.dividerGap} />
-                                <View style={styles.divider} />
-                            </View>
-                        </View>
-                    </View>
-
-                    {/* Social Login */}
-                    <View style={styles.socialContainer}>
-                        <TouchableOpacity
-                            style={styles.socialButton}
-                            onPress={handleGoogleLogin}
-                        >
-                            <Text style={styles.googleText}>G</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.socialButton}
-                            onPress={handleFacebookLogin}
-                        >
-                            <Text style={styles.facebookText}>f</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Create Account Button */}
-                    <TouchableOpacity
-                        onPress={handleCreateAccount}
-                        style={styles.createAccountButton}
+                    <ScrollView
+                        contentContainerStyle={styles.scrollContent}
+                        showsVerticalScrollIndicator={false}
+                        keyboardShouldPersistTaps="handled"
                     >
-                        <Text style={styles.createAccountText}>Tạo tài khoản mới</Text>
-                    </TouchableOpacity>
+                        <View style={styles.page}>
+                            <View>
+                                <Animated.View
+                                    entering={FadeInUp.delay(200).duration(800)}
+                                    style={styles.logoSection}
+                                >
+                                    <Image
+                                        source={isDarkMode ? require('../../../assets/dark_logo.png') : require('../../../assets/light_logo.png')}
+                                        style={styles.logo}
+                                        resizeMode="contain"
+                                    />
+                                </Animated.View>
 
-                    {/* Footer */}
-                    <Text style={styles.footerText}>
-                        Bằng việc đăng ký, bạn đồng ý với{' '}
-                        <Text style={styles.linkText}>Điều khoản dịch vụ</Text>
-                        {' '}và{' '}
-                        <Text style={styles.linkText}>Chính{'\n'}sách bảo mật</Text>
-                        {' '}của chúng tôi
-                    </Text>
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </Pressable>
+                                <Animated.View entering={FadeInDown.delay(400).duration(800)}>
+                                    <Text style={[styles.title, { color: palette.textPrimary }]}>Chào mừng quay lại</Text>
+                                    <Text style={[styles.subtitle, { color: palette.textSecondary }]}>
+                                        Đăng nhập để tiếp tục trải nghiệm âm nhạc cùng SoundMates
+                                    </Text>
+                                </Animated.View>
+
+                                <Animated.View
+                                    entering={FadeInDown.delay(600).duration(800)}
+                                    style={styles.formContainer}
+                                >
+                                    <BlurView intensity={70} tint={isDarkMode ? 'dark' : 'light'} style={[styles.inputWrapper, { borderColor: palette.border }]}>
+                                        <Ionicons name="mail-outline" size={20} color={palette.primary} style={styles.inputIcon} />
+                                        <TextInput
+                                            style={[styles.input, { color: palette.textPrimary }]}
+                                            placeholder="Email hoặc tên đăng nhập"
+                                            placeholderTextColor={palette.textMuted}
+                                            value={emailOrUsername}
+                                            onChangeText={setEmailOrUsername}
+                                            autoCapitalize="none"
+                                        />
+                                    </BlurView>
+
+                                    <BlurView intensity={70} tint={isDarkMode ? 'dark' : 'light'} style={[styles.inputWrapper, { borderColor: palette.border }]}>
+                                        <Ionicons name="lock-closed-outline" size={20} color={palette.primary} style={styles.inputIcon} />
+                                        <TextInput
+                                            style={[styles.input, { color: palette.textPrimary }]}
+                                            placeholder="Mật khẩu"
+                                            placeholderTextColor={palette.textMuted}
+                                            value={password}
+                                            onChangeText={setPassword}
+                                            secureTextEntry={!showPassword}
+                                        />
+                                        <TouchableOpacity onPress={toggleShowPassword} style={styles.eyeIcon}>
+                                            <Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={20} color={palette.textMuted} />
+                                        </TouchableOpacity>
+                                    </BlurView>
+
+                                    <TouchableOpacity onPress={onNavigateToForgotPassword} style={styles.forgotPassword}>
+                                        <Text style={[styles.forgotPasswordText, { color: palette.primary }]}>Quên mật khẩu?</Text>
+                                    </TouchableOpacity>
+
+                                    <AnimatedTouchableOpacity
+                                        style={[styles.loginButtonWrapper, { shadowColor: palette.primary }, buttonAnimatedStyle]}
+                                        onPressIn={handlePressIn}
+                                        onPressOut={handlePressOut}
+                                        onPress={handleLogin}
+                                        disabled={isLoading}
+                                        activeOpacity={1}
+                                    >
+                                        <LinearGradient
+                                            colors={[palette.primary, palette.primaryDark]}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 1 }}
+                                            style={styles.loginButton}
+                                        >
+                                            <Text style={styles.loginButtonText}>
+                                                {isLoading ? 'Đang xử lý...' : 'Đăng nhập'}
+                                            </Text>
+                                        </LinearGradient>
+                                    </AnimatedTouchableOpacity>
+                                </Animated.View>
+
+                                <Animated.View
+                                    entering={FadeInDown.delay(800).duration(800)}
+                                    style={styles.socialSection}
+                                >
+                                    <View style={styles.dividerRow}>
+                                        <View style={[styles.divider, { backgroundColor: palette.border + '55' }]} />
+                                        <Text style={[styles.dividerText, { color: palette.textMuted }]}>Hoặc đăng nhập với</Text>
+                                        <View style={[styles.divider, { backgroundColor: palette.border + '55' }]} />
+                                    </View>
+
+                                    <View style={styles.socialButtons}>
+                                        <TouchableOpacity style={[styles.socialButton, { backgroundColor: palette.surface, borderColor: palette.border }]} activeOpacity={0.7}>
+                                            <Ionicons name="logo-google" size={24} color="#DB4437" />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={[styles.socialButton, { backgroundColor: palette.surface, borderColor: palette.border }]} activeOpacity={0.7}>
+                                            <Ionicons name="logo-apple" size={24} color={isDarkMode ? '#FFFFFF' : '#000000'} />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={[styles.socialButton, { backgroundColor: palette.surface, borderColor: palette.border }]} activeOpacity={0.7}>
+                                            <Ionicons name="logo-facebook" size={24} color="#4267B2" />
+                                        </TouchableOpacity>
+                                    </View>
+                                </Animated.View>
+                            </View>
+
+                            <Animated.View
+                                entering={FadeInDown.delay(1000).duration(800)}
+                                style={styles.footer}
+                            >
+                                <Text style={[styles.footerText, { color: palette.textSecondary }]}>Chưa có tài khoản? </Text>
+                                <TouchableOpacity onPress={onNavigateToRegister}>
+                                    <Text style={[styles.registerText, { color: palette.primary }]}>Đăng ký ngay</Text>
+                                </TouchableOpacity>
+                            </Animated.View>
+                        </View>
+                    </ScrollView>
+                </KeyboardAvoidingView>
+            </Pressable>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: SoundMateLightColors.background,
+    },
+    content: {
+        flex: 1,
     },
     keyboardView: {
         flex: 1,
     },
     scrollContent: {
         flexGrow: 1,
-        paddingHorizontal: 24,
-        paddingTop: 60,
-        paddingBottom: 30,
+        paddingHorizontal: 30,
+        paddingTop: 80,
+        paddingBottom: 40,
+    },
+    page: {
+        flexGrow: 1,
+        justifyContent: 'space-between',
     },
     logoSection: {
         alignItems: 'center',
-        marginBottom: 10,
+        marginBottom: 28,
+    },
+    logo: {
+        width: 180,
+        height: 180,
     },
     title: {
-        fontSize: 26,
-        fontWeight: '700',
-        color: SoundMateLightColors.primary,
-        marginBottom: 28,
+        fontSize: 32,
+        fontWeight: '800',
         textAlign: 'center',
+        marginBottom: 10,
+        letterSpacing: -0.5,
+    },
+    subtitle: {
+        fontSize: 16,
+        textAlign: 'center',
+        marginBottom: 40,
+        lineHeight: 22,
+        paddingHorizontal: 20,
     },
     formContainer: {
-        marginBottom: 24,
+        gap: 16,
     },
-    inputContainer: {
+    inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: SoundMateLightColors.surface,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: SoundMateLightColors.border,
+        height: 60,
+        borderRadius: 18,
         paddingHorizontal: 16,
-        marginBottom: 16,
-        height: 56,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 3,
-        elevation: 1,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.5)',
+        overflow: 'hidden',
     },
     inputIcon: {
         marginRight: 12,
@@ -351,119 +325,78 @@ const styles = StyleSheet.create({
     input: {
         flex: 1,
         fontSize: 16,
-        color: SoundMateLightColors.textPrimary,
+        fontWeight: '500',
     },
     eyeIcon: {
-        padding: 4,
+        padding: 8,
     },
-    loginButtonWrapper: {
-        marginTop: 8,
-    },
-    loginButton: {
-        height: 54,
-        borderRadius: 12,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: SoundMateLightColors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    loginButtonText: {
-        fontSize: 17,
-        fontWeight: '600',
-        color: '#FFFFFF',
-        letterSpacing: 0.3,
-    },
-    loadingContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    forgotPasswordContainer: {
-        alignItems: 'center',
-        marginTop: 24,
-        marginBottom: 16,
+    forgotPassword: {
+        alignSelf: 'flex-end',
     },
     forgotPasswordText: {
-        fontSize: 15,
-        color: SoundMateLightColors.textSecondary,
-        fontWeight: '500',
-        marginBottom: 12,
+        fontWeight: '600',
+        fontSize: 14,
+    },
+    loginButtonWrapper: {
+        marginTop: 10,
+        borderRadius: 18,
+        overflow: 'hidden',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 6,
+    },
+    loginButton: {
+        height: 60,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loginButtonText: {
+        color: '#FFFFFF',
+        fontSize: 18,
+        fontWeight: '700',
+        letterSpacing: 0.5,
+    },
+    socialSection: {
+        marginTop: 40,
     },
     dividerRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        width: '100%',
+        marginBottom: 25,
     },
     divider: {
         flex: 1,
         height: 1,
-        backgroundColor: SoundMateLightColors.border,
     },
-    dividerGap: {
-        width: 60,
+    dividerText: {
+        marginHorizontal: 15,
+        fontSize: 13,
+        fontWeight: '500',
     },
-    socialContainer: {
+    socialButtons: {
         flexDirection: 'row',
         justifyContent: 'center',
-        gap: 50,
-        marginBottom: 28,
+        gap: 20,
     },
     socialButton: {
-        width: 56,
-        height: 56,
-        borderRadius: 12,
-        backgroundColor: SoundMateLightColors.surface,
-        borderWidth: 1.5,
-        borderColor: SoundMateLightColors.border,
+        width: 60,
+        height: 60,
+        borderRadius: 20,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 4,
-        elevation: 2,
+        borderWidth: 1,
     },
-    googleText: {
-        fontSize: 24,
-        fontWeight: '600',
-        color: SoundMateLightColors.textPrimary,
-    },
-    facebookText: {
-        fontSize: 28,
-        fontWeight: '700',
-        color: SoundMateLightColors.textPrimary,
-    },
-    createAccountButton: {
-        height: 54,
-        borderRadius: 12,
-        borderWidth: 1.5,
-        borderColor: SoundMateLightColors.border,
+    footer: {
+        flexDirection: 'row',
         justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 24,
-        backgroundColor: SoundMateLightColors.surface,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 3,
-        elevation: 1,
-    },
-    createAccountText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: SoundMateLightColors.textPrimary,
-        letterSpacing: 0.3,
+        paddingTop: 28,
     },
     footerText: {
-        fontSize: 12,
-        color: SoundMateLightColors.textPrimary,
-        textAlign: 'center',
-        lineHeight: 20,
+        fontSize: 15,
     },
-    linkText: {
-        color: SoundMateLightColors.primary,
-        fontWeight: '500',
+    registerText: {
+        fontSize: 15,
+        fontWeight: '700',
     },
 });

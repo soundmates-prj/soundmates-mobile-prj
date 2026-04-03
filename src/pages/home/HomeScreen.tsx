@@ -636,7 +636,7 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
                             </TouchableOpacity>
 
                             <View style={styles.topHitSection}>
-                                <SectionHeader title="Top Hit Playlist Live" />
+                                <SectionHeader title="Top Hit Playlist Live" titleColor={palette.primary} />
                                 <ScrollView
                                     horizontal
                                     showsHorizontalScrollIndicator={false}
@@ -649,7 +649,7 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
                             </View>
 
                             <View style={styles.scheduleSection}>
-                                <SectionHeader title="Lịch phát sóng" />
+                                <SectionHeader title="Lịch phát sóng" titleColor={palette.primary} />
 
                                 <LinearGradient
                                     colors={isDarkMode ? ['#111827', '#0F172A'] : ['#EAF6FF', '#F8FBFF']}
@@ -756,7 +756,7 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
                             </View>
 
                             <View style={styles.sectionBlock}>
-                                <SectionHeader title="Playlist cá nhân" />
+                                <SectionHeader title="Playlist cá nhân" titleColor={palette.primary} />
 
                                 <ScrollView
                                     horizontal
@@ -846,7 +846,7 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
                                 end={{ x: 1, y: 1 }}
                                 style={styles.podcastSection}
                             >
-                                <SectionHeader title="Podcast Hot" titleColor="#0E7490" />
+                                <SectionHeader title="Podcast Hot" titleColor={palette.primary} />
 
                                 <TouchableOpacity style={styles.podcastFeaturedCard} activeOpacity={0.92}>
                                     <Image source={{ uri: featuredPodcast.image }} style={styles.podcastFeaturedImage} />
@@ -915,7 +915,7 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
 
                                 <SectionHeader
                                     title="Cộng đồng"
-                                    titleColor={isDarkMode ? '#BFDBFE' : '#1D4ED8'}
+                                    titleColor={palette.primary}
                                     onPressSeeAll={() => setActiveTab('blog')}
                                 />
 

@@ -91,6 +91,8 @@ export const BLOG_ENDPOINTS = {
     MY_POSTS: '/me/posts',
     MY_COMMENTS: '/me/comments',
     MY_REACTIONS: '/me/reactions',
+    // Moderation
+    REPORTS: '/reports',
 };
 
 // Subscription Endpoints
@@ -121,6 +123,11 @@ export const LIVESTREAM_ENDPOINTS = {
     LIVE_SESSIONS: '/livesession',
     ACTIVE_SESSIONS: '/livesession/active',
     LIVE_SESSION_DETAIL: (sessionId: string) => `/livesession/${sessionId}`,
+    CREATE_LIVE_SESSION: '/livesession',
+    UPDATE_LIVE_SESSION: (sessionId: string) => `/livesession/${sessionId}`,
+    START_LIVE_SESSION: (sessionId: string) => `/livesession/${sessionId}/start`,
+    STOP_LIVE_SESSION: (sessionId: string) => `/livesession/${sessionId}/stop`,
+    MY_HOSTED_SESSIONS: '/livesession/my',
 };
 
 export const SPOTIFY_ENDPOINTS = {

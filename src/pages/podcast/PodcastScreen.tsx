@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -10,15 +11,28 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Dimensions,
 } from 'react-native';
+import Animated, { 
+  Extrapolate,
+  FadeInDown, 
+  FadeInRight,
+  interpolate,
+  useAnimatedScrollHandler,
+  useAnimatedStyle, 
+  useSharedValue, 
+  withSpring 
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { PodcastResponse, podcastService } from '../../api';
 import { useTheme } from '../../context/ThemeContext';
 import { PodcastDetailScreen } from './PodcastDetailScreen';
 
+const { width } = Dimensions.get('window');
+
 // ─── Helpers ─────────────────────────────────────────────────────
 
-/** Map API response → view-model used by UI components */
 interface PodcastVM {
   id: string;
   title: string;
@@ -39,7 +53,6 @@ const DEFAULT_COVER =
 
 const DEFAULT_AVATAR = 'https://i.pravatar.cc/100?img=10';
 
-/** Consider podcast "new" if created within the last 7 days */
 const isRecentlyCreated = (dateStr: string): boolean => {
   try {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -49,7 +62,7 @@ const isRecentlyCreated = (dateStr: string): boolean => {
   }
 };
 
-const mapToPodcastVM = (raw: PodcastResponse, idx: number): PodcastVM => ({
+const mapToPodcastVM = (raw: PodcastResponse): PodcastVM => ({
   id: raw.id,
   title: raw.title,
   subtitle: raw.description || '',
@@ -60,8 +73,7 @@ const mapToPodcastVM = (raw: PodcastResponse, idx: number): PodcastVM => ({
   episodes: raw.episodeCount,
   category: raw.type || 'Khác',
   isNew: isRecentlyCreated(raw.createdAt),
-  // Mark the top 3 podcasts (by episode count) as trending
-  isTrending: false, // will be set after sorting
+  isTrending: false,
   createdAt: raw.createdAt,
 });
 
@@ -70,107 +82,137 @@ const CATEGORIES = ['Tất cả', 'Mới nhất', 'Thịnh hành'];
 // ─── Sub-Components ──────────────────────────────────────────────
 
 function FeaturedPodcast({ podcast, onPress }: { podcast: PodcastVM; onPress: () => void }) {
+  const { isDarkMode } = useTheme();
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.96);
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1);
+  };
+
   return (
-    <TouchableOpacity activeOpacity={0.92} style={styles.featuredWrap} onPress={onPress}>
-      <Image source={{ uri: podcast.coverImage }} style={styles.featuredImage} />
+    <Animated.View style={[styles.featuredWrap, animatedStyle]}>
+      <TouchableOpacity 
+        activeOpacity={1} 
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={styles.featuredTouchable}
+      >
+        <Image source={{ uri: podcast.coverImage }} style={styles.featuredImage} />
 
-      <LinearGradient
-        colors={['rgba(0,0,0,0.80)', 'rgba(0,0,0,0.40)', 'rgba(0,0,0,0.10)']}
-        start={{ x: 0, y: 1 }}
-        end={{ x: 0, y: 0 }}
-        style={styles.featuredOverlay}
-      />
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.8)']}
+          style={styles.featuredGradient}
+        />
 
-      <View style={styles.featuredCircle} />
+        <BlurView intensity={20} style={styles.featuredGlassOverlay} tint={isDarkMode ? 'dark' : 'light'} />
 
-      <View style={styles.featuredContent}>
-        <View style={styles.featuredBadgeRow}>
-          {podcast.isTrending && (
-            <View style={styles.badgeTrending}>
-              <Ionicons name="trending-up" size={12} color="#FFFFFF" />
-              <Text style={styles.badgeText}>TRENDING</Text>
+        <View style={styles.featuredContent}>
+          <View style={styles.featuredBadgeRow}>
+            {podcast.isTrending && (
+              <View style={styles.badgeTrending}>
+                <Ionicons name="trending-up" size={12} color="#FFFFFF" />
+                <Text style={styles.badgeText}>TRENDING</Text>
+              </View>
+            )}
+            {podcast.isNew && (
+              <View style={styles.badgeNew}>
+                <Ionicons name="sparkles" size={12} color="#FFFFFF" />
+                <Text style={styles.badgeText}>MỚI</Text>
+              </View>
+            )}
+          </View>
+
+          <Text style={styles.featuredTitle} numberOfLines={2}>{podcast.title}</Text>
+          <Text style={styles.featuredSubtitle} numberOfLines={1}>{podcast.subtitle}</Text>
+
+          <View style={styles.featuredFooter}>
+            <View style={styles.featuredHostRow}>
+              <Image source={{ uri: podcast.hostAvatar }} style={styles.featuredHostAvatar} />
+              <Text style={styles.featuredHostName}>{podcast.host}</Text>
             </View>
-          )}
-
-          {podcast.isNew && (
-            <View style={styles.badgeNew}>
-              <Ionicons name="sparkles" size={12} color="#FFFFFF" />
-              <Text style={styles.badgeText}>MỚI</Text>
+            <View style={styles.featuredPlayBtn}>
+              <Ionicons name="play" size={20} color="#FFFFFF" />
             </View>
-          )}
-        </View>
-
-        <Text style={styles.featuredTitle}>{podcast.title}</Text>
-        <Text style={styles.featuredSubtitle}>{podcast.subtitle}</Text>
-
-        <View style={styles.featuredStatsRow}>
-          <View style={styles.featuredStatInline}>
-            <Ionicons name="mic-outline" size={14} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.featuredStatText}>{podcast.episodes} tập</Text>
           </View>
         </View>
-      </View>
-
-      <View style={styles.featuredPlayWrap}>
-        <View style={styles.featuredPlayButton}>
-          <Ionicons name="play" size={20} color="#FFFFFF" style={styles.featuredPlayIcon} />
-        </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
 function PodcastCard({ podcast, onPress }: { podcast: PodcastVM; onPress: () => void }) {
+  const { isDarkMode } = useTheme();
+  const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
+
   return (
-    <TouchableOpacity activeOpacity={0.9} style={styles.podcastCard} onPress={onPress}>
-      <View style={styles.podcastCardTop}>
-        <View style={styles.podcastCoverWrap}>
-          <Image source={{ uri: podcast.coverImage }} style={styles.podcastCover} />
-          {podcast.isNew && <View style={styles.newDot} />}
+    <Animated.View entering={FadeInDown.duration(400)}>
+      <TouchableOpacity 
+        activeOpacity={0.7} 
+        style={[styles.podcastCard, { backgroundColor: palette.surface, borderColor: palette.border }]} 
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onPress();
+        }}
+      >
+        <View style={styles.cardImageContainer}>
+          <Image source={{ uri: podcast.coverImage }} style={styles.cardImage} />
+          {podcast.isNew && (
+            <View style={styles.cardNewBadge}>
+              <View style={styles.cardNewDot} />
+            </View>
+          )}
         </View>
 
-        <View style={styles.podcastInfoWrap}>
-          <Text numberOfLines={1} style={styles.podcastTitle}>
+        <View style={styles.cardInfo}>
+          <Text style={[styles.cardTitle, { color: palette.textPrimary }]} numberOfLines={1}>
             {podcast.title}
           </Text>
-          <Text numberOfLines={1} style={styles.podcastSubtitle}>
+          <Text style={[styles.cardSubtitle, { color: palette.textSecondary }]} numberOfLines={1}>
             {podcast.subtitle}
           </Text>
-
-          <View style={styles.podcastMetaRow}>
-            <View style={styles.podcastMetaInline}>
-              <Ionicons name="mic-outline" size={12} color="#9CA3AF" />
-              <Text style={styles.podcastMetaText}>{podcast.episodes} tập</Text>
+          
+          <View style={styles.cardMeta}>
+            <View style={styles.metaItem}>
+              <Ionicons name="mic-outline" size={12} color={palette.textSecondary} />
+              <Text style={[styles.metaText, { color: palette.textSecondary }]}>{podcast.episodes} tập</Text>
             </View>
-
-            {podcast.category ? (
-              <View style={styles.podcastMetaInline}>
-                <Ionicons name="pricetag-outline" size={12} color="#9CA3AF" />
-                <Text style={styles.podcastMetaText}>{podcast.category}</Text>
-              </View>
-            ) : null}
+            <View style={styles.metaDivider} />
+            <Text style={[styles.metaText, { color: palette.primary }]}>{podcast.category}</Text>
           </View>
         </View>
 
-        <TouchableOpacity activeOpacity={0.85} style={styles.cardPlayButton}>
-          <Ionicons name="play" size={16} color="#FFFFFF" style={styles.cardPlayIcon} />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.hostRow}>
-        <Image source={{ uri: podcast.hostAvatar }} style={styles.hostAvatar} />
-        <Text numberOfLines={1} style={styles.hostText}>
-          Host: <Text style={styles.hostName}>{podcast.host}</Text>
-        </Text>
-        {podcast.isTrending && <Ionicons name="trending-up" size={14} color="#EF4444" style={styles.trendingIcon} />}
-      </View>
-    </TouchableOpacity>
+        <View style={[styles.cardAction, { backgroundColor: palette.primary + '20' }]}>
+          <Ionicons name="chevron-forward" size={16} color={palette.primary} />
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
 // ─── Main Screen ─────────────────────────────────────────────────
 
-export default function PodcastScreen() {
+interface PodcastScreenProps {
+  paddingTop?: number;
+  paddingBottom?: number;
+  hideStickyHeader?: boolean;
+  onScroll?: any;
+}
+
+export default function PodcastScreen({
+  paddingTop = 0,
+  paddingBottom = 0,
+  hideStickyHeader = false,
+  onScroll
+}: PodcastScreenProps) {
   const { isDarkMode } = useTheme();
   const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
   const [activeCategory, setActiveCategory] = useState('Tất cả');
@@ -180,19 +222,24 @@ export default function PodcastScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const scrollY = useSharedValue(0);
+
+  const headerAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, 50], [0, 1], Extrapolate.CLAMP),
+    transform: [{ translateY: interpolate(scrollY.value, [0, 50], [-10, 0], Extrapolate.CLAMP) }],
+  }));
+
   const fetchPodcasts = useCallback(async (isRefresh = false) => {
     try {
       if (!isRefresh) setLoading(true);
       setError(null);
 
       const data = await podcastService.getPublished();
-
-      // Sort by episode count descending to determine "trending"
       const sorted = [...data].sort((a, b) => b.episodeCount - a.episodeCount);
       const trendingIds = new Set(sorted.slice(0, 3).map((p) => p.id));
 
-      const mapped = data.map((raw, idx) => {
-        const vm = mapToPodcastVM(raw, idx);
+      const mapped = data.map((raw) => {
+        const vm = mapToPodcastVM(raw);
         vm.isTrending = trendingIds.has(raw.id);
         return vm;
       });
@@ -216,8 +263,6 @@ export default function PodcastScreen() {
     fetchPodcasts(true);
   }, [fetchPodcasts]);
 
-  // ─── Derived data ──────────────────────────────────────────────
-
   const filteredPodcasts = useMemo(() => {
     return podcasts.filter((podcast) => {
       if (activeCategory === 'Tất cả') return true;
@@ -227,8 +272,8 @@ export default function PodcastScreen() {
     });
   }, [activeCategory, podcasts]);
 
-  const featuredPodcast = useMemo(() => {
-    return podcasts.find((podcast) => podcast.isTrending) || podcasts[0];
+  const featuredPodcasts = useMemo(() => {
+    return podcasts.filter(p => p.isTrending).slice(0, 5);
   }, [podcasts]);
 
   const selectedPodcastData = useMemo(() => {
@@ -236,159 +281,148 @@ export default function PodcastScreen() {
     return podcasts.find((podcast) => podcast.id === selectedPodcast);
   }, [selectedPodcast, podcasts]);
 
-  // Build dynamic category chips from the data
   const dynamicCategories = useMemo(() => {
     const typeSet = new Set<string>();
     podcasts.forEach((p) => {
       if (p.category) typeSet.add(p.category);
     });
-    // Always keep base categories, append unique types from data
     const extra = [...typeSet].filter((t) => !CATEGORIES.includes(t));
     return [...CATEGORIES, ...extra];
   }, [podcasts]);
-
-  // ─── Detail screen ────────────────────────────────────────────
 
   if (selectedPodcast) {
     return <PodcastDetailScreen onBack={() => setSelectedPodcast(null)} podcast={selectedPodcastData} />;
   }
 
-  // ─── Loading state ────────────────────────────────────────────
-
   if (loading) {
     return (
       <View style={[styles.screen, styles.centerContent, { backgroundColor: palette.background }]}> 
         <ActivityIndicator size="large" color={palette.primary} />
-        <Text style={[styles.loadingText, { color: palette.textSecondary }]}>Đang tải podcast...</Text>
       </View>
     );
   }
-
-  // ─── Error state ──────────────────────────────────────────────
-
-  if (error && podcasts.length === 0) {
-    return (
-      <View style={[styles.screen, styles.centerContent, { backgroundColor: palette.background }]}> 
-        <View style={styles.emptyIconWrap}>
-          <Ionicons name="cloud-offline-outline" size={32} color="#D1D5DB" />
-        </View>
-        <Text style={[styles.emptyTitle, { color: palette.textPrimary }]}>{error}</Text>
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={[styles.retryButton, { backgroundColor: palette.primary }]}
-          onPress={() => fetchPodcasts()}
-        >
-          <Text style={styles.retryButtonText}>Thử lại</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  // ─── Render ───────────────────────────────────────────────────
 
   return (
     <View style={[styles.screen, { backgroundColor: palette.background }]}> 
-      <View style={[styles.header, { backgroundColor: palette.surface, borderBottomColor: palette.border }]}> 
-        <Text style={[styles.headerTitle, { color: palette.textPrimary }]}>Podcast Letter</Text>
-        <TouchableOpacity activeOpacity={0.8} style={styles.headerSearchButton}>
-          <Ionicons name="search" size={20} color={palette.textPrimary} />
-        </TouchableOpacity>
-      </View>
+      {/* Animated Sticky Header */}
+      {!hideStickyHeader && (
+        <Animated.View style={[
+          styles.stickyHeader, 
+          headerAnimatedStyle,
+          { backgroundColor: palette.surface + 'CC' }
+        ]}>
+          <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={isDarkMode ? 'dark' : 'light'} />
+          <View style={styles.headerContent}>
+            <Text style={[styles.headerTitle, { color: palette.textPrimary }]}>Podcast</Text>
+            <TouchableOpacity 
+              activeOpacity={0.7} 
+              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            >
+              <Ionicons name="search" size={22} color={palette.textPrimary} />
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      )}
 
-      <ScrollView
+      <Animated.ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: 10 + paddingTop, paddingBottom: 120 + paddingBottom }]}
+        onScroll={onScroll || useAnimatedScrollHandler((e) => {
+          scrollY.value = e.contentOffset.y;
+        })}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[palette.primary]} tintColor={palette.primary} />
         }
       >
-        {/* Featured */}
-        {featuredPodcast && (
+        <View style={styles.topSection}>
+          <Animated.Text entering={FadeInDown.delay(100)} style={[styles.mainTitle, { color: palette.textPrimary }]}>
+            Podcast
+          </Animated.Text>
+          <Animated.View entering={FadeInDown.delay(200)} style={styles.searchPlaceholder}>
+             <Ionicons name="search" size={20} color={palette.textSecondary} />
+             <Text style={[styles.searchText, { color: palette.textSecondary }]}>Tìm kiếm podcast...</Text>
+          </Animated.View>
+        </View>
+
+        {/* Featured Carousels */}
+        {featuredPodcasts.length > 0 && (
           <View style={styles.featuredSection}>
-            <View style={styles.featuredSectionTitleRow}>
-              <Ionicons name="sparkles" size={18} color="#55C5F1" />
-              <Text style={styles.featuredSectionTitle}>Nổi bật hôm nay</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>Nổi bật</Text>
             </View>
-            <FeaturedPodcast podcast={featuredPodcast} onPress={() => setSelectedPodcast(featuredPodcast.id)} />
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              snapToInterval={width * 0.85 + 16}
+              decelerationRate="fast"
+              contentContainerStyle={styles.featuredScroll}
+            >
+              {featuredPodcasts.map((p, idx) => (
+                <FeaturedPodcast key={p.id} podcast={p} onPress={() => setSelectedPodcast(p.id)} />
+              ))}
+            </ScrollView>
           </View>
         )}
 
         {/* Categories */}
-        <View style={styles.categoriesWrap}>
+        <View style={styles.categoriesSection}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoriesScrollContent}
+            contentContainerStyle={styles.categoriesScroll}
           >
-            {dynamicCategories.map((category) => {
+            {dynamicCategories.map((category, idx) => {
               const isActive = category === activeCategory;
-
               return (
-                <TouchableOpacity
-                  key={category}
-                  onPress={() => setActiveCategory(category)}
-                  activeOpacity={0.85}
-                  style={[styles.categoryPill, isActive ? styles.categoryPillActive : styles.categoryPillInactive]}
-                >
-                  <Text style={[styles.categoryPillText, isActive ? styles.categoryPillTextActive : styles.categoryPillTextInactive]}>
-                    {category}
-                  </Text>
-                </TouchableOpacity>
+                <Animated.View key={category} entering={FadeInRight.delay(idx * 50)}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setActiveCategory(category);
+                    }}
+                    activeOpacity={0.8}
+                    style={[
+                      styles.categoryChip, 
+                      isActive ? { backgroundColor: palette.primary } : { backgroundColor: palette.surface, borderColor: palette.border }
+                    ]}
+                  >
+                    <Text style={[
+                      styles.categoryText, 
+                      isActive ? { color: '#FFFFFF' } : { color: palette.textSecondary }
+                    ]}>
+                      {category}
+                    </Text>
+                  </TouchableOpacity>
+                </Animated.View>
               );
             })}
           </ScrollView>
         </View>
 
-        {/* Stats */}
-        <View style={styles.statsWrap}>
-          <LinearGradient
-            colors={['#E0F2FE', '#F0F9FF']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.statsCard}
-          >
-            <View style={styles.statsRow}>
-              <View>
-                <Text style={styles.statsLabel}>Tổng số podcast</Text>
-                <Text style={styles.statsPrimaryValue}>{podcasts.length}</Text>
-              </View>
-
-              <View style={styles.statsRightBlock}>
-                <Text style={styles.statsLabel}>Tổng số tập</Text>
-                <Text style={styles.statsSecondaryValue}>
-                  {podcasts.reduce((sum, p) => sum + p.episodes, 0)}
-                </Text>
-              </View>
-
-              <View style={styles.statsIconWrap}>
-                <Ionicons name="mic" size={24} color="#55C5F1" />
-              </View>
-            </View>
-          </LinearGradient>
-        </View>
-
-        {/* Podcast List */}
-        <View style={styles.listWrap}>
-          <View style={styles.listHeaderRow}>
-            <Text style={styles.listTitle}>{activeCategory === 'Tất cả' ? 'Tất cả Podcast' : activeCategory}</Text>
-            <Text style={styles.listCount}>{filteredPodcasts.length} podcast</Text>
+        {/* List Section */}
+        <View style={styles.listSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>
+              {activeCategory === 'Tất cả' ? 'Dành cho bạn' : activeCategory}
+            </Text>
+            <Text style={[styles.sectionCount, { color: palette.textSecondary }]}>
+              {filteredPodcasts.length} kết quả
+            </Text>
           </View>
 
-          {filteredPodcasts.map((podcast) => (
-            <PodcastCard key={podcast.id} podcast={podcast} onPress={() => setSelectedPodcast(podcast.id)} />
+          {filteredPodcasts.map((p, idx) => (
+            <PodcastCard key={p.id} podcast={p} onPress={() => setSelectedPodcast(p.id)} />
           ))}
 
           {filteredPodcasts.length === 0 && (
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIconWrap}>
-                <Ionicons name="mic" size={32} color="#D1D5DB" />
-              </View>
-              <Text style={styles.emptyTitle}>Không có podcast</Text>
-              <Text style={styles.emptySubtitle}>Chưa có podcast nào trong danh mục này</Text>
+            <View style={styles.emptyContainer}>
+              <Ionicons name="mic-off-outline" size={48} color={palette.border} />
+              <Text style={[styles.emptyText, { color: palette.textSecondary }]}>Không tìm thấy podcast nào</Text>
             </View>
           )}
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }
@@ -398,389 +432,287 @@ export default function PodcastScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
   },
   centerContent: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#64748B',
+  stickyHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+    zIndex: 10,
+    justifyContent: 'flex-end',
+    paddingBottom: 12,
   },
-  retryButton: {
-    marginTop: 16,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: '#55C5F1',
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  header: {
-    height: 52,
-    paddingHorizontal: 20,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    paddingHorizontal: 20,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#1E293B',
-  },
-  headerSearchButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   scrollContent: {
-    paddingBottom: 114,
   },
-  featuredSection: {
+  topSection: {
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 16,
+    paddingBottom: 12,
   },
-  featuredSectionTitleRow: {
+  mainTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginBottom: 8,
+  },
+  searchPlaceholder: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    backgroundColor: 'rgba(150,150,150,0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
   },
-  featuredSectionTitle: {
+  searchText: {
     marginLeft: 8,
     fontSize: 16,
+  },
+  featuredSection: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 20,
     fontWeight: '700',
-    color: '#1E293B',
+    letterSpacing: -0.3,
+  },
+  sectionCount: {
+    fontSize: 13,
+  },
+  featuredScroll: {
+    paddingHorizontal: 20,
+    paddingBottom: 8,
   },
   featuredWrap: {
-    height: 200,
-    borderRadius: 16,
+    width: width * 0.85,
+    height: 220,
+    marginRight: 16,
+    borderRadius: 24,
     overflow: 'hidden',
-    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  featuredTouchable: {
+    flex: 1,
   },
   featuredImage: {
     width: '100%',
     height: '100%',
+    position: 'absolute',
   },
-  featuredOverlay: {
+  featuredGradient: {
     ...StyleSheet.absoluteFillObject,
   },
-  featuredCircle: {
-    position: 'absolute',
-    top: -20,
-    right: -20,
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+  featuredGlassOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.2,
   },
   featuredContent: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-    bottom: 20,
+    flex: 1,
+    justifyContent: 'flex-end',
+    padding: 20,
   },
   featuredBadgeRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  badgeTrending: {
-    marginRight: 8,
-    backgroundColor: 'rgba(239,68,68,0.9)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  badgeNew: {
-    backgroundColor: 'rgba(16,185,129,0.9)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  badgeText: {
-    marginLeft: 4,
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  featuredTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 4,
-    lineHeight: 30,
-  },
-  featuredSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: 12,
-  },
-  featuredStatsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  featuredStatInline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  featuredStatText: {
-    marginLeft: 4,
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 12,
-  },
-  featuredPlayWrap: {
-    position: 'absolute',
-    right: 20,
-    bottom: 20,
-  },
-  featuredPlayButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#55C5F1',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  featuredPlayIcon: {
-    marginLeft: 2,
-  },
-  categoriesWrap: {
-    paddingHorizontal: 20,
-    marginBottom: 16,
-  },
-  categoriesScrollContent: {
-    paddingBottom: 4,
-  },
-  categoryPill: {
-    marginRight: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  categoryPillActive: {
-    backgroundColor: '#55C5F1',
-    borderColor: '#55C5F1',
-  },
-  categoryPillInactive: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#1E293B',
-  },
-  categoryPillText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  categoryPillTextActive: {
-    color: '#FFFFFF',
-  },
-  categoryPillTextInactive: {
-    color: '#6B7280',
-  },
-  statsWrap: {
-    marginHorizontal: 20,
-    marginBottom: 20,
-  },
-  statsCard: {
-    borderRadius: 16,
-    padding: 16,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  statsLabel: {
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 4,
-  },
-  statsPrimaryValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  statsRightBlock: {
-    alignItems: 'flex-end',
-    marginLeft: 10,
-  },
-  statsSecondaryValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#55C5F1',
-  },
-  statsIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(85,197,241,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 10,
-  },
-  listWrap: {
-    paddingHorizontal: 20,
-  },
-  listHeaderRow: {
-    marginBottom: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  listTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  listCount: {
-    fontSize: 13,
-    color: '#94A3B8',
-  },
-  podcastCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#1E293B',
-    padding: 16,
-    marginBottom: 12,
-  },
-  podcastCardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  podcastCoverWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-    overflow: 'hidden',
-    position: 'relative',
-    marginRight: 12,
-  },
-  podcastCover: {
-    width: '100%',
-    height: '100%',
-  },
-  newDot: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10B981',
-  },
-  podcastInfoWrap: {
-    flex: 1,
-    minWidth: 0,
-  },
-  podcastTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 2,
-  },
-  podcastSubtitle: {
-    fontSize: 12,
-    color: '#6B7280',
     marginBottom: 8,
   },
-  podcastMetaRow: {
+  badgeTrending: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginRight: 8,
   },
-  podcastMetaInline: {
+  badgeNew: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 12,
+    backgroundColor: '#34C759',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  podcastMetaText: {
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
     marginLeft: 4,
-    fontSize: 11,
-    color: '#9CA3AF',
   },
-  cardPlayButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#55C5F1',
+  featuredTitle: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '800',
+    lineHeight: 28,
+    marginBottom: 4,
+  },
+  featuredSubtitle: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  featuredFooter: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
+    justifyContent: 'space-between',
   },
-  cardPlayIcon: {
-    marginLeft: 1,
-  },
-  hostRow: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+  featuredHostRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  hostAvatar: {
+  featuredHostAvatar: {
     width: 24,
     height: 24,
     borderRadius: 12,
     marginRight: 8,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
-  hostText: {
-    flex: 1,
+  featuredHostName: {
+    color: '#FFFFFF',
     fontSize: 12,
-    color: '#64748B',
-  },
-  hostName: {
     fontWeight: '600',
-    color: '#1E293B',
   },
-  trendingIcon: {
-    marginLeft: 8,
-  },
-  emptyState: {
+  featuredPlayBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 80,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
   },
-  emptyIconWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#F3F4F6',
+  categoriesSection: {
+    marginBottom: 24,
+  },
+  categoriesScroll: {
+    paddingHorizontal: 20,
+  },
+  categoryChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+    marginRight: 10,
+    borderWidth: 1,
+  },
+  categoryText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  listSection: {
+    paddingHorizontal: 20,
+  },
+  podcastCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
+    padding: 12,
+    borderRadius: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  emptyTitle: {
+  cardImageContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 14,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cardNewBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: '#FFFFFF',
+    padding: 2,
+    borderRadius: 6,
+  },
+  cardNewDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#34C759',
+  },
+  cardInfo: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  cardTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 8,
+    marginBottom: 2,
   },
-  emptySubtitle: {
+  cardSubtitle: {
     fontSize: 13,
-    color: '#6B7280',
-    textAlign: 'center',
+    marginBottom: 6,
+  },
+  cardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  metaText: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  metaDivider: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: '#CBD5E1',
+    marginHorizontal: 8,
+  },
+  cardAction: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    marginTop: 12,
+    fontSize: 15,
   },
 });

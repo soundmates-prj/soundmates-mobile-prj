@@ -14,10 +14,10 @@ interface SectionHeaderProps {
     onPressSeeAll?: () => void;
 }
 
-export function SectionHeader({ title, titleColor = '#0059C5', onPressSeeAll }: SectionHeaderProps) {
+export function SectionHeader({ title, titleColor, onPressSeeAll }: SectionHeaderProps) {
     return (
         <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: titleColor }]}>{title}</Text>
+            <Text style={[styles.sectionTitle, { color: titleColor ?? '#55C5F1' }]}>{title}</Text>
             {onPressSeeAll ? (
                 <TouchableOpacity activeOpacity={0.7} onPress={onPressSeeAll}>
                     <Text style={styles.seeAllText}>Xem tất cả</Text>

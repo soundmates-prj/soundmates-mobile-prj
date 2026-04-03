@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Animated,
     Keyboard,
     KeyboardAvoidingView,
     Platform,
@@ -10,13 +10,24 @@ import {
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
-import { SoundMateLightColors } from '../../../constants/theme';
-import { authService } from '../../api';
-import OtpCodeInput, { type OtpCodeInputRef } from '../../components/ui/OtpCodeInput';
+import Animated, {
+    FadeInDown,
+    FadeInUp,
+    useAnimatedStyle,
+    useSharedValue,
+    withSequence,
+    withSpring,
+    withTiming,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { showToast } from '../../components/ui/Toast';
+import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/theme';
+import { authService } from '../../api';
+import { useTheme } from '../../context/ThemeContext';
 
 interface OTPScreenProps {
     navigation?: any;
@@ -26,367 +37,325 @@ interface OTPScreenProps {
     onNavigateBack?: () => void;
 }
 
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+
 export default function OTPScreen({
-    navigation,
     email = '',
-    password = '',
     onVerifySuccess,
     onNavigateBack
 }: OTPScreenProps) {
-    const [otp, setOtp] = useState('');
+    const { isDarkMode } = useTheme();
+    const palette = isDarkMode ? SoundMateDarkColors : SoundMateLightColors;
+    const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [isLoading, setIsLoading] = useState(false);
     const [countdown, setCountdown] = useState(60);
     const [canResend, setCanResend] = useState(false);
 
-    const otpInputRef = useRef<OtpCodeInputRef>(null);
+    const inputRefs = useRef<Array<TextInput | null>>([]);
+    const buttonScale = useSharedValue(1);
+    const shakeOffset = useSharedValue(0);
 
-    // Animation values
-    const buttonScale = useRef(new Animated.Value(1)).current;
-    const shakeAnimation = useRef(new Animated.Value(0)).current;
-
-    // Countdown timer
     useEffect(() => {
         if (countdown > 0) {
-            const timer = setTimeout(() => {
-                setCountdown(countdown - 1);
-            }, 1000);
+            const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
             return () => clearTimeout(timer);
         } else {
             setCanResend(true);
         }
     }, [countdown]);
 
-    // Mask email for display
     const maskedEmail = useMemo(() => {
         if (!email) return 'tr****@gmail.com';
         const [name, domain] = email.split('@');
-        if (name.length <= 2) return email;
-        return `${name.substring(0, 2)}****@${domain}`;
+        return name.length <= 2 ? email : `${name.substring(0, 2)}****@${domain}`;
     }, [email]);
 
     const handlePressIn = useCallback(() => {
-        Animated.spring(buttonScale, {
-            toValue: 0.97,
-            useNativeDriver: true,
-        }).start();
+        buttonScale.value = withSpring(0.96);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }, [buttonScale]);
 
     const handlePressOut = useCallback(() => {
-        Animated.spring(buttonScale, {
-            toValue: 1,
-            friction: 3,
-            tension: 40,
-            useNativeDriver: true,
-        }).start();
+        buttonScale.value = withSpring(1);
     }, [buttonScale]);
 
-    const dismissKeyboard = useCallback(() => {
-        Keyboard.dismiss();
-    }, []);
+    const buttonAnimatedStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: buttonScale.value }],
+    }));
 
-    const shakeInputs = useCallback(() => {
-        Animated.sequence([
-            Animated.timing(shakeAnimation, { toValue: 10, duration: 50, useNativeDriver: true }),
-            Animated.timing(shakeAnimation, { toValue: -10, duration: 50, useNativeDriver: true }),
-            Animated.timing(shakeAnimation, { toValue: 10, duration: 50, useNativeDriver: true }),
-            Animated.timing(shakeAnimation, { toValue: -10, duration: 50, useNativeDriver: true }),
-            Animated.timing(shakeAnimation, { toValue: 0, duration: 50, useNativeDriver: true }),
-        ]).start();
-    }, [shakeAnimation]);
+    const shakeAnimatedStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: shakeOffset.value }],
+    }));
+
+    const triggerShake = useCallback(() => {
+        shakeOffset.value = withSequence(
+            withTiming(-10, { duration: 50 }),
+            withTiming(10, { duration: 50 }),
+            withTiming(-10, { duration: 50 }),
+            withTiming(10, { duration: 50 }),
+            withTiming(0, { duration: 50 })
+        );
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }, [shakeOffset]);
+
+    const handleOtpChange = useCallback((value: string, index: number) => {
+        if (value && !/^\d$/.test(value)) return;
+        const newOtp = [...otp];
+        newOtp[index] = value;
+        setOtp(newOtp);
+        if (value && index < 5) inputRefs.current[index + 1]?.focus();
+    }, [otp]);
+
+    const handleKeyPress = useCallback((e: any, index: number) => {
+        if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
+            inputRefs.current[index - 1]?.focus();
+        }
+    }, [otp]);
 
     const handleVerify = useCallback(async () => {
-        const otpCode = otp;
-
+        const otpCode = otp.join('');
         if (otpCode.length !== 6) {
             showToast.warning('Mã không đầy đủ', 'Vui lòng nhập đủ 6 số');
-            shakeInputs();
+            triggerShake();
             return;
         }
 
         setIsLoading(true);
-
         try {
-            const response = await authService.verifyOtp({
-                email: email,
-                otpCode: otpCode,
-            });
-
+            const response = await authService.verifyOtp({ email, otpCode });
             if (response.success) {
                 showToast.success('Xác thực thành công!', 'Tài khoản của bạn đã được kích hoạt');
-                if (onVerifySuccess) {
-                    onVerifySuccess();
-                }
+                onVerifySuccess?.();
             } else {
                 showToast.error('Xác thực thất bại', response.message || 'Mã OTP không đúng');
-                shakeInputs();
-                setOtp('');
-                otpInputRef.current?.focus(0);
+                triggerShake();
+                setOtp(['', '', '', '', '', '']);
+                inputRefs.current[0]?.focus();
             }
         } catch (error: any) {
-            console.log('Verify OTP error:', error);
-            const errorMessage = error?.response?.data?.message || 
-                               error?.message || 
-                               'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.';
-            showToast.error('Lỗi xác thực', errorMessage);
-            shakeInputs();
+            showToast.error('Lỗi xác thực', error?.message || 'Lỗi kết nối');
+            triggerShake();
         } finally {
             setIsLoading(false);
         }
-    }, [otp, email, onVerifySuccess, shakeInputs]);
+    }, [otp, email, onVerifySuccess, triggerShake]);
 
-    const handleResendOtp = useCallback(async () => {
-        if (!canResend) return;
-
-        try {
-            const response = await authService.resendOtp(email);
-
-            if (response.success) {
-                showToast.success('Đã gửi lại mã', 'Vui lòng kiểm tra email của bạn');
-                setCountdown(60);
-                setCanResend(false);
-                setOtp('');
-                otpInputRef.current?.focus(0);
-            } else {
-                showToast.error('Gửi mã thất bại', response.message || 'Không thể gửi lại mã OTP');
-            }
-        } catch (error: any) {
-            console.log('Resend OTP error:', error);
-            const errorMessage = error?.response?.data?.message || 
-                               error?.message || 
-                               'Không thể kết nối đến máy chủ';
-            showToast.error('Lỗi gửi mã', errorMessage);
-        }
-    }, [canResend, email]);
-
-    const handleNavigateBack = useCallback(() => {
-        if (onNavigateBack) {
-            onNavigateBack();
-        }
+    const handleBack = useCallback(() => {
+        onNavigateBack?.();
     }, [onNavigateBack]);
 
-    // Memoized button transform style
-    const buttonTransformStyle = useMemo(() => ({
-        transform: [{ scale: buttonScale }]
-    }), [buttonScale]);
-
-    // Memoized shake transform style
-    const shakeTransformStyle = useMemo(() => ({
-        transform: [{ translateX: shakeAnimation }]
-    }), [shakeAnimation]);
-
     return (
-        <Pressable style={styles.container} onPress={dismissKeyboard}>
-            {/* Back Button */}
-            <TouchableOpacity
-                style={styles.backButton}
-                onPress={handleNavigateBack}
-            >
-                <Ionicons name="chevron-back" size={28} color={SoundMateLightColors.primary} />
-            </TouchableOpacity>
+        <View style={styles.container}>
+            <LinearGradient
+                colors={isDarkMode ? ['#050B18', '#0A1120', '#000000'] : ['#E0F7FF', '#FFFFFF', '#F0F9FF']}
+                style={StyleSheet.absoluteFill}
+            />
 
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                style={styles.keyboardView}
-            >
-                <ScrollView
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
-                    keyboardShouldPersistTaps="handled"
-                >
-                    {/* Shield Icon */}
-                    <View style={styles.iconSection}>
-                        <LinearGradient
-                            colors={[SoundMateLightColors.primaryLight, SoundMateLightColors.primary]}
-                            style={styles.iconCircle}
-                        >
-                            <Ionicons name="shield-checkmark-outline" size={60} color="#FFFFFF" />
-                        </LinearGradient>
-                    </View>
+            <Pressable style={styles.content} onPress={Keyboard.dismiss}>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
+                    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-                    {/* Title */}
-                    <Text style={styles.title}>Xác thực OTP</Text>
+                        <Animated.View entering={FadeInUp.delay(200).duration(800)} style={styles.header}>
+                            <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+                                <Ionicons name="chevron-back" size={24} color={palette.primary} />
+                            </TouchableOpacity>
+                            <View style={styles.iconCircle}>
+                                <Ionicons name="shield-checkmark" size={40} color={palette.primary} />
+                            </View>
+                        </Animated.View>
 
-                    {/* Subtitle */}
-                    <Text style={styles.subtitle}>
-                        Chúng tôi đã gửi mã xác thực đến{'\n'}
-                        <Text style={styles.emailText}>{maskedEmail}</Text>
-                    </Text>
-
-                    {/* OTP Inputs */}
-                    <Animated.View style={[styles.otpContainer, shakeTransformStyle]}>
-                        <OtpCodeInput
-                            ref={otpInputRef}
-                            value={otp}
-                            onChange={setOtp}
-                            length={6}
-                            autoFocus
-                            containerStyle={styles.otpContainerInner}
-                            inputStyle={styles.otpInput}
-                            filledInputStyle={styles.otpInputFilled}
-                            editable={!isLoading}
-                        />
-                    </Animated.View>
-
-                    {/* Verify Button */}
-                    <Animated.View style={[styles.verifyButtonWrapper, buttonTransformStyle]}>
-                        <TouchableOpacity
-                            onPressIn={handlePressIn}
-                            onPressOut={handlePressOut}
-                            onPress={handleVerify}
-                            disabled={isLoading}
-                            activeOpacity={0.9}
-                        >
-                            <LinearGradient
-                                colors={[SoundMateLightColors.primaryLight, SoundMateLightColors.primary]}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 0 }}
-                                style={styles.verifyButton}
-                            >
-                                <Text style={styles.verifyButtonText}>
-                                    {isLoading ? 'Đang xác thực...' : 'Xác thực'}
-                                </Text>
-                            </LinearGradient>
-                        </TouchableOpacity>
-                    </Animated.View>
-
-                    {/* Resend OTP */}
-                    <View style={styles.resendContainer}>
-                        <Text style={styles.resendText}>Không nhận được mã ?</Text>
-                        <TouchableOpacity
-                            onPress={handleResendOtp}
-                            disabled={!canResend}
-                        >
-                            <Text style={[
-                                styles.resendLink,
-                                !canResend && styles.resendLinkDisabled
-                            ]}>
-                                {canResend ? 'Gửi lại mã' : `Gửi lại sau ${countdown}s`}
+                        <Animated.View entering={FadeInDown.delay(400).duration(800)}>
+                            <Text style={[styles.title, { color: isDarkMode ? '#FFFFFF' : '#1A1A1A' }]}>Xác thực OTP</Text>
+                            <Text style={[styles.subtitle, { color: isDarkMode ? palette.textSecondary : '#666' }]}>
+                                Chúng tôi đã gửi mã xác thực đến{'\n'}
+                                <Text style={[styles.emailText, { color: palette.primary }]}>{maskedEmail}</Text>
                             </Text>
-                        </TouchableOpacity>
-                    </View>
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </Pressable>
+                        </Animated.View>
+
+                        <Animated.View entering={FadeInDown.delay(600).duration(800)} style={shakeAnimatedStyle}>
+                            <View style={styles.otpContainer}>
+                                {otp.map((digit, index) => (
+                                    <BlurView key={index} intensity={60} tint="light" style={styles.otpInputWrapper}>
+                                        <TextInput
+                                            ref={(ref) => { inputRefs.current[index] = ref; }}
+                                            style={[styles.otpInput, digit ? styles.otpInputFilled : null]}
+                                            value={digit}
+                                            onChangeText={(value) => handleOtpChange(value, index)}
+                                            onKeyPress={(e) => handleKeyPress(e, index)}
+                                            keyboardType="number-pad"
+                                            maxLength={1}
+                                            selectTextOnFocus
+                                            autoFocus={index === 0}
+                                        />
+                                    </BlurView>
+                                ))}
+                            </View>
+                        </Animated.View>
+
+                        <Animated.View entering={FadeInDown.delay(800).duration(800)}>
+                            <AnimatedTouchableOpacity
+                                style={[styles.verifyButtonWrapper, buttonAnimatedStyle]}
+                                onPressIn={handlePressIn}
+                                onPressOut={handlePressOut}
+                                onPress={handleVerify}
+                                disabled={isLoading}
+                                activeOpacity={1}
+                            >
+                                <LinearGradient
+                                    colors={[palette.primary, palette.primaryDark]}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
+                                    style={styles.verifyButton}
+                                >
+                                    <Text style={styles.verifyButtonText}>
+                                        {isLoading ? 'Đang xác thực...' : 'Xác thực'}
+                                    </Text>
+                                </LinearGradient>
+                            </AnimatedTouchableOpacity>
+
+                            <View style={styles.resendContainer}>
+                                <Text style={styles.resendText}>Không nhận được mã?</Text>
+                                <TouchableOpacity onPress={() => {/* resend logic */ }} disabled={!canResend}>
+                                    <Text style={[styles.resendLink, !canResend && styles.resendLinkDisabled]}>
+                                        {canResend ? 'Gửi lại mã' : `Gửi lại sau ${countdown}s`}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </Animated.View>
+
+                    </ScrollView>
+                </KeyboardAvoidingView>
+            </Pressable>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: SoundMateLightColors.background,
     },
-    backButton: {
-        position: 'absolute',
-        top: 10,
-        left: 10,
-        zIndex: 10,
-        width: 44,
-        height: 44,
-        justifyContent: 'center',
-        alignItems: 'center',
+    content: {
+        flex: 1,
     },
     keyboardView: {
         flex: 1,
     },
     scrollContent: {
         flexGrow: 1,
-        paddingHorizontal: 24,
-        paddingTop: 60,
+        paddingHorizontal: 30,
+        paddingTop: 80,
         paddingBottom: 40,
-        alignItems: 'center',
     },
-    iconSection: {
-        marginTop: 40,
-        marginBottom: 32,
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 40,
+    },
+    backButton: {
+        position: 'absolute',
+        left: 0,
+        width: 44,
+        height: 44,
+        borderRadius: 15,
+        backgroundColor: '#FFFFFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 2,
     },
     iconCircle: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
+        width: 80,
+        height: 80,
+        borderRadius: 24,
+        backgroundColor: '#FFFFFF',
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: SoundMateLightColors.primary,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 16,
-        elevation: 8,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+        elevation: 5,
     },
     title: {
-        fontSize: 26,
-        fontWeight: '700',
-        color: SoundMateLightColors.primary,
-        marginBottom: 16,
+        fontSize: 32,
+        fontWeight: '800',
         textAlign: 'center',
+        marginBottom: 10,
+        letterSpacing: -0.5,
     },
     subtitle: {
         fontSize: 16,
-        color: SoundMateLightColors.textSecondary,
         textAlign: 'center',
+        marginBottom: 40,
         lineHeight: 24,
-        marginBottom: 32,
     },
     emailText: {
-        color: SoundMateLightColors.primary,
-        fontWeight: '600',
+        fontWeight: '700',
     },
     otpContainer: {
-        marginBottom: 32,
-        width: '100%',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 40,
     },
-    otpContainerInner: {
-        gap: 10,
-        width: '100%',
+    otpInputWrapper: {
+        width: 45,
+        height: 56,
+        borderRadius: 15,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.5)',
+        overflow: 'hidden',
     },
     otpInput: {
-        width: 48,
-        height: 56,
-        borderRadius: 12,
-        borderWidth: 1.5,
-        borderColor: SoundMateLightColors.border,
-        backgroundColor: SoundMateLightColors.surface,
+        flex: 1,
         fontSize: 24,
-        fontWeight: '600',
+        fontWeight: '700',
         textAlign: 'center',
-        color: SoundMateLightColors.textPrimary,
+        color: '#1A1A1A',
     },
     otpInputFilled: {
-        borderColor: SoundMateLightColors.primary,
+        backgroundColor: 'rgba(255, 255, 255, 0.5)',
     },
     verifyButtonWrapper: {
-        width: '100%',
-        marginBottom: 32,
+        borderRadius: 18,
+        overflow: 'hidden',
+        shadowColor: SoundMateLightColors.primary,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 6,
+        marginBottom: 30,
     },
     verifyButton: {
-        height: 54,
-        borderRadius: 27,
+        height: 60,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: SoundMateLightColors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 4,
     },
     verifyButtonText: {
-        fontSize: 17,
-        fontWeight: '600',
         color: '#FFFFFF',
-        letterSpacing: 0.3,
+        fontSize: 18,
+        fontWeight: '700',
+        letterSpacing: 0.5,
     },
     resendContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
         alignItems: 'center',
+        gap: 8,
     },
     resendText: {
+        color: '#666',
         fontSize: 15,
-        color: SoundMateLightColors.textSecondary,
-        marginBottom: 8,
     },
     resendLink: {
-        fontSize: 15,
         color: SoundMateLightColors.primary,
-        fontWeight: '500',
+        fontSize: 15,
+        fontWeight: '700',
     },
     resendLinkDisabled: {
-        color: SoundMateLightColors.textMuted,
+        color: '#AAA',
     },
 });

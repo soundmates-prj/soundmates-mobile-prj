@@ -4,28 +4,37 @@
     "slug": "SoundMate",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/logo_notext.png",
     "scheme": "soundmate",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "backgroundColor": "#0D0D0D"
+      "backgroundColor": "#0D0D0D",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0D0D0D",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/logo_notext.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "backgroundColor": "#0D0D0D"
+      "backgroundColor": "#0D0D0D",
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "WAKE_LOCK"
+      ]
     },
     "web": {
       "output": "single",
-      "favicon": "./assets/images/favicon.png",
+      "favicon": "./assets/logo_notext.png",
       "backgroundColor": "#0D0D0D"
     },
     "plugins": [
@@ -40,12 +49,24 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/logo_notext.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#0D0D0D",
           "dark": {
             "backgroundColor": "#0D0D0D"
+          }
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Cho phep SoundMate su dung microphone.",
+          "ios": {
+            "audioSessionCategory": "Playback"
+          },
+          "android": {
+            "stayAwake": true
           }
         }
       ]

@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
-    Animated,
+    Image,
     Keyboard,
     KeyboardAvoidingView,
     Platform,
@@ -11,15 +12,21 @@ import {
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
+import Animated, {
+    FadeInDown,
+    FadeInUp,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { showToast } from '../../components/ui/Toast';
 import { SoundMateLightColors } from '../../../constants/theme';
 import { authService } from '../../api';
-import DateField from '../../components/ui/DateField';
-import FormTextField from '../../components/ui/FormTextField';
-import SelectField from '../../components/ui/SelectField';
-import { showToast } from '../../components/ui/Toast';
 
 interface ProfileSetupScreenProps {
     navigation?: any;
@@ -30,13 +37,13 @@ interface ProfileSetupScreenProps {
 
 type GenderType = 'male' | 'female' | 'other' | null;
 
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+
 export default function ProfileSetupScreen({
-    navigation,
     onSetupComplete,
     onSkip,
     onNavigateBack,
 }: ProfileSetupScreenProps) {
-    // Form states
     const [bio, setBio] = useState('');
     const [phone, setPhone] = useState('');
     const [gender, setGender] = useState<GenderType>(null);
@@ -45,125 +52,68 @@ export default function ProfileSetupScreen({
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [showGenderPicker, setShowGenderPicker] = useState(false);
 
-    // Animation values
-    const buttonScale = useRef(new Animated.Value(1)).current;
+    const buttonScale = useSharedValue(1);
 
     const handlePressIn = useCallback(() => {
-        Animated.spring(buttonScale, {
-            toValue: 0.97,
-            useNativeDriver: true,
-        }).start();
+        buttonScale.value = withSpring(0.96);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }, [buttonScale]);
 
     const handlePressOut = useCallback(() => {
-        Animated.spring(buttonScale, {
-            toValue: 1,
-            friction: 3,
-            tension: 40,
-            useNativeDriver: true,
-        }).start();
+        buttonScale.value = withSpring(1);
     }, [buttonScale]);
 
-    const dismissKeyboard = useCallback(() => {
-        Keyboard.dismiss();
-        setShowDatePicker(false);
-        setShowGenderPicker(false);
-    }, []);
+    const buttonAnimatedStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: buttonScale.value }],
+    }));
 
     const handleDateChange = useCallback((event: any, selectedDate?: Date) => {
-        if (Platform.OS === 'android') {
-            setShowDatePicker(false);
-        }
-        if (selectedDate) {
-            setDateOfBirth(selectedDate);
-        }
+        if (Platform.OS === 'android') setShowDatePicker(false);
+        if (selectedDate) setDateOfBirth(selectedDate);
     }, []);
 
-    const formatDate = useCallback((date: Date | null): string => {
-        if (!date) return 'dd/MM/YYYY';
-        return date.toLocaleDateString('vi-VN', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-        });
-    }, []);
+    const formatDate = (date: Date | null): string => {
+        if (!date) return 'Ngày sinh';
+        return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
 
-    const getGenderLabel = useCallback((g: GenderType): string => {
+    const getGenderLabel = (g: GenderType): string => {
         switch (g) {
             case 'male': return 'Nam';
             case 'female': return 'Nữ';
             case 'other': return 'Khác';
             default: return 'Giới tính';
         }
-    }, []);
-
-    const handleGenderSelect = useCallback((value: GenderType) => {
-        setGender(value);
-        setShowGenderPicker(false);
-    }, []);
+    };
 
     const handleSubmit = useCallback(async () => {
         setIsLoading(true);
-
         try {
-            // Prepare data - only send non-empty values
-            const profileData: {
-                bio?: string;
-                phone?: string;
-                gender?: string;
-                dateOfBirth?: string;
-            } = {};
-
+            const profileData: any = {};
             if (bio.trim()) profileData.bio = bio.trim();
             if (phone.trim()) profileData.phone = phone.trim();
             if (gender) profileData.gender = gender;
             if (dateOfBirth) profileData.dateOfBirth = dateOfBirth.toISOString();
 
-            // Check if any data to update
             if (Object.keys(profileData).length === 0) {
-                showToast.info('Không có thay đổi', 'Bạn có thể bỏ qua bước này');
-                if (onSkip) {
-                    onSkip();
-                }
+                onSkip?.();
                 return;
             }
 
             const response = await authService.updateProfileOptions(profileData);
-
             if (response.success) {
-                showToast.success('Cập nhật thành công!', 'Thông tin cá nhân của bạn đã được lưu');
-                if (onSetupComplete) {
-                    onSetupComplete();
-                }
+                showToast.success('Cập nhật thành công!', 'Thông tin của bạn đã được lưu');
+                onSetupComplete?.();
             } else {
-                showToast.error('Cập nhật thất bại', response.message || 'Vui lòng thử lại sau');
+                showToast.error('Cập nhật thất bại', response.message);
             }
         } catch (error: any) {
-            console.log('Profile update error:', error);
-            showToast.error('Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.');
+            showToast.error('Lỗi kết nối', 'Vui lòng thử lại sau');
         } finally {
             setIsLoading(false);
         }
     }, [bio, phone, gender, dateOfBirth, onSetupComplete, onSkip]);
 
-    const handleSkip = useCallback(() => {
-        if (onSkip) {
-            onSkip();
-        }
-    }, [onSkip]);
-
-    const handleNavigateBack = useCallback(() => {
-        if (onNavigateBack) {
-            onNavigateBack();
-        }
-    }, [onNavigateBack]);
-
-    // Memoized button transform style
-    const buttonTransformStyle = useMemo(() => ({
-        transform: [{ scale: buttonScale }]
-    }), [buttonScale]);
-
-    // Max date for DOB (must be at least 13 years old)
     const maxDate = useMemo(() => {
         const date = new Date();
         date.setFullYear(date.getFullYear() - 13);
@@ -171,200 +121,169 @@ export default function ProfileSetupScreen({
     }, []);
 
     return (
-        <Pressable style={styles.container} onPress={dismissKeyboard}>
-            {/* Back Button */}
-            <TouchableOpacity
-                style={styles.backButton}
-                onPress={handleNavigateBack}
-            >
-                <Ionicons name="chevron-back" size={28} color={SoundMateLightColors.primary} />
-            </TouchableOpacity>
+        <View style={styles.container}>
+            <LinearGradient colors={['#E0F7FF', '#FFFFFF', '#F0F9FF']} style={StyleSheet.absoluteFill} />
 
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                style={styles.keyboardView}
-            >
-                <ScrollView
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
-                    keyboardShouldPersistTaps="handled"
-                >
-                    {/* Avatar Section */}
-                    <View style={styles.avatarSection}>
-                        <TouchableOpacity style={styles.avatarContainer}>
-                            <View style={styles.avatarCircle}>
-                                <Ionicons name="camera-outline" size={40} color={SoundMateLightColors.textPrimary} />
-                            </View>
-                        </TouchableOpacity>
-                    </View>
+            <Pressable style={styles.content} onPress={Keyboard.dismiss}>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
+                    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-                    {/* Title */}
-                    <Text style={styles.title}>Thông tin cá nhân</Text>
+                        <Animated.View entering={FadeInUp.delay(200).duration(800)} style={styles.header}>
+                            <TouchableOpacity onPress={onNavigateBack} style={styles.backButton}>
+                                <Ionicons name="chevron-back" size={24} color={SoundMateLightColors.primary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.avatarContainer}>
+                                <BlurView intensity={60} tint="light" style={styles.avatarCircle}>
+                                    <Ionicons name="camera" size={32} color={SoundMateLightColors.primary} />
+                                </BlurView>
+                                <View style={styles.addIconContainer}>
+                                    <Ionicons name="add" size={16} color="#FFFFFF" />
+                                </View>
+                            </TouchableOpacity>
+                        </Animated.View>
 
-                    {/* Form Section */}
-                    <View style={styles.formContainer}>
-                        {/* Phone Input */}
-                        <FormTextField
-                            inputContainerStyle={styles.inputContainer}
-                            style={styles.input}
-                            leftIconName="call-outline"
-                            leftIconSize={22}
-                            leftIconColor={SoundMateLightColors.textPrimary}
-                            placeholder="Số điện thoại"
-                            placeholderTextColor={SoundMateLightColors.textPrimary}
-                            value={phone}
-                            onChangeText={setPhone}
-                            keyboardType="phone-pad"
-                            maxLength={20}
-                        />
+                        <Animated.View entering={FadeInDown.delay(400).duration(800)}>
+                            <Text style={styles.title}>Hoàn thiện hồ sơ</Text>
+                            <Text style={styles.subtitle}>Hãy để mọi người biết thêm về bạn</Text>
+                        </Animated.View>
 
-                        {/* Gender Picker */}
-                        <SelectField
-                            containerStyle={styles.inputContainer}
-                            onPress={() => setShowGenderPicker(!showGenderPicker)}
-                            activeOpacity={0.7}
-                            value={getGenderLabel(gender)}
-                            isPlaceholder={!gender}
-                            leftIconName="male-female-outline"
-                            leftIconSize={22}
-                            leftIconColor={SoundMateLightColors.textPrimary}
-                            leftIconStyle={styles.inputIcon}
-                            valueTextStyle={[styles.input, styles.pickerText]}
-                            placeholderTextStyle={styles.placeholderText}
-                            showChevron={false}
-                        />
+                        <Animated.View entering={FadeInDown.delay(600).duration(800)} style={styles.formContainer}>
+                            <BlurView intensity={60} tint="light" style={styles.inputWrapper}>
+                                <Ionicons name="call-outline" size={20} color={SoundMateLightColors.primary} style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Số điện thoại"
+                                    placeholderTextColor={SoundMateLightColors.textMuted}
+                                    value={phone}
+                                    onChangeText={setPhone}
+                                    keyboardType="phone-pad"
+                                />
+                            </BlurView>
 
-                        {/* Gender Options */}
-                        {showGenderPicker && (
-                            <View style={styles.genderOptionsContainer}>
-                                <TouchableOpacity
-                                    style={[styles.genderOption, gender === 'male' && styles.genderOptionSelected]}
-                                    onPress={() => handleGenderSelect('male')}
-                                >
-                                    <Text style={[styles.genderOptionText, gender === 'male' && styles.genderOptionTextSelected]}>Nam</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.genderOption, gender === 'female' && styles.genderOptionSelected]}
-                                    onPress={() => handleGenderSelect('female')}
-                                >
-                                    <Text style={[styles.genderOptionText, gender === 'female' && styles.genderOptionTextSelected]}>Nữ</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.genderOption, gender === 'other' && styles.genderOptionSelected]}
-                                    onPress={() => handleGenderSelect('other')}
-                                >
-                                    <Text style={[styles.genderOptionText, gender === 'other' && styles.genderOptionTextSelected]}>Khác</Text>
-                                </TouchableOpacity>
-                            </View>
-                        )}
+                            <TouchableOpacity onPress={() => setShowGenderPicker(!showGenderPicker)}>
+                                <BlurView intensity={60} tint="light" style={styles.inputWrapper}>
+                                    <Ionicons name="male-female-outline" size={20} color={SoundMateLightColors.primary} style={styles.inputIcon} />
+                                    <Text style={[styles.input, !gender && { color: SoundMateLightColors.textMuted }]}>
+                                        {getGenderLabel(gender)}
+                                    </Text>
+                                    <Ionicons name="chevron-down" size={18} color={SoundMateLightColors.textMuted} />
+                                </BlurView>
+                            </TouchableOpacity>
 
-                        {/* Date of Birth Picker */}
-                        <DateField
-                            containerStyle={styles.inputContainer}
-                            onPress={() => setShowDatePicker(true)}
-                            activeOpacity={0.7}
-                            value={formatDate(dateOfBirth)}
-                            isPlaceholder={!dateOfBirth}
-                            leftIconName="calendar-outline"
-                            leftIconSize={22}
-                            leftIconColor={SoundMateLightColors.textPrimary}
-                            leftIconStyle={styles.inputIcon}
-                            valueTextStyle={[styles.input, styles.pickerText]}
-                            placeholderTextStyle={styles.placeholderText}
-                            showChevron={false}
-                        />
-                        {showDatePicker && (
-                            <DateTimePicker
-                                value={dateOfBirth || new Date(2000, 0, 1)}
-                                mode="date"
-                                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                                onChange={handleDateChange}
-                                maximumDate={maxDate}
-                                minimumDate={new Date(1920, 0, 1)}
-                            />
-                        )}
+                            {showGenderPicker && (
+                                <View style={styles.genderOptions}>
+                                    {['male', 'female', 'other'].map((g: any) => (
+                                        <TouchableOpacity
+                                            key={g}
+                                            onPress={() => { setGender(g); setShowGenderPicker(false); }}
+                                            style={[styles.genderOption, gender === g && styles.genderOptionActive]}
+                                        >
+                                            <Text style={[styles.genderOptionText, gender === g && styles.genderOptionTextActive]}>
+                                                {getGenderLabel(g)}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            )}
 
-                        {/* Bio Input */}
-                        <FormTextField
-                            inputContainerStyle={[styles.inputContainer, styles.bioContainer]}
-                            style={[styles.input, styles.bioInput]}
-                            placeholder="Tiểu sử"
-                            placeholderTextColor={SoundMateLightColors.textPrimary}
-                            value={bio}
-                            onChangeText={setBio}
-                            multiline
-                            numberOfLines={4}
-                            maxLength={500}
-                            textAlignVertical="top"
-                        />
-                    </View>
+                            <TouchableOpacity onPress={() => setShowDatePicker(true)}>
+                                <BlurView intensity={60} tint="light" style={styles.inputWrapper}>
+                                    <Ionicons name="calendar-outline" size={20} color={SoundMateLightColors.primary} style={styles.inputIcon} />
+                                    <Text style={[styles.input, !dateOfBirth && { color: SoundMateLightColors.textMuted }]}>
+                                        {formatDate(dateOfBirth)}
+                                    </Text>
+                                </BlurView>
+                            </TouchableOpacity>
 
-                    {/* Action Buttons */}
-                    <View style={styles.actionContainer}>
-                        {/* Submit Button */}
-                        <Animated.View style={[styles.submitButtonWrapper, buttonTransformStyle]}>
-                            <TouchableOpacity
+                            {showDatePicker && (
+                                <DateTimePicker
+                                    value={dateOfBirth || new Date(2000, 0, 1)}
+                                    mode="date"
+                                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                    onChange={handleDateChange}
+                                    maximumDate={maxDate}
+                                />
+                            )}
+
+                            <BlurView intensity={60} tint="light" style={[styles.inputWrapper, styles.bioWrapper]}>
+                                <TextInput
+                                    style={[styles.input, styles.bioInput]}
+                                    placeholder="Viết vài dòng giới thiệu về bản thân..."
+                                    placeholderTextColor={SoundMateLightColors.textMuted}
+                                    value={bio}
+                                    onChangeText={setBio}
+                                    multiline
+                                    maxLength={200}
+                                />
+                            </BlurView>
+
+                            <AnimatedTouchableOpacity
+                                style={[styles.submitButtonWrapper, buttonAnimatedStyle]}
                                 onPressIn={handlePressIn}
                                 onPressOut={handlePressOut}
                                 onPress={handleSubmit}
                                 disabled={isLoading}
-                                activeOpacity={0.9}
+                                activeOpacity={1}
                             >
                                 <LinearGradient
-                                    colors={[SoundMateLightColors.primaryLight, SoundMateLightColors.primary]}
+                                    colors={[SoundMateLightColors.primary, SoundMateLightColors.primaryDark]}
                                     start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
                                     style={styles.submitButton}
                                 >
                                     <Text style={styles.submitButtonText}>
-                                        {isLoading ? 'Đang lưu...' : 'Tiếp tục'}
+                                        {isLoading ? 'Đang lưu...' : 'Hoàn tất'}
                                     </Text>
                                 </LinearGradient>
+                            </AnimatedTouchableOpacity>
+
+                            <TouchableOpacity onPress={onSkip} style={styles.skipButton}>
+                                <Text style={styles.skipButtonText}>Bỏ qua bước này</Text>
                             </TouchableOpacity>
                         </Animated.View>
-
-                        {/* Skip Button */}
-                        <TouchableOpacity
-                            onPress={handleSkip}
-                            style={styles.skipButton}
-                            disabled={isLoading}
-                        >
-                            <Text style={styles.skipButtonText}>Bỏ qua</Text>
-                        </TouchableOpacity>
-                    </View>
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </Pressable>
+                    </ScrollView>
+                </KeyboardAvoidingView>
+            </Pressable>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: SoundMateLightColors.background,
     },
-    backButton: {
-        position: 'absolute',
-        top: 10,
-        left: 10,
-        zIndex: 10,
-        width: 44,
-        height: 44,
-        justifyContent: 'center',
-        alignItems: 'center',
+    content: {
+        flex: 1,
     },
     keyboardView: {
         flex: 1,
     },
     scrollContent: {
         flexGrow: 1,
-        paddingHorizontal: 24,
-        paddingTop: 50,
+        paddingHorizontal: 30,
+        paddingTop: 60,
         paddingBottom: 40,
     },
-    avatarSection: {
+    header: {
+        flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 24,
+        justifyContent: 'center',
+        marginBottom: 30,
+    },
+    backButton: {
+        position: 'absolute',
+        left: 0,
+        width: 44,
+        height: 44,
+        borderRadius: 15,
+        backgroundColor: '#FFFFFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 2,
     },
     avatarContainer: {
         position: 'relative',
@@ -372,41 +291,56 @@ const styles = StyleSheet.create({
     avatarCircle: {
         width: 100,
         height: 100,
-        borderRadius: 50,
-        backgroundColor: SoundMateLightColors.surface,
-        borderWidth: 2,
-        borderColor: SoundMateLightColors.primary,
+        borderRadius: 35,
         justifyContent: 'center',
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.5)',
+        overflow: 'hidden',
+    },
+    addIconContainer: {
+        position: 'absolute',
+        bottom: -5,
+        right: -5,
+        width: 30,
+        height: 30,
+        borderRadius: 10,
+        backgroundColor: SoundMateLightColors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 3,
+        borderColor: '#FFFFFF',
     },
     title: {
-        fontSize: 26,
-        fontWeight: '700',
-        color: SoundMateLightColors.primary,
-        marginBottom: 28,
+        fontSize: 32,
+        fontWeight: '800',
+        color: '#1A1A1A',
         textAlign: 'center',
+        marginBottom: 10,
+        letterSpacing: -0.5,
+    },
+    subtitle: {
+        fontSize: 16,
+        color: '#666',
+        textAlign: 'center',
+        marginBottom: 30,
+        lineHeight: 22,
     },
     formContainer: {
-        marginBottom: 32,
+        gap: 12,
     },
-    inputContainer: {
+    inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: SoundMateLightColors.surface,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: SoundMateLightColors.border,
+        height: 56,
+        borderRadius: 18,
         paddingHorizontal: 16,
-        marginBottom: 16,
-        height: 54,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 3,
-        elevation: 1,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.5)',
+        overflow: 'hidden',
     },
-    bioContainer: {
-        height: 100,
+    bioWrapper: {
+        height: 120,
         alignItems: 'flex-start',
         paddingVertical: 12,
     },
@@ -416,79 +350,70 @@ const styles = StyleSheet.create({
     input: {
         flex: 1,
         fontSize: 16,
-        color: SoundMateLightColors.textPrimary,
+        color: '#1A1A1A',
+        fontWeight: '500',
     },
     bioInput: {
         height: '100%',
         textAlignVertical: 'top',
     },
-    pickerText: {
-        flex: 1,
-        fontSize: 16,
-    },
-    placeholderText: {
-        color: SoundMateLightColors.textPrimary,
-    },
-    genderOptionsContainer: {
+    genderOptions: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        gap: 12,
-        marginBottom: 16,
-        marginTop: -8,
+        gap: 10,
+        marginBottom: 5,
     },
     genderOption: {
         flex: 1,
-        backgroundColor: SoundMateLightColors.surface,
+        height: 44,
         borderRadius: 12,
-        borderWidth: 1,
-        borderColor: SoundMateLightColors.border,
-        paddingVertical: 12,
+        backgroundColor: '#FFFFFF',
+        justifyContent: 'center',
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(0, 0, 0, 0.05)',
     },
-    genderOptionSelected: {
+    genderOptionActive: {
         borderColor: SoundMateLightColors.primary,
-        backgroundColor: SoundMateLightColors.surfaceLight,
+        backgroundColor: 'rgba(85, 197, 241, 0.1)',
     },
     genderOptionText: {
         fontSize: 14,
+        color: '#666',
         fontWeight: '500',
-        color: SoundMateLightColors.textSecondary,
     },
-    genderOptionTextSelected: {
+    genderOptionTextActive: {
         color: SoundMateLightColors.primary,
-        fontWeight: '600',
-    },
-    actionContainer: {
-        gap: 16,
+        fontWeight: '700',
     },
     submitButtonWrapper: {
-        width: '100%',
+        marginTop: 10,
+        borderRadius: 18,
+        overflow: 'hidden',
+        shadowColor: SoundMateLightColors.primary,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 6,
     },
     submitButton: {
-        height: 54,
-        borderRadius: 27,
+        height: 60,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: SoundMateLightColors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 4,
     },
     submitButtonText: {
-        fontSize: 17,
-        fontWeight: '600',
         color: '#FFFFFF',
-        letterSpacing: 0.3,
+        fontSize: 18,
+        fontWeight: '700',
+        letterSpacing: 0.5,
     },
     skipButton: {
-        height: 48,
+        height: 44,
         justifyContent: 'center',
         alignItems: 'center',
     },
     skipButtonText: {
-        fontSize: 16,
-        fontWeight: '500',
-        color: SoundMateLightColors.textSecondary,
+        color: '#999',
+        fontSize: 15,
+        fontWeight: '600',
     },
 });

@@ -1,8 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  Alert,
   Clipboard,
   Dimensions,
   Image,
@@ -38,57 +37,6 @@ interface AccountInfoScreenProps {
   subscriptionPlanName?: string;
   subscriptionEndDate?: string | null;
 }
-
-// ─── Data ───────────────────────────────────────────────
-
-const LOGIN_SESSIONS = [
-  {
-    id: '1',
-    device: 'iPhone 15 Pro Max',
-    icon: 'phone-portrait-outline',
-    os: 'iOS 18.2',
-    location: 'TP.HCM, Việt Nam',
-    lastActive: 'Đang hoạt động',
-    isCurrent: true,
-  },
-  {
-    id: '2',
-    device: 'MacBook Pro 14"',
-    icon: 'desktop-outline',
-    os: 'macOS Sequoia',
-    location: 'TP.HCM, Việt Nam',
-    lastActive: '2 giờ trước',
-    isCurrent: false,
-  },
-  {
-    id: '3',
-    device: 'Chrome — Windows',
-    icon: 'globe-outline',
-    os: 'Windows 11',
-    location: 'Hà Nội, Việt Nam',
-    lastActive: '3 ngày trước',
-    isCurrent: false,
-  },
-];
-
-const STORAGE_DATA = {
-  used: 2.4,
-  total: 10,
-  breakdown: [
-    { label: 'Nhạc đã tải', size: '1.2 GB', percent: 50, color: '#55C5F1' },
-    { label: 'Podcast', size: '0.6 GB', percent: 25, color: '#A78BFA' },
-    { label: 'Bộ nhớ đệm', size: '0.4 GB', percent: 17, color: '#F59E0B' },
-    { label: 'Khác', size: '0.2 GB', percent: 8, color: '#9CA3AF' },
-  ],
-};
-
-const LISTENING_STATS = {
-  totalHours: 234,
-  totalSongs: 3847,
-  totalArtists: 412,
-  topGenre: 'Acoustic',
-  streak: 28,
-};
 
 // ─── Sub-components ─────────────────────────────────────
 
@@ -188,7 +136,6 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription, subscrip
   const insets = useSafeAreaInsets();
   const { user } = useUser();
   console.log('User data in AccountInfoScreen:', user);
-  const [showAllSessions, setShowAllSessions] = useState(false);
 
   const fallbackTopInset = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
   const topInset = Math.max(insets.top, fallbackTopInset);
@@ -214,36 +161,12 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription, subscrip
   const subscriptionEndDateLabel = subscriptionEndDate ? formatDate(subscriptionEndDate) : null;
 
   const phone = user?.phone?.trim() || 'Chưa cập nhật';
-  const location = 'Hồ Chí Minh, Việt Nam';
+  const location = user?.location?.trim() || 'Chưa cập nhật';
   const birthday = user?.dateOfBirth ? formatDate(user.dateOfBirth) : 'Chưa cập nhật';
   const gender = mapServerGenderToLabel(user?.gender);
-  const bio = 'Yêu nhạc, yêu cuộc sống 🎵';
   const website = user?.website?.trim() || 'Chưa cập nhật';
-  const favoriteGenre = 'Acoustic, Lofi, Ballad';
-  const isEmailVerified = true;
+  const isEmailVerified = !!user?.email;
   const isPhoneVerified = !!user?.phone;
-  const twoFactorEnabled = false;
-
-  const handleClearCache = () => {
-    Alert.alert(
-      'Xóa bộ nhớ đệm',
-      'Bạn có chắc chắn muốn xóa bộ nhớ đệm? Việc này sẽ giải phóng dung lượng nhưng có thể làm chậm ứng dụng khi tải lại dữ liệu.',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Xóa',
-          style: 'destructive',
-          onPress: () => {
-            showToast.success('Đã xóa', 'Bộ nhớ đệm đã được xóa thành công');
-          },
-        },
-      ]
-    );
-  };
-
-  const handleEnable2FA = () => {
-    showToast.info('Đang phát triển', 'Tính năng xác thực 2 lớp sẽ sớm được ra mắt');
-  };
 
   return (
     <SafeAreaView style={[styles.container, { paddingTop: topInset, backgroundColor: palette.background }]} edges={['left', 'right', 'bottom']}>
@@ -382,234 +305,14 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription, subscrip
           <InfoRow icon="person-outline" iconColor="#A78BFA" label="Giới tính" value={gender} palette={palette} isDarkMode={isDarkMode} />
           <View style={[styles.divider, { backgroundColor: palette.border }]} />
           <InfoRow icon="location-outline" iconColor="#EF4444" label="Vị trí" value={location} palette={palette} isDarkMode={isDarkMode} />
-          <View style={[styles.divider, { backgroundColor: palette.border }]} />
-          <InfoRow
-            icon="musical-notes-outline"
-            iconColor="#10B981"
-            label="Thể loại yêu thích"
-            value={favoriteGenre}
-            palette={palette}
-            isDarkMode={isDarkMode}
-          />
-        </View>
-
-        {/* ── Listening Stats ── */}
-        <SectionHeader title="Thống kê nghe nhạc" palette={palette} />
-        <View style={styles.statsGrid}>
-          <View style={[styles.statCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-            <View style={[styles.statIcon, { backgroundColor: '#55C5F1' + '12' }]}>
-              <Ionicons name="headset-outline" size={18} color="#55C5F1" />
-            </View>
-            <Text style={[styles.statValue, { color: palette.textPrimary }]}>{LISTENING_STATS.totalHours}h</Text>
-            <Text style={[styles.statLabel, { color: palette.textSecondary }]}>Tổng giờ nghe</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-            <View style={[styles.statIcon, { backgroundColor: '#A78BFA' + '12' }]}>
-              <Ionicons name="musical-notes-outline" size={18} color="#A78BFA" />
-            </View>
-            <Text style={[styles.statValue, { color: palette.textPrimary }]}>{LISTENING_STATS.totalSongs.toLocaleString()}</Text>
-            <Text style={[styles.statLabel, { color: palette.textSecondary }]}>Bài hát</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-            <View style={[styles.statIcon, { backgroundColor: '#EF4444' + '12' }]}>
-              <Ionicons name="heart-outline" size={18} color="#EF4444" />
-            </View>
-            <Text style={[styles.statValue, { color: palette.textPrimary }]}>{LISTENING_STATS.totalArtists.toLocaleString()}</Text>
-            <Text style={[styles.statLabel, { color: palette.textSecondary }]}>Nghệ sĩ</Text>
-          </View>
-        </View>
-
-        {/* Streak + Top Genre */}
-        <View style={styles.highlightCardsRow}>
-          <LinearGradient
-            colors={['#F59E0B', '#F97316']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.highlightCard}
-          >
-            <View style={styles.highlightIcon}>
-              <Ionicons name="flash" size={22} color="white" />
-            </View>
-            <View>
-              <Text style={styles.highlightValue}>{LISTENING_STATS.streak} ngày</Text>
-              <Text style={styles.highlightLabel}>Chuỗi nghe liên tiếp</Text>
-            </View>
-          </LinearGradient>
-          <LinearGradient
-            colors={['#10B981', '#059669']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.highlightCard}
-          >
-            <View style={styles.highlightIcon}>
-              <Ionicons name="musical-notes" size={22} color="white" />
-            </View>
-            <View>
-              <Text style={styles.highlightValue}>{LISTENING_STATS.topGenre}</Text>
-              <Text style={styles.highlightLabel}>Thể loại nghe nhiều nhất</Text>
-            </View>
-          </LinearGradient>
-        </View>
-
-        {/* ── Security ── */}
-        <SectionHeader title="Bảo mật" palette={palette} />
-        <View style={[styles.section, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-          <View style={styles.infoRow}>
-            <View style={[styles.infoIcon, { backgroundColor: '#10B981' + '10' }]}>
-              <Ionicons name="shield-checkmark-outline" size={17} color="#10B981" />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: palette.textMuted }]}>Xác minh tài khoản</Text>
-              <Text style={[styles.infoValue, { color: palette.textPrimary }]}>Đã xác minh</Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: '#10B981' + '10' }]}>
-              <Ionicons name="checkmark-circle" size={10} color="#10B981" style={{ marginRight: 2 }} />
-              <Text style={[styles.badgeText, { color: '#10B981' }]}>Verified</Text>
-            </View>
-          </View>
-          <View style={[styles.divider, { backgroundColor: palette.border }]} />
-          <View style={styles.infoRow}>
-            <View style={[styles.infoIcon, { backgroundColor: '#F59E0B' + '10' }]}>
-              <Ionicons name="finger-print-outline" size={17} color="#F59E0B" />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoLabel, { color: palette.textMuted }]}>Xác thực 2 lớp</Text>
-              <Text style={[styles.infoValue, { color: palette.textPrimary }]}>Chưa bật</Text>
-            </View>
-            <TouchableOpacity style={styles.enable2FAButton} onPress={handleEnable2FA}>
-              <Text style={styles.enable2FAText}>Bật ngay</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* 2FA Warning */}
-        {!twoFactorEnabled && (
-          <View style={[styles.warningCard, { backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.16)' : 'rgba(245, 158, 11, 0.08)', borderColor: isDarkMode ? 'rgba(245, 158, 11, 0.38)' : 'rgba(245, 158, 11, 0.2)' }]}>
-            <Ionicons name="warning-outline" size={18} color="#F59E0B" style={styles.warningIcon} />
-            <View style={styles.warningContent}>
-              <Text style={[styles.warningTitle, { color: isDarkMode ? '#FCD34D' : '#92400E' }]}>Tăng cường bảo mật</Text>
-              <Text style={[styles.warningText, { color: isDarkMode ? '#FDE68A' : '#A16207' }]}> 
-                Bật xác thực 2 lớp để bảo vệ tài khoản khỏi truy cập trái phép. Bạn sẽ cần xác nhận đăng nhập
-                qua điện thoại.
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* ── Login Sessions ── */}
-        <SectionHeader title="Phiên đăng nhập" palette={palette} />
-        <View style={[styles.section, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-          {(showAllSessions ? LOGIN_SESSIONS : LOGIN_SESSIONS.slice(0, 2)).map((session, index) => (
-            <View key={session.id}>
-              {index > 0 && <View style={[styles.divider, { backgroundColor: palette.border }]} />}
-              <View style={styles.sessionRow}>
-                <View style={[styles.sessionIcon, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}>
-                  <Ionicons name={session.icon as any} size={18} color={palette.textSecondary} />
-                </View>
-                <View style={styles.sessionContent}>
-                  <View style={styles.sessionHeader}>
-                    <Text style={[styles.sessionDevice, { color: palette.textPrimary }]} numberOfLines={1}>
-                      {session.device}
-                    </Text>
-                    {session.isCurrent && (
-                      <View style={styles.currentBadge}>
-                        <Text style={styles.currentBadgeText}>Hiện tại</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={[styles.sessionInfo, { color: palette.textSecondary }]}>
-                    {session.os} · {session.location}
-                  </Text>
-                </View>
-                <Text
-                  style={[
-                    styles.sessionTime,
-                    { color: palette.textSecondary },
-                    session.isCurrent && { color: '#10B981', fontWeight: '500' },
-                  ]}
-                >
-                  {session.lastActive}
-                </Text>
-              </View>
-            </View>
-          ))}
-
-          {LOGIN_SESSIONS.length > 2 && (
-            <>
-              <View style={[styles.divider, { backgroundColor: palette.border }]} />
-              <TouchableOpacity
-                style={styles.showAllButton}
-                onPress={() => setShowAllSessions(!showAllSessions)}
-              >
-                <Text style={styles.showAllText}>
-                  {showAllSessions ? 'Thu gọn' : `Xem tất cả (${LOGIN_SESSIONS.length})`}
-                </Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-
-        {/* ── Storage Usage ── */}
-        <SectionHeader title="Dung lượng & Lưu trữ" palette={palette} />
-        <View style={[styles.section, styles.storageSection, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-          {/* Total usage */}
-          <View style={styles.storageHeader}>
-            <View style={styles.storageHeaderLeft}>
-              <Ionicons name="server-outline" size={16} color={palette.textSecondary} style={{ marginRight: 6 }} />
-              <Text style={[styles.storageHeaderText, { color: palette.textPrimary }]}>Đã sử dụng</Text>
-            </View>
-            <Text style={styles.storageHeaderValue}>
-              {STORAGE_DATA.used} GB{' '}
-              <Text style={styles.storageHeaderTotal}>/ {STORAGE_DATA.total} GB</Text>
-            </Text>
-          </View>
-
-          {/* Progress bar */}
-          <View style={[styles.progressBar, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}> 
-            {STORAGE_DATA.breakdown.map((item, index) => (
-              <View
-                key={item.label}
-                style={[
-                  styles.progressSegment,
-                  {
-                    width: `${(item.percent / 100) * (STORAGE_DATA.used / STORAGE_DATA.total) * 100}%`,
-                    backgroundColor: item.color,
-                    borderTopLeftRadius: index === 0 ? 99 : 0,
-                    borderBottomLeftRadius: index === 0 ? 99 : 0,
-                    borderTopRightRadius: index === STORAGE_DATA.breakdown.length - 1 ? 99 : 0,
-                    borderBottomRightRadius: index === STORAGE_DATA.breakdown.length - 1 ? 99 : 0,
-                  },
-                ]}
-              />
-            ))}
-          </View>
-
-          {/* Breakdown */}
-          <View style={styles.storageBreakdown}>
-            {STORAGE_DATA.breakdown.map((item) => (
-              <View key={item.label} style={styles.storageItem}>
-                <View style={styles.storageItemLeft}>
-                  <View style={[styles.storageItemDot, { backgroundColor: item.color }]} />
-                  <Text style={[styles.storageItemLabel, { color: palette.textSecondary }]}>{item.label}</Text>
-                </View>
-                <Text style={[styles.storageItemSize, { color: palette.textPrimary }]}>{item.size}</Text>
-              </View>
-            ))}
-          </View>
-
-          {/* Clear cache button */}
-          <TouchableOpacity style={[styles.clearCacheButton, { borderColor: palette.border }]} onPress={handleClearCache}>
-            <Text style={[styles.clearCacheText, { color: palette.textSecondary }]}>Xóa bộ nhớ đệm</Text>
-          </TouchableOpacity>
         </View>
 
         {/* ── Footer Info ── */}
-        <View style={styles.footer}>
+        <View style={[styles.footer, { borderTopColor: palette.border }]}>
           <View style={styles.footerRow}>
             <Ionicons name="information-circle-outline" size={12} color={palette.textMuted} />
-            <Text style={[styles.footerText, { color: palette.textMuted }]}>Thông tin được cập nhật lần cuối: Hôm nay, 14:30</Text>
+            <Text style={[styles.footerText, { color: palette.textMuted }]}>Mã tài khoản: {accountId}</Text>
           </View>
-          <Text style={[styles.footerText, { color: palette.textMuted }]}>Mã tài khoản: {accountId}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
