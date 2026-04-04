@@ -1,4 +1,3 @@
-import { VITE_CLOUDINARY_CLOUD_NAME, VITE_CLOUDINARY_UPLOAD_PRESET } from '@env';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,7 +18,7 @@ import {
   View
 } from 'react-native';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
-import { authService, BlogPostResponse, blogService, paymentService, ReactionResponse, UpdateProfileRequest } from '../../api';
+import { authService, BlogPostResponse, blogService, paymentService, ReactionResponse, UpdateProfileRequest, uploadService } from '../../api';
 import { BlogPostCard, DisplayPost } from '../../components/blog/BlogPostCard';
 import { showToast } from '../../components/ui/Toast';
 import { ThemePreference, useTheme } from '../../context/ThemeContext';
@@ -35,44 +34,6 @@ import SubscriptionDetailsScreen from './SubscriptionDetailsScreen';
 const { width } = Dimensions.get('window');
 
 const defaultAvatarUrl = 'https://i.pravatar.cc/150?img=10';
-
-const buildUploadFileName = (asset: ImagePicker.ImagePickerAsset) => {
-  if (asset.fileName) {
-    return asset.fileName;
-  }
-
-  const extension = asset.mimeType?.split('/')[1] || 'jpg';
-  return `image-${Date.now()}.${extension}`;
-};
-
-const uploadToCloudinary = async (asset: ImagePicker.ImagePickerAsset): Promise<string> => {
-  const cloudName = VITE_CLOUDINARY_CLOUD_NAME?.trim();
-  const uploadPreset = VITE_CLOUDINARY_UPLOAD_PRESET?.trim();
-
-  if (!cloudName || !uploadPreset) {
-    throw new Error('Thiếu cấu hình Cloudinary. Vui lòng kiểm tra biến VITE_CLOUDINARY_CLOUD_NAME và VITE_CLOUDINARY_UPLOAD_PRESET trong .env.');
-  }
-
-  const formData = new FormData();
-  formData.append('file', {
-    uri: asset.uri,
-    name: buildUploadFileName(asset),
-    type: asset.mimeType || 'image/jpeg',
-  } as any);
-  formData.append('upload_preset', uploadPreset);
-
-  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-    method: 'POST',
-    body: formData,
-  });
-
-  const data = await response.json();
-  if (!response.ok || !data?.secure_url) {
-    throw new Error(data?.error?.message || 'Upload ảnh thất bại');
-  }
-
-  return data.secure_url as string;
-};
 
 // ─── Data ───────────────────────────────────────────────
 
@@ -262,9 +223,10 @@ interface ProfileScreenProps {
   onNavigateToForgotPassword?: () => void;
   onNavigateToSubscription?: () => void;
   onLogout?: () => void;
+  hideBottomNav?: boolean;
 }
 
-export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword, onNavigateToSubscription, onLogout }: ProfileScreenProps) {
+export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword, onNavigateToSubscription, onLogout, hideBottomNav = false }: ProfileScreenProps) {
   const { user, refreshUser, saveUser } = useUser();
   const { themePreference, effectiveTheme, isDarkMode, setThemePreference } = useTheme();
   const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
@@ -300,6 +262,7 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
   const [showImageOptionsPopup, setShowImageOptionsPopup] = useState(false);
   const [activeImageTarget, setActiveImageTarget] = useState<'avatar' | 'cover'>('avatar');
   const [isUpdatingProfileImage, setIsUpdatingProfileImage] = useState(false);
+  const [profileImageLoadingText, setProfileImageLoadingText] = useState('Đang xử lý ảnh...');
   const [showImagePreviewPopup, setShowImagePreviewPopup] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState('');
   const [previewImageTarget, setPreviewImageTarget] = useState<'avatar' | 'cover'>('avatar');
@@ -418,6 +381,8 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
 
     await refreshUser({
       expectedUpdatedAt: result.data?.updatedAt || requestedAt,
+      expectedProfileImageUrl: target === 'avatar' ? value : undefined,
+      expectedBackgroundImageUrl: target === 'cover' ? value : undefined,
       maxAttempts: 12,
       delayMs: 250,
     });
@@ -434,9 +399,19 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
       setCoverImageUrl(asset.uri);
     }
 
+    setProfileImageLoadingText('Đang tải ảnh...');
     setIsUpdatingProfileImage(true);
     try {
-      const uploadedUrl = await uploadToCloudinary(asset);
+      const uploadResult = await uploadService.uploadImageToCloudinary({
+        uri: asset.uri,
+        fileName: asset.fileName,
+        mimeType: asset.mimeType,
+      });
+      if (!uploadResult.success || !uploadResult.data) {
+        throw new Error(uploadResult.message || 'Upload ảnh thất bại');
+      }
+
+      const uploadedUrl = uploadResult.data;
 
       if (target === 'avatar') {
         setAvatarUrl(uploadedUrl);
@@ -444,6 +419,7 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
         setCoverImageUrl(uploadedUrl);
       }
 
+      setProfileImageLoadingText('Đang cập nhật thông tin hồ sơ...');
       await updateProfileImageField(target, uploadedUrl);
       showToast.success('Cập nhật thành công', target === 'avatar' ? 'Đã đổi ảnh đại diện' : 'Đã đổi ảnh bìa');
     } catch (error: any) {
@@ -452,6 +428,7 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
       showToast.error('Cập nhật thất bại', error?.message || 'Vui lòng thử lại sau');
     } finally {
       setIsUpdatingProfileImage(false);
+      setProfileImageLoadingText('Đang xử lý ảnh...');
     }
   };
 
@@ -552,6 +529,7 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
       setCoverImageUrl('');
     }
 
+    setProfileImageLoadingText('Đang cập nhật thông tin hồ sơ...');
     setIsUpdatingProfileImage(true);
     try {
       await updateProfileImageField(target, '');
@@ -562,6 +540,7 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
       showToast.error('Xóa ảnh thất bại', error?.message || 'Vui lòng thử lại sau');
     } finally {
       setIsUpdatingProfileImage(false);
+      setProfileImageLoadingText('Đang xử lý ảnh...');
     }
   };
 
@@ -1013,8 +992,22 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
         </View>
       </Modal>
 
+      <Modal
+        visible={isUpdatingProfileImage}
+        transparent
+        animationType="fade"
+      >
+        <View style={styles.uploadBlockingOverlay}>
+          <View style={styles.uploadBlockingCard}>
+            <ActivityIndicator size="large" color={palette.primary} />
+            <Text style={[styles.uploadBlockingText, { color: palette.textPrimary }]}>{profileImageLoadingText}</Text>
+            <Text style={[styles.uploadBlockingHint, { color: palette.textSecondary }]}>Vui lòng đợi trong giây lát...</Text>
+          </View>
+        </View>
+      </Modal>
+
       {/* Bottom Navigation */}
-      <BottomNavigation activeTab={activeBottomTab} onTabPress={handleTabPress} />
+      {!hideBottomNav && <BottomNavigation activeTab={activeBottomTab} onTabPress={handleTabPress} />}
 
       {/* ── Edit Profile Modal ── */}
       <Modal
@@ -2140,6 +2133,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#D1D5DB',
     paddingBottom: 24,
+  },
+
+  uploadBlockingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  uploadBlockingCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    elevation: 10,
+  },
+  uploadBlockingText: {
+    marginTop: 14,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  uploadBlockingHint: {
+    marginTop: 6,
+    fontSize: 13,
+    textAlign: 'center',
   },
 
   // Bottom Spacer

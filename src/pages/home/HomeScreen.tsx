@@ -20,6 +20,7 @@ import CreatePostScreen from '../blog/CreatePostScreen';
 import PostDetailScreen from '../blog/PostDetailScreen';
 import BottomNavigation, { TabName } from '../BottomNavigation';
 import PodcastScreen from '../podcast/PodcastScreen';
+import ProfileScreen from '../profile/ProfileScreen';
 import SearchResultsScreen, { SearchResultBundle } from '../search/SearchResultsScreen';
 import {
     MyPlaylistCard,
@@ -42,11 +43,18 @@ import styles from './HomeScreen.styles';
 interface HomeScreenProps {
     initialTab?: TabName;
     onLogout?: () => void;
-    onNavigateToProfile?: () => void;
     onNavigateToLive?: () => void;
+    onNavigateToForgotPassword?: () => void;
+    onNavigateToSubscription?: () => void;
 }
 
-export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateToProfile, onNavigateToLive }: HomeScreenProps) {
+export default function HomeScreen({
+    initialTab = 'home',
+    onLogout,
+    onNavigateToLive,
+    onNavigateToForgotPassword,
+    onNavigateToSubscription,
+}: HomeScreenProps) {
     const { isDarkMode } = useTheme();
     const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
     const [activeTab, setActiveTab] = useState<TabName>(initialTab);
@@ -266,20 +274,20 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
     }, [fetchSearchBundle, makeSuggestions, searchInput, showSearchResults, showSearchScreen]);
 
     const handleTabPress = (tab: TabName) => {
-        setActiveTab(tab);
-
         if (tab === 'profile') {
-            onNavigateToProfile?.();
+            setActiveTab('profile');
             return;
         }
 
         if (tab === 'live') {
             onNavigateToLive?.();
+            return;
         }
+
+        setActiveTab(tab);
     };
 
     const handleLivePress = () => {
-        setActiveTab('live');
         onNavigateToLive?.();
     };
 
@@ -514,6 +522,21 @@ export default function HomeScreen({ initialTab = 'home', onLogout, onNavigateTo
                         />
                     ) : activeTab === 'podcast' ? (
                         <PodcastScreen />
+                    ) : activeTab === 'profile' ? (
+                        <ProfileScreen
+                            hideBottomNav
+                            onBackToHome={(tab = 'home') => {
+                                if (tab === 'blog' || tab === 'podcast' || tab === 'home') {
+                                    setActiveTab(tab);
+                                    return;
+                                }
+
+                                setActiveTab('home');
+                            }}
+                            onNavigateToForgotPassword={onNavigateToForgotPassword}
+                            onNavigateToSubscription={onNavigateToSubscription}
+                            onLogout={onLogout}
+                        />
                     ) : (
                         <ScrollView
                             showsVerticalScrollIndicator={false}

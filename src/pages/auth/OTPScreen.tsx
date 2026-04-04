@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -10,7 +10,6 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
@@ -23,10 +22,10 @@ import Animated, {
     withSpring,
     withTiming,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import { showToast } from '../../components/ui/Toast';
 import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/theme';
 import { authService } from '../../api';
+import OtpCodeInput, { type OtpCodeInputRef } from '../../components/ui/OtpCodeInput';
+import { showToast } from '../../components/ui/Toast';
 import { useTheme } from '../../context/ThemeContext';
 
 interface OTPScreenProps {
@@ -46,12 +45,13 @@ export default function OTPScreen({
 }: OTPScreenProps) {
     const { isDarkMode } = useTheme();
     const palette = isDarkMode ? SoundMateDarkColors : SoundMateLightColors;
-    const [otp, setOtp] = useState(['', '', '', '', '', '']);
-    const [isLoading, setIsLoading] = useState(false);
+    const [otp, setOtp] = useState('');
+    const [isVerifying, setIsVerifying] = useState(false);
+    const [isResending, setIsResending] = useState(false);
     const [countdown, setCountdown] = useState(60);
     const [canResend, setCanResend] = useState(false);
 
-    const inputRefs = useRef<Array<TextInput | null>>([]);
+    const otpInputRef = useRef<OtpCodeInputRef>(null);
     const buttonScale = useSharedValue(1);
     const shakeOffset = useSharedValue(0);
 
@@ -69,6 +69,7 @@ export default function OTPScreen({
         const [name, domain] = email.split('@');
         return name.length <= 2 ? email : `${name.substring(0, 2)}****@${domain}`;
     }, [email]);
+    const isOtpComplete = otp.length === 6;
 
     const handlePressIn = useCallback(() => {
         buttonScale.value = withSpring(0.96);
@@ -98,51 +99,58 @@ export default function OTPScreen({
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }, [shakeOffset]);
 
-    const handleOtpChange = useCallback((value: string, index: number) => {
-        if (value && !/^\d$/.test(value)) return;
-        const newOtp = [...otp];
-        newOtp[index] = value;
-        setOtp(newOtp);
-        if (value && index < 5) inputRefs.current[index + 1]?.focus();
-    }, [otp]);
-
-    const handleKeyPress = useCallback((e: any, index: number) => {
-        if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-            inputRefs.current[index - 1]?.focus();
-        }
-    }, [otp]);
-
     const handleVerify = useCallback(async () => {
-        const otpCode = otp.join('');
-        if (otpCode.length !== 6) {
+        if (otp.length !== 6) {
             showToast.warning('Mã không đầy đủ', 'Vui lòng nhập đủ 6 số');
             triggerShake();
             return;
         }
 
-        setIsLoading(true);
+        setIsVerifying(true);
         try {
-            const response = await authService.verifyOtp({ email, otpCode });
+            const response = await authService.verifyOtp({ email, otpCode: otp });
             if (response.success) {
                 showToast.success('Xác thực thành công!', 'Tài khoản của bạn đã được kích hoạt');
                 onVerifySuccess?.();
             } else {
                 showToast.error('Xác thực thất bại', response.message || 'Mã OTP không đúng');
                 triggerShake();
-                setOtp(['', '', '', '', '', '']);
-                inputRefs.current[0]?.focus();
+                setOtp('');
+                otpInputRef.current?.focus(0);
             }
         } catch (error: any) {
             showToast.error('Lỗi xác thực', error?.message || 'Lỗi kết nối');
             triggerShake();
         } finally {
-            setIsLoading(false);
+            setIsVerifying(false);
         }
     }, [otp, email, onVerifySuccess, triggerShake]);
 
     const handleBack = useCallback(() => {
         onNavigateBack?.();
     }, [onNavigateBack]);
+
+    const handleResendOtp = useCallback(async () => {
+        if (!canResend || isResending) return;
+
+        setIsResending(true);
+        try {
+            const response = await authService.resendOtp(email);
+            if (response.success) {
+                showToast.success('Đã gửi lại mã OTP', response.message || 'Vui lòng kiểm tra email của bạn');
+                setOtp('');
+                setCountdown(60);
+                setCanResend(false);
+                otpInputRef.current?.focus(0);
+            } else {
+                showToast.error('Gửi lại thất bại', response.message || 'Không thể gửi lại mã OTP');
+            }
+        } catch (error: any) {
+            showToast.error('Gửi lại thất bại', error?.message || 'Lỗi kết nối');
+        } finally {
+            setIsResending(false);
+        }
+    }, [canResend, email, isResending]);
 
     return (
         <View style={styles.container}>
@@ -173,32 +181,30 @@ export default function OTPScreen({
                         </Animated.View>
 
                         <Animated.View entering={FadeInDown.delay(600).duration(800)} style={shakeAnimatedStyle}>
-                            <View style={styles.otpContainer}>
-                                {otp.map((digit, index) => (
-                                    <BlurView key={index} intensity={60} tint="light" style={styles.otpInputWrapper}>
-                                        <TextInput
-                                            ref={(ref) => { inputRefs.current[index] = ref; }}
-                                            style={[styles.otpInput, digit ? styles.otpInputFilled : null]}
-                                            value={digit}
-                                            onChangeText={(value) => handleOtpChange(value, index)}
-                                            onKeyPress={(e) => handleKeyPress(e, index)}
-                                            keyboardType="number-pad"
-                                            maxLength={1}
-                                            selectTextOnFocus
-                                            autoFocus={index === 0}
-                                        />
-                                    </BlurView>
-                                ))}
-                            </View>
+                            <OtpCodeInput
+                                ref={otpInputRef}
+                                value={otp}
+                                onChange={setOtp}
+                                length={6}
+                                autoFocus
+                                containerStyle={styles.otpContainer}
+                                inputStyle={styles.otpInput}
+                                filledInputStyle={styles.otpInputFilled}
+                                editable={!isVerifying}
+                            />
                         </Animated.View>
 
                         <Animated.View entering={FadeInDown.delay(800).duration(800)}>
                             <AnimatedTouchableOpacity
-                                style={[styles.verifyButtonWrapper, buttonAnimatedStyle]}
+                                style={[
+                                    styles.verifyButtonWrapper,
+                                    buttonAnimatedStyle,
+                                    !isOtpComplete && styles.verifyButtonDisabled,
+                                ]}
                                 onPressIn={handlePressIn}
                                 onPressOut={handlePressOut}
                                 onPress={handleVerify}
-                                disabled={isLoading}
+                                disabled={!isOtpComplete || isVerifying || isResending}
                                 activeOpacity={1}
                             >
                                 <LinearGradient
@@ -208,16 +214,16 @@ export default function OTPScreen({
                                     style={styles.verifyButton}
                                 >
                                     <Text style={styles.verifyButtonText}>
-                                        {isLoading ? 'Đang xác thực...' : 'Xác thực'}
+                                        {isVerifying ? 'Đang xác thực...' : 'Xác thực'}
                                     </Text>
                                 </LinearGradient>
                             </AnimatedTouchableOpacity>
 
                             <View style={styles.resendContainer}>
                                 <Text style={styles.resendText}>Không nhận được mã?</Text>
-                                <TouchableOpacity onPress={() => {/* resend logic */ }} disabled={!canResend}>
-                                    <Text style={[styles.resendLink, !canResend && styles.resendLinkDisabled]}>
-                                        {canResend ? 'Gửi lại mã' : `Gửi lại sau ${countdown}s`}
+                                <TouchableOpacity onPress={handleResendOtp} disabled={!canResend || isResending}>
+                                    <Text style={[styles.resendLink, (!canResend || isResending) && styles.resendLinkDisabled]}>
+                                        {isResending ? 'Đang gửi lại...' : canResend ? 'Gửi lại mã' : `Gửi lại sau ${countdown}s`}
                                     </Text>
                                 </TouchableOpacity>
                             </View>
@@ -254,6 +260,7 @@ const styles = StyleSheet.create({
     },
     backButton: {
         position: 'absolute',
+        bottom: 100,
         left: 0,
         width: 44,
         height: 44,
@@ -301,23 +308,20 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: 40,
     },
-    otpInputWrapper: {
+    otpInput: {
         width: 45,
         height: 56,
         borderRadius: 15,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.5)',
-        overflow: 'hidden',
-    },
-    otpInput: {
-        flex: 1,
+        borderColor: '#CCC',
         fontSize: 24,
         fontWeight: '700',
         textAlign: 'center',
         color: '#1A1A1A',
+        backgroundColor: '#FFFFFF',
     },
     otpInputFilled: {
-        backgroundColor: 'rgba(255, 255, 255, 0.5)',
+        backgroundColor: '#FFFFFF',
     },
     verifyButtonWrapper: {
         borderRadius: 18,
@@ -328,6 +332,9 @@ const styles = StyleSheet.create({
         shadowRadius: 12,
         elevation: 6,
         marginBottom: 30,
+    },
+    verifyButtonDisabled: {
+        opacity: 0.55,
     },
     verifyButton: {
         height: 60,

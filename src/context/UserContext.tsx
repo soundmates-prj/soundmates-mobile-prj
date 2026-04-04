@@ -26,6 +26,8 @@ export interface UserData {
 
 interface RefreshUserOptions {
     expectedUpdatedAt?: string;
+    expectedProfileImageUrl?: string;
+    expectedBackgroundImageUrl?: string;
     maxAttempts?: number;
     delayMs?: number;
 }
@@ -42,6 +44,14 @@ interface UserContextType {
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 const USER_STORAGE_KEY = 'userData';
+
+const normalizeImageValue = (value?: string | null): string => {
+    if (typeof value !== 'string') {
+        return '';
+    }
+
+    return value.trim();
+};
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
     const [user, setUserState] = useState<UserData | null>(null);
@@ -112,7 +122,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         const maxAttempts = options?.maxAttempts ?? 4;
         const delayMs = options?.delayMs ?? 600;
         const expectedUpdatedAt = options?.expectedUpdatedAt;
+        const expectedProfileImageUrl = options?.expectedProfileImageUrl;
+        const expectedBackgroundImageUrl = options?.expectedBackgroundImageUrl;
         const expectedDate = expectedUpdatedAt ? new Date(expectedUpdatedAt) : null;
+        const normalizedExpectedProfileImageUrl = expectedProfileImageUrl === undefined
+            ? undefined
+            : normalizeImageValue(expectedProfileImageUrl);
+        const normalizedExpectedBackgroundImageUrl = expectedBackgroundImageUrl === undefined
+            ? undefined
+            : normalizeImageValue(expectedBackgroundImageUrl);
 
         let lastProfile: UserData | null = null;
         for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -153,8 +171,14 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 }
 
                 const profileDate = new Date(profile.updatedAt || '');
+                const profileImageMatched = normalizedExpectedProfileImageUrl === undefined
+                    || normalizeImageValue(profile.profileImageUrl) === normalizedExpectedProfileImageUrl;
+                const backgroundImageMatched = normalizedExpectedBackgroundImageUrl === undefined
+                    || normalizeImageValue(profile.backgroundImageUrl) === normalizedExpectedBackgroundImageUrl;
+                const expectedImageMatched = profileImageMatched && backgroundImageMatched;
+
                 if (expectedDate && !Number.isNaN(expectedDate.getTime()) && !Number.isNaN(profileDate.getTime())) {
-                    if (profileDate.getTime() >= expectedDate.getTime()) {
+                    if (profileDate.getTime() >= expectedDate.getTime() && expectedImageMatched) {
                         await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(mergedUser));
                         setUserState(mergedUser);
                         return;
@@ -168,9 +192,19 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (lastProfile) {
+            const profileImageMatched = normalizedExpectedProfileImageUrl === undefined
+                || normalizeImageValue(lastProfile.profileImageUrl) === normalizedExpectedProfileImageUrl;
+            const backgroundImageMatched = normalizedExpectedBackgroundImageUrl === undefined
+                || normalizeImageValue(lastProfile.backgroundImageUrl) === normalizedExpectedBackgroundImageUrl;
+            const expectedImageMatched = profileImageMatched && backgroundImageMatched;
+
             if (expectedDate && !Number.isNaN(expectedDate.getTime())) {
                 const lastProfileDate = new Date(lastProfile.updatedAt || '');
-                if (Number.isNaN(lastProfileDate.getTime()) || lastProfileDate.getTime() < expectedDate.getTime()) {
+                if (
+                    Number.isNaN(lastProfileDate.getTime())
+                    || lastProfileDate.getTime() < expectedDate.getTime()
+                    || !expectedImageMatched
+                ) {
                     // Keep the current local state when backend read model is still stale.
                     return;
                 }

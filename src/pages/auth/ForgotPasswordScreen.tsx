@@ -1,17 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import Animated, {
   FadeInDown,
@@ -20,12 +20,11 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import { showToast } from '../../components/ui/Toast';
 import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/theme';
 import { authService } from '../../api';
-import { useTheme } from '../../context/ThemeContext';
 import OtpCodeInput, { type OtpCodeInputRef } from '../../components/ui/OtpCodeInput';
+import { showToast } from '../../components/ui/Toast';
+import { useTheme } from '../../context/ThemeContext';
 
 interface ForgotPasswordScreenProps {
   onBack: () => void;
@@ -463,7 +462,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     height: 60,
-    marginTop: Platform.OS === 'ios' ? 40 : 0,
+    // marginTop: Platform.OS === 'ios' ? 40 : 0,
   },
   backButton: {
     width: 44,

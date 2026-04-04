@@ -1,29 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  Dimensions,
-} from 'react-native';
-import Animated, { 
-  Extrapolate,
-  FadeInDown, 
-  FadeInRight,
-  interpolate,
-  useAnimatedScrollHandler,
-  useAnimatedStyle, 
-  useSharedValue, 
-  withSpring 
-} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+    ActivityIndicator,
+    Dimensions,
+    Image,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import Animated, {
+    Extrapolate,
+    FadeInDown,
+    FadeInRight,
+    interpolate,
+    useAnimatedScrollHandler,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring
+} from 'react-native-reanimated';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { PodcastResponse, podcastService } from '../../api';
 import { useTheme } from '../../context/ThemeContext';
@@ -223,6 +223,10 @@ export default function PodcastScreen({
   const [error, setError] = useState<string | null>(null);
 
   const scrollY = useSharedValue(0);
+  const internalScrollHandler = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y;
+  });
+  const scrollHandler = onScroll ?? internalScrollHandler;
 
   const headerAnimatedStyle = useAnimatedStyle(() => ({
     opacity: interpolate(scrollY.value, [0, 50], [0, 1], Extrapolate.CLAMP),
@@ -327,9 +331,7 @@ export default function PodcastScreen({
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingTop: 10 + paddingTop, paddingBottom: 120 + paddingBottom }]}
-        onScroll={onScroll || useAnimatedScrollHandler((e) => {
-          scrollY.value = e.contentOffset.y;
-        })}
+        onScroll={scrollHandler}
         scrollEventThrottle={16}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[palette.primary]} tintColor={palette.primary} />

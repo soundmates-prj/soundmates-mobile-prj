@@ -1,19 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { registerRootComponent } from 'expo';
-import React, { useCallback, useEffect, useState } from 'react';
-import { StatusBar, StyleSheet, View } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { registerRootComponent } from 'expo';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { StatusBar, StyleSheet, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { SoundMateDarkColors, SoundMateLightColors } from './constants/theme';
-import { authService, livestreamService, registerUnauthorizedHandler } from './src/api';
+import { authService, registerUnauthorizedHandler } from './src/api';
 import { showToast, toastConfig } from './src/components/ui/Toast';
+import { AudioPlayerProvider } from './src/context/AudioPlayerContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { UserProvider, useUser } from './src/context/UserContext';
-import { AudioPlayerProvider } from './src/context/AudioPlayerContext';
 import {
+    EditProfileScreen,
     ForgotPasswordScreen,
     HomeScreen,
     HostBroadcastScreen,
@@ -27,7 +28,6 @@ import {
     ProfileSetupScreen,
     RegisterScreen,
     SubscriptionScreen,
-    EditProfileScreen,
 } from './src/pages';
 import type { TabName } from './src/pages/BottomNavigation';
 import type { SelectedPlan } from './src/pages/subscription/PaymentCheckoutScreen';
@@ -67,8 +67,9 @@ function AppContent() {
     const { clearUser, refreshUser, user } = useUser();
     const { isDarkMode } = useTheme();
     const navigationRef = useNavigationContainerRef<RootStackParamList>();
-    const [currentRouteName, setCurrentRouteName] = useState<string | undefined>(undefined);
+    const [isLiveRoute, setIsLiveRoute] = useState(false);
     const [isAuthChecked, setIsAuthChecked] = useState(false);
+    const [isNavigationReady, setIsNavigationReady] = useState(false);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [userEmail, setUserEmail] = useState<string>('');
     const [pendingPassword, setPendingPassword] = useState<string>('');
@@ -78,8 +79,57 @@ function AppContent() {
     const [selectedPlan, setSelectedPlan] = useState<SelectedPlan | null>(null);
     const [paymentResultType, setPaymentResultType] = useState<'success' | 'failed'>('success');
     const [paymentResultMessage, setPaymentResultMessage] = useState<string>('');
-    const useDarkThemeShell = isDarkMode && currentRouteName !== 'Live';
+    const pendingNavigationActionsRef = useRef<Array<() => void>>([]);
+    const useDarkThemeShell = isDarkMode && !isLiveRoute;
     const appBackground = useDarkThemeShell ? SoundMateDarkColors.background : SoundMateLightColors.background;
+
+    const syncRouteMeta = useCallback(() => {
+        const isLive = navigationRef.getCurrentRoute()?.name === 'Live';
+        setIsLiveRoute((prev) => (prev === isLive ? prev : isLive));
+    }, [navigationRef]);
+
+    const runOrQueueNavigationAction = useCallback((action: () => void) => {
+        if (navigationRef.isReady()) {
+            action();
+            return;
+        }
+
+        pendingNavigationActionsRef.current.push(action);
+    }, [navigationRef]);
+
+    const flushPendingNavigationActions = useCallback(() => {
+        if (!navigationRef.isReady() || pendingNavigationActionsRef.current.length === 0) {
+            return;
+        }
+
+        const actions = [...pendingNavigationActionsRef.current];
+        pendingNavigationActionsRef.current = [];
+        actions.forEach((action) => action());
+    }, [navigationRef]);
+
+    const safeNavigate = useCallback(<T extends keyof RootStackParamList>(
+        name: T,
+        params?: RootStackParamList[T],
+    ) => {
+        runOrQueueNavigationAction(() => {
+            if (params === undefined) {
+                navigationRef.navigate(name);
+            } else {
+                navigationRef.navigate(name, params);
+            }
+        });
+    }, [navigationRef, runOrQueueNavigationAction]);
+
+    const safeGoBack = useCallback(() => {
+        runOrQueueNavigationAction(() => {
+            if (navigationRef.canGoBack()) {
+                navigationRef.goBack();
+                return;
+            }
+
+            navigationRef.navigate(isAuthenticated ? 'Home' : 'Login');
+        });
+    }, [isAuthenticated, navigationRef, runOrQueueNavigationAction]);
 
     // Bootstrap app state before rendering the main navigation flow.
     useEffect(() => {
@@ -212,7 +262,7 @@ function AppContent() {
         }
 
         // Navigate immediately so user can input OTP right away
-        navigationRef.navigate('OTP');
+        safeNavigate('OTP');
 
         // Send verification OTP
         showToast.info('Xác thực email', 'Đang gửi mã xác thực đến email của bạn...');
@@ -229,7 +279,7 @@ function AppContent() {
                 showToast.warning('Lưu ý', 'Không thể gửi lại mã OTP. Vui lòng thử gửi lại mã trong màn hình xác thực.');
             }
         })();
-    }, []);
+    }, [safeNavigate]);
 
     // Handle registration success - go to OTP
     const handleRegisterSuccess = useCallback(async (email?: string, password?: string) => {
@@ -246,8 +296,8 @@ function AppContent() {
             }
         }
         setIsNewRegistration(true);
-        navigationRef.navigate('OTP');
-    }, []);
+        safeNavigate('OTP');
+    }, [safeNavigate]);
 
     // Handle OTP verification success
     const handleOTPVerifySuccess = useCallback(async () => {
@@ -281,7 +331,7 @@ function AppContent() {
                     // If new registration, go to profile setup; otherwise go to home
                     if (isNewRegistration) {
                         showToast.success('Xác thực thành công!', 'Hãy hoàn thiện hồ sơ của bạn');
-                        navigationRef.navigate('ProfileSetup');
+                        safeNavigate('ProfileSetup');
                     } else {
                         showToast.success('�ăng nhập thành công!', 'Chào mừng bạn quay trở lại!');
                         setIsAuthenticated(true);
@@ -308,6 +358,7 @@ function AppContent() {
         establishAuthenticatedSession,
         isNewRegistration,
         pendingPassword,
+        safeNavigate,
         userEmail,
     ]);
 
@@ -329,15 +380,19 @@ function AppContent() {
         if (!user?.roleName) return;
 
         // Prevent redirect loop — only redirect if not already on host pages
+        if (!navigationRef.isReady()) {
+            return;
+        }
+
         const currentRoute = navigationRef.getCurrentRoute()?.name;
         if (currentRoute === 'HostLiveManager' || currentRoute === 'HostBroadcast') return;
 
         const role = user.roleName.toLowerCase();
         if (role === 'host' || role === 'admin') {
-            navigationRef.navigate('HostLiveManager');
+            safeNavigate('HostLiveManager');
         }
         // Members and other roles go to Home (default)
-    }, [isAuthenticated, isAuthChecked, user?.roleName]);
+    }, [isAuthenticated, isAuthChecked, navigationRef, safeNavigate, user?.roleName]);
 
     const handleLogout = useCallback(async () => {
         await clearAuthTokens();
@@ -347,52 +402,52 @@ function AppContent() {
     const handleBackToHome = useCallback((tab: TabName = 'home') => {
         const entryTab: HomeEntryTab = tab === 'blog' || tab === 'podcast' ? tab : 'home';
         setHomeEntryTab(entryTab);
-        navigationRef.goBack();
-    }, []);
+        safeGoBack();
+    }, [safeGoBack]);
 
     // ─── Payment flow navigation ─────────────────────
     const handleNavigateToSubscription = useCallback(() => {
-        navigationRef.navigate('Subscription');
-    }, []);
+        safeNavigate('Subscription');
+    }, [safeNavigate]);
 
     const handleSubscriptionBack = useCallback(() => {
-        navigationRef.goBack();
-    }, []);
+        safeGoBack();
+    }, [safeGoBack]);
 
     const handleSelectPlan = useCallback((plan: SelectedPlan) => {
         setSelectedPlan(plan);
-        navigationRef.navigate('PaymentCheckout');
-    }, []);
+        safeNavigate('PaymentCheckout');
+    }, [safeNavigate]);
 
     const handlePaymentCheckoutBack = useCallback(() => {
-        navigationRef.goBack();
-    }, []);
+        safeGoBack();
+    }, [safeGoBack]);
 
     const handlePaymentSuccess = useCallback(() => {
         setPaymentResultType('success');
         setPaymentResultMessage('');
-        navigationRef.navigate('PaymentResult');
-    }, []);
+        safeNavigate('PaymentResult');
+    }, [safeNavigate]);
 
     const handlePaymentFailed = useCallback((reason?: string) => {
         setPaymentResultType('failed');
         setPaymentResultMessage(reason || '');
-        navigationRef.navigate('PaymentResult');
-    }, []);
+        safeNavigate('PaymentResult');
+    }, [safeNavigate]);
 
     const handlePaymentResultDone = useCallback(() => {
         setSelectedPlan(null);
         setHomeEntryTab('home');
-        navigationRef.navigate('Home');
-    }, []);
+        safeNavigate('Home');
+    }, [safeNavigate]);
 
     const handlePaymentRetry = useCallback(() => {
         if (selectedPlan) {
-            navigationRef.navigate('PaymentCheckout');
+            safeNavigate('PaymentCheckout');
         } else {
-            navigationRef.navigate('Subscription');
+            safeNavigate('Subscription');
         }
-    }, [selectedPlan]);
+    }, [safeNavigate, selectedPlan]);
 
     useEffect(() => {
         const unregisterUnauthorizedHandler = registerUnauthorizedHandler(async () => {
@@ -417,14 +472,14 @@ function AppContent() {
         if (!isAuthChecked) {
             return;
         }
-        if (!navigationRef.isReady()) {
+        if (!isNavigationReady || !navigationRef.isReady()) {
             return;
         }
         navigationRef.reset({
             index: 0,
             routes: [{ name: isAuthenticated ? 'Home' : 'Login' }],
         });
-    }, [isAuthenticated, isAuthChecked, navigationRef]);
+    }, [isAuthenticated, isAuthChecked, isNavigationReady]);
 
     return (
         <SafeAreaProvider>
@@ -439,8 +494,12 @@ function AppContent() {
                 ) : (
                     <NavigationContainer
                         ref={navigationRef}
-                        onReady={() => setCurrentRouteName(navigationRef.getCurrentRoute()?.name)}
-                        onStateChange={() => setCurrentRouteName(navigationRef.getCurrentRoute()?.name)}
+                        onReady={() => {
+                            setIsNavigationReady(true);
+                            flushPendingNavigationActions();
+                            syncRouteMeta();
+                        }}
+                        onStateChange={syncRouteMeta}
                     >
                         <Stack.Navigator
                             screenOptions={{
@@ -503,8 +562,9 @@ function AppContent() {
                                     <HomeScreen
                                         initialTab={homeEntryTab}
                                         onLogout={handleLogout}
-                                        onNavigateToProfile={() => props.navigation.navigate('Profile')}
                                         onNavigateToLive={() => props.navigation.navigate('Live')}
+                                        onNavigateToForgotPassword={() => props.navigation.navigate('ForgotPassword', { prefillEmail: userEmail })}
+                                        onNavigateToSubscription={handleNavigateToSubscription}
                                     />
                                 )}
                             </Stack.Screen>

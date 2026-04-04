@@ -37,4 +37,6 @@ export { podcastService } from './podcastService';
 export type { PodcastResponse } from './podcastService';
 export { spotifyService } from './spotifyService';
 export type { SpotifyAlbum, SpotifyArtist, SpotifySearchResult, SpotifyTrack } from './spotifyService';
+export { uploadService } from './uploadService';
+export type { UploadImagePayload } from './uploadService';
 

@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useState } from 'react';
 import {
@@ -22,10 +23,9 @@ import Animated, {
     useSharedValue,
     withSpring,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import { showToast } from '../../components/ui/Toast';
 import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/theme';
 import { authService } from '../../api';
+import { showToast } from '../../components/ui/Toast';
 import { useTheme } from '../../context/ThemeContext';
 
 interface RegisterScreenProps {
@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     scrollContent: {
         flexGrow: 1,
         paddingHorizontal: 30,
-        paddingTop: 60,
+        // paddingTop: 60,
         paddingBottom: 40,
     },
     page: {
@@ -281,7 +281,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'flex-start',
-        marginBottom: 30,
+        marginBottom: 10,
+        marginTop: 10,
     },
     backButton: {
         width: 44,
