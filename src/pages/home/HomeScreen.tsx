@@ -17,6 +17,7 @@ import {
 import { BlogPostCard, DisplayPost } from '../../components/blog/BlogPostCard';
 import FormTextField from '../../components/ui/FormTextField';
 import { useTheme } from '../../context/ThemeContext';
+import { useUser } from '../../context/UserContext';
 import BlogScreen from '../blog/BlogScreen';
 import CreatePostScreen from '../blog/CreatePostScreen';
 import PostDetailScreen from '../blog/PostDetailScreen';
@@ -141,6 +142,7 @@ export default function HomeScreen({
     onNavigateToSubscription,
 }: HomeScreenProps) {
     const { isDarkMode } = useTheme();
+    const { user } = useUser();
     const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
     const [activeTab, setActiveTab] = useState<TabName>(initialTab);
     const [showCreatePost, setShowCreatePost] = useState(false);
@@ -456,7 +458,12 @@ export default function HomeScreen({
         setActiveTab('live');
     };
 
-    const handleToggleCommunityLike = useCallback((postId: string) => {
+    const handleToggleCommunityLike = useCallback(async (postId: string) => {
+        const targetPost = communityPosts.find((post) => post.id === postId);
+        if (!targetPost) {
+            return;
+        }
+
         setCommunityPosts((prevPosts) =>
             prevPosts.map((post) => {
                 if (post.id !== postId) {
@@ -464,15 +471,37 @@ export default function HomeScreen({
                 }
 
                 const nextLiked = !post.isLiked;
-
                 return {
                     ...post,
                     isLiked: nextLiked,
                     reactionCount: Math.max(0, post.reactionCount + (nextLiked ? 1 : -1)),
                 };
-            })
+            }),
         );
-    }, []);
+
+        try {
+            const result = targetPost.isLiked
+                ? await blogService.removeReaction(postId)
+                : await blogService.addReaction(postId, 'like');
+
+            if (!result.success) {
+                throw new Error(result.message || 'Không thể cập nhật phản ứng');
+            }
+        } catch (error) {
+            console.log('[HomeScreen] handleToggleCommunityLike error:', error);
+            setCommunityPosts((prevPosts) =>
+                prevPosts.map((post) =>
+                    post.id === postId
+                        ? {
+                            ...post,
+                            isLiked: targetPost.isLiked,
+                            reactionCount: targetPost.reactionCount,
+                        }
+                        : post,
+                ),
+            );
+        }
+    }, [communityPosts]);
 
     const fetchCommunityPosts = useCallback(async () => {
         setIsCommunityLoading(true);
@@ -494,6 +523,12 @@ export default function HomeScreen({
                     return {
                         id: post.id,
                         userId: post.userId,
+                        userFullName:
+                            (post as PopularPostResponse & { user_full_name?: string }).userFullName
+                            || (post as PopularPostResponse & { user_full_name?: string }).user_full_name,
+                        userAvatarUrl:
+                            (post as PopularPostResponse & { user_avatar_url?: string }).userAvatarUrl
+                            || (post as PopularPostResponse & { user_avatar_url?: string }).user_avatar_url,
                         title: post.title,
                         contentText: post.contentText,
                         imageUrl: post.imgUrl || null,
@@ -510,7 +545,27 @@ export default function HomeScreen({
                         isLiked: false,
                     };
                 });
-                setCommunityPosts(mappedPosts);
+
+                if (user?.userId) {
+                    const enrichedPosts = await Promise.all(
+                        mappedPosts.map(async (post) => {
+                            try {
+                                const reactions = await blogService.getPostReactions(post.id);
+                                const isLiked = !!reactions.data?.some((reaction) => reaction.userId === user.userId);
+                                return {
+                                    ...post,
+                                    isLiked,
+                                };
+                            } catch {
+                                return post;
+                            }
+                        }),
+                    );
+
+                    setCommunityPosts(enrichedPosts);
+                } else {
+                    setCommunityPosts(mappedPosts);
+                }
             } else {
                 setCommunityPosts([]);
             }
@@ -520,7 +575,7 @@ export default function HomeScreen({
         } finally {
             setIsCommunityLoading(false);
         }
-    }, []);
+    }, [user?.userId]);
 
     const fetchLiveBannerData = useCallback(async () => {
         try {

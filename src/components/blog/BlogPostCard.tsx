@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -157,19 +156,31 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
                 style={styles.contentContainer}
             >
                 {(post.imageUrl || post.imgUrl) ? (
-                    <View style={styles.imageWrapper}>
-                        <Image source={{ uri: post.imageUrl || post.imgUrl! }} style={styles.postImage} resizeMode="cover" />
-                        {post.moodTag && (
-                            <BlurView intensity={60} tint="dark" style={styles.tagBadge}>
-                                <Text style={styles.tagText}>#{post.moodTag}</Text>
-                            </BlurView>
-                        )}
-                        {post.audioUrl && (
-                            <View style={styles.audioIndicator}>
-                                <Ionicons name="musical-notes" size={14} color="#FFF" />
-                            </View>
-                        )}
-                    </View>
+                    <>
+                        <View style={styles.imagePostMeta}>
+                            <Text style={[styles.imagePostTitle, { color: palette.textPrimary }]} numberOfLines={2}>
+                                {post.title}
+                            </Text>
+                            {!!post.contentText && (
+                                <Text style={[styles.imagePostContent, { color: palette.textSecondary }]} numberOfLines={3}>
+                                    {post.contentText}
+                                </Text>
+                            )}
+                            {!!post.moodTag && (
+                                <View style={[styles.imagePostTag, { backgroundColor: palette.primary + '18' }]}>
+                                    <Text style={[styles.imagePostTagText, { color: palette.primary }]}>#{post.moodTag}</Text>
+                                </View>
+                            )}
+                        </View>
+                        <View style={styles.imageWrapper}>
+                            <Image source={{ uri: post.imageUrl || post.imgUrl! }} style={styles.postImage} resizeMode="cover" />
+                            {post.audioUrl && (
+                                <View style={styles.audioIndicator}>
+                                    <Ionicons name="musical-notes" size={14} color="#FFF" />
+                                </View>
+                            )}
+                        </View>
+                    </>
                 ) : (
                     <View style={[styles.textOnlyContent, { backgroundColor: palette.primary + '05' }]}>
                         <Text style={[styles.textTitle, { color: palette.textPrimary }]}>{post.title}</Text>
@@ -209,7 +220,7 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
                 <Text style={[styles.likesCount, { color: palette.textPrimary }]}>
                     {formatNumber(likeCountLocal)} lượt thích
                 </Text>
-                {(post.imageUrl || post.imgUrl) && (
+                {/* {(post.imageUrl || post.imgUrl) && (
                     <View style={styles.captionRow}>
                         <Text style={[styles.captionUsername, { color: palette.textPrimary }]}>
                             {displayName}{' '}
@@ -218,7 +229,7 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
                             </Text>
                         </Text>
                     </View>
-                )}
+                )} */}
                 {post.commentCount > 0 && (
                     <TouchableOpacity onPress={() => onNavigateToDetail?.(post.id)}>
                         <Text style={[styles.viewComments, { color: palette.textMuted }]}>
@@ -271,6 +282,30 @@ const styles = StyleSheet.create({
     contentContainer: {
         width: '100%',
     },
+    imagePostMeta: {
+        paddingHorizontal: 14,
+        paddingBottom: 10,
+        gap: 6,
+    },
+    imagePostTitle: {
+        fontSize: 16,
+        fontWeight: '800',
+        lineHeight: 22,
+    },
+    imagePostContent: {
+        fontSize: 14,
+        lineHeight: 20,
+    },
+    imagePostTag: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 999,
+    },
+    imagePostTagText: {
+        fontSize: 12,
+        fontWeight: '700',
+    },
     imageWrapper: {
         width: '100%',
         aspectRatio: 1,
@@ -280,20 +315,6 @@ const styles = StyleSheet.create({
     postImage: {
         width: '100%',
         height: '100%',
-    },
-    tagBadge: {
-        position: 'absolute',
-        top: 12,
-        right: 12,
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 20,
-        overflow: 'hidden',
-    },
-    tagText: {
-        color: '#FFF',
-        fontSize: 12,
-        fontWeight: '700',
     },
     audioIndicator: {
         position: 'absolute',

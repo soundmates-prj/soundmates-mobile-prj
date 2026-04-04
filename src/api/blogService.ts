@@ -97,6 +97,8 @@ export interface CommentResponse {
     postId: string;
     parentCommentId: string;
     userId: string;
+    userFullName: string;
+    userAvatarUrl?: string;
     content: string;
     status: string;
     createdAt: string;

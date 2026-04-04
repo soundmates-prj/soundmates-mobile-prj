@@ -1,22 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
     Image,
     Keyboard,
+    Platform,
     RefreshControl,
+    TextInput as RNTextInput,
     ScrollView,
     StyleSheet,
     Text,
-    TextInput as RNTextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Haptics from 'expo-haptics';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import {
     blogService,
@@ -52,6 +53,7 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
     const [replyingTo, setReplyingTo] = useState<{ commentId: string; username: string } | null>(null);
     const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
     const [isLiked, setIsLiked] = useState(false);
+    const [keyboardOffset, setKeyboardOffset] = useState(0);
     const inputRef = React.useRef<RNTextInput>(null);
 
     const fetchData = useCallback(async (refresh = false) => {
@@ -71,17 +73,48 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
             }
             if (statsRes.success && statsRes.data) setStats(statsRes.data);
             if (commentsRes.success && commentsRes.data) setComments(commentsRes.data.items || []);
+
+            if (user?.userId) {
+                try {
+                    const reactionsRes = await blogService.getPostReactions(postId);
+                    const liked = !!reactionsRes.data?.some((reaction) => reaction.userId === user.userId);
+                    setIsLiked(liked);
+                } catch {
+                    setIsLiked(false);
+                }
+            } else {
+                setIsLiked(false);
+            }
         } catch (error) {
             console.error('Fetch post detail error:', error);
         } finally {
             setIsLoading(false);
             setIsRefreshing(false);
         }
-    }, [postId]);
+    }, [postId, user?.userId]);
 
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    useEffect(() => {
+        const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+        const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+        const showSubscription = Keyboard.addListener(showEvent, (event) => {
+            const keyboardHeight = event.endCoordinates?.height || 0;
+            setKeyboardOffset(Math.max(keyboardHeight - insets.bottom, 0));
+        });
+
+        const hideSubscription = Keyboard.addListener(hideEvent, () => {
+            setKeyboardOffset(0);
+        });
+
+        return () => {
+            showSubscription.remove();
+            hideSubscription.remove();
+        };
+    }, [insets.bottom]);
 
     const handleLike = async () => {
         if (!post) return;
@@ -91,7 +124,13 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
         setStats(prev => prev ? { ...prev, reactionCount: newLikedState ? prev.reactionCount + 1 : prev.reactionCount - 1 } : null);
 
         try {
-            await blogService.addReaction(postId, 'like');
+            const result = isLiked
+                ? await blogService.removeReaction(postId)
+                : await blogService.addReaction(postId, 'like');
+
+            if (!result.success) {
+                throw new Error(result.message || 'Không thể cập nhật phản ứng');
+            }
         } catch (error) {
             setIsLiked(!newLikedState);
             setStats(prev => prev ? { ...prev, reactionCount: !newLikedState ? prev.reactionCount + 1 : prev.reactionCount - 1 } : null);
@@ -205,13 +244,13 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
             >
                 <View style={styles.commentMainRow}>
                     <Image
-                        source={{ uri: `https://api.dicebear.com/7.x/initials/png?seed=${comment.userId}&backgroundColor=55C5F1` }}
+                        source={{ uri: comment.userAvatarUrl || `https://api.dicebear.com/7.x/initials/png?seed=${comment.userId}&backgroundColor=55C5F1` }}
                         style={styles.commentAvatar}
                     />
                     <View style={styles.commentBubbleWrapper}>
                         <View style={[styles.commentBubble, { backgroundColor: isDarkMode ? '#262626' : '#F3F4F6' }]}>
                             <Text style={[styles.commentAuthor, { color: palette.textPrimary }]}>
-                                {comment.userId.substring(0, 10)}
+                                {comment.userFullName}
                             </Text>
                             <Text style={[styles.commentText, { color: palette.textSecondary }]}>
                                 {comment.content}
@@ -221,7 +260,7 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                             <Text style={[styles.commentTime, { color: palette.textMuted }]}>
                                 {formatTimeAgo(comment.createdAt)}
                             </Text>
-                            <TouchableOpacity onPress={() => handleReplyPress(comment.id, comment.userId.substring(0, 10))}>
+                            <TouchableOpacity onPress={() => handleReplyPress(comment.id, comment.userFullName)}>
                                 <Text style={[styles.commentActionText, { color: palette.textMuted }]}>Phản hồi</Text>
                             </TouchableOpacity>
                             {user?.userId === comment.userId && (
@@ -272,6 +311,7 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                 style={styles.scrollArea}
                 contentContainerStyle={{ paddingBottom: 100 }}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
                 refreshControl={
                     <RefreshControl refreshing={isRefreshing} onRefresh={() => fetchData(true)} tintColor={palette.primary} />
                 }
@@ -284,7 +324,7 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                                 style={styles.authorAvatar}
                             />
                             <View>
-                                <Text style={[styles.authorName, { color: palette.textPrimary }]}>{post.userId.substring(0, 10)}</Text>
+                                <Text style={[styles.authorName, { color: palette.textPrimary }]}>{post.userFullName || post.userId.substring(0, 10)}</Text>
                                 <Text style={[styles.postTime, { color: palette.textMuted }]}>{formatTimeAgo(post.publishedAt || post.createdAt)}</Text>
                             </View>
                         </View>
@@ -330,7 +370,13 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
             <BlurView
                 intensity={90}
                 tint={isDarkMode ? 'dark' : 'light'}
-                style={[styles.inputWrapper, { paddingBottom: Math.max(insets.bottom, 20) }]}
+                style={[
+                    styles.inputWrapper,
+                    {
+                        bottom: keyboardOffset,
+                        paddingBottom: keyboardOffset > 0 ? 45 : Math.max(insets.bottom, 20)
+                    }
+                ]}
             >
                 {(replyingTo || editingCommentId) && (
                     <View style={styles.replyPreview}>
@@ -378,12 +424,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     header: {
-        height: 100,
+        height: 50,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
-        paddingTop: 40,
         zIndex: 10,
     },
     backButton: {

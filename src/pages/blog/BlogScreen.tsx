@@ -20,6 +20,7 @@ import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/th
 import { blogService } from '../../api';
 import { BlogPostCard } from '../../components/blog/BlogPostCard';
 import { useTheme } from '../../context/ThemeContext';
+import { useUser } from '../../context/UserContext';
 
 type TabType = 'trending' | 'newest' | 'following';
 
@@ -41,6 +42,7 @@ export default function BlogScreen({
     onScroll
 }: BlogScreenProps) {
     const { isDarkMode } = useTheme();
+    const { user } = useUser();
     const palette = isDarkMode ? SoundMateDarkColors : SoundMateLightColors;
     const [activeTab, setActiveTab] = useState<TabType>('trending');
     const [posts, setPosts] = useState<any[]>([]);
@@ -77,7 +79,35 @@ export default function BlogScreen({
                 : await blogService.getPublishedPosts({ page: 1, pageSize: 20 });
 
             if (response.success) {
-                setPosts(response.data?.items || []);
+                const normalizedPosts = (response.data?.items || []).map((post: any) => ({
+                    ...post,
+                    imageUrl: post.imageUrl ?? post.imgUrl ?? null,
+                    reactionCount: Number.isFinite(post.reactionCount) ? post.reactionCount : 0,
+                    commentCount: Number.isFinite(post.commentCount) ? post.commentCount : 0,
+                    viewCount: Number.isFinite(post.viewCount) ? post.viewCount : 0,
+                    isLiked: false,
+                }));
+
+                if (user?.userId) {
+                    const enrichedPosts = await Promise.all(
+                        normalizedPosts.map(async (post: any) => {
+                            try {
+                                const reactions = await blogService.getPostReactions(post.id);
+                                const isLiked = !!reactions.data?.some((reaction) => reaction.userId === user.userId);
+                                return {
+                                    ...post,
+                                    isLiked,
+                                };
+                            } catch {
+                                return post;
+                            }
+                        }),
+                    );
+
+                    setPosts(enrichedPosts);
+                } else {
+                    setPosts(normalizedPosts);
+                }
             }
         } catch (error) {
             console.error('Fetch posts error:', error);
@@ -85,7 +115,7 @@ export default function BlogScreen({
             setIsLoading(false);
             setIsRefreshing(false);
         }
-    }, [activeTab]);
+    }, [activeTab, user?.userId]);
 
     useEffect(() => {
         fetchPosts();
@@ -102,10 +132,48 @@ export default function BlogScreen({
     };
 
     const handleLike = async (postId: string) => {
+        const targetPost = posts.find((post) => post.id === postId);
+        if (!targetPost) {
+            return;
+        }
+
+        setPosts((prevPosts) =>
+            prevPosts.map((post) => {
+                if (post.id !== postId) {
+                    return post;
+                }
+
+                const nextLiked = !post.isLiked;
+                return {
+                    ...post,
+                    isLiked: nextLiked,
+                    reactionCount: Math.max(0, post.reactionCount + (nextLiked ? 1 : -1)),
+                };
+            }),
+        );
+
         try {
-            await blogService.addReaction(postId, 'like');
+            const result = targetPost.isLiked
+                ? await blogService.removeReaction(postId)
+                : await blogService.addReaction(postId, 'like');
+
+            if (!result.success) {
+                throw new Error(result.message || 'Không thể cập nhật phản ứng');
+            }
         } catch (error) {
             console.error('Like post error:', error);
+
+            setPosts((prevPosts) =>
+                prevPosts.map((post) =>
+                    post.id === postId
+                        ? {
+                            ...post,
+                            isLiked: targetPost.isLiked,
+                            reactionCount: targetPost.reactionCount,
+                        }
+                        : post,
+                ),
+            );
         }
     };
 
