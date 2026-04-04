@@ -4,7 +4,7 @@
  */
 
 // Config
-export { API_CONFIG, AUTH_ENDPOINTS, BLOG_ENDPOINTS, FAVORITE_ENDPOINTS, LIVESTREAM_ENDPOINTS, PAYMENT_ENDPOINTS, PODCAST_ENDPOINTS, SPOTIFY_ENDPOINTS, SUBSCRIPTION_ENDPOINTS, TRANSACTION_ENDPOINTS, USER_ENDPOINTS } from './config';
+export { API_CONFIG, AUTH_ENDPOINTS, BLOG_ENDPOINTS, FAVORITE_ENDPOINTS, LIVESTREAM_ENDPOINTS, MUSIC_CATALOG_ENDPOINTS, PAYMENT_ENDPOINTS, PODCAST_ENDPOINTS, SPOTIFY_ENDPOINTS, SUBSCRIPTION_ENDPOINTS, TRANSACTION_ENDPOINTS, USER_ENDPOINTS, USER_PLAYLIST_ENDPOINTS } from './config';
 
 // API Client
 export { authApiClient, handleApiError, registerUnauthorizedHandler } from './apiClient';
@@ -39,4 +39,13 @@ export { spotifyService } from './spotifyService';
 export type { SpotifyAlbum, SpotifyArtist, SpotifySearchResult, SpotifyTrack } from './spotifyService';
 export { uploadService } from './uploadService';
 export type { UploadImagePayload } from './uploadService';
+export { userPlaylistService } from './userPlaylistService';
+export type {
+    CreateUserPlaylistRequest,
+    MusicCatalogItemResponse,
+    PlaylistTrackResponse,
+    PlaylistVisibility,
+    UpdateUserPlaylistRequest,
+    UserPlaylistResponse
+} from './userPlaylistService';
 

@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -11,15 +12,13 @@ import {
     View,
 } from 'react-native';
 import Animated, {
-    FadeInDown,
     useAnimatedScrollHandler,
     useAnimatedStyle,
-    useSharedValue,
+    useSharedValue
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import { BlogPostCard } from '../../components/blog/BlogPostCard';
 import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/theme';
 import { blogService } from '../../api';
+import { BlogPostCard } from '../../components/blog/BlogPostCard';
 import { useTheme } from '../../context/ThemeContext';
 
 type TabType = 'trending' | 'newest' | 'following';
@@ -199,7 +198,7 @@ const styles = StyleSheet.create({
         top: 0,
         left: 0,
         right: 0,
-        height: 100,
+        height: 50,
         zIndex: 10,
         justifyContent: 'flex-end',
         alignItems: 'center',

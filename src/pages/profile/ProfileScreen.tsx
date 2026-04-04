@@ -7,19 +7,36 @@ import {
   Alert,
   Dimensions,
   Image,
+  KeyboardAvoidingView,
   Linking,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View
 } from 'react-native';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
-import { authService, BlogPostResponse, blogService, paymentService, ReactionResponse, UpdateProfileRequest, uploadService } from '../../api';
+import {
+  authService,
+  BlogPostResponse,
+  blogService,
+  FavoriteItemResponse,
+  favoriteService,
+  paymentService,
+  PlaylistVisibility,
+  ReactionResponse,
+  UpdateProfileRequest,
+  uploadService,
+  UserPlaylistResponse,
+  userPlaylistService,
+} from '../../api';
 import { BlogPostCard, DisplayPost } from '../../components/blog/BlogPostCard';
+import FormTextField from '../../components/ui/FormTextField';
 import { showToast } from '../../components/ui/Toast';
 import { ThemePreference, useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
@@ -30,10 +47,45 @@ import AccountInfoScreen from './AccountInfoScreen';
 import ChangePasswordScreen from './ChangePasswordScreen';
 import EditProfileScreen from './EditProfileScreen';
 import SubscriptionDetailsScreen from './SubscriptionDetailsScreen';
+import PlaylistDetailModal from './components/PlaylistDetailModal';
 
 const { width } = Dimensions.get('window');
 
 const defaultAvatarUrl = 'https://i.pravatar.cc/150?img=10';
+const profileContentTabs = [
+  { key: 'posts', label: 'Bài viết', icon: 'create-outline' },
+  { key: 'playlists', label: 'Playlist', icon: 'musical-notes-outline' },
+  { key: 'favorites', label: 'Yêu thích', icon: 'heart-outline' },
+] as const;
+
+const favoriteItemTypeOptions = [
+  { label: 'Bài hát', value: 'track' },
+  { label: 'Playlist', value: 'playlist' },
+  { label: 'Podcast', value: 'podcast' },
+] as const;
+
+const favoriteSourceOptions = [
+  { label: 'Spotify', value: 'spotify' },
+  { label: 'Local', value: 'local' },
+  { label: 'Khác', value: 'other' },
+] as const;
+
+type ProfileContentTab = typeof profileContentTabs[number]['key'];
+
+const normalizePlaylistVisibility = (visibility: number | undefined): PlaylistVisibility => {
+  if (visibility === 0 || visibility === 2) {
+    return visibility;
+  }
+
+  return 1;
+};
+
+const getPlaylistVisibilityLabel = (visibility: number | undefined): string => {
+  const normalized = normalizePlaylistVisibility(visibility);
+  if (normalized === 0) return 'Công khai';
+  if (normalized === 2) return 'Không liệt kê';
+  return 'Riêng tư';
+};
 
 // ─── Data ───────────────────────────────────────────────
 
@@ -79,6 +131,14 @@ function sortPostsNewestFirst(posts: DisplayPost[]): DisplayPost[] {
   return [...posts].sort((a, b) => {
     const timeA = new Date(a.publishedAt || a.createdAt).getTime();
     const timeB = new Date(b.publishedAt || b.createdAt).getTime();
+    return timeB - timeA;
+  });
+}
+
+function sortPlaylistsNewestFirst(playlists: UserPlaylistResponse[]): UserPlaylistResponse[] {
+  return [...playlists].sort((a, b) => {
+    const timeA = new Date(a.updatedAt || a.createdAt).getTime();
+    const timeB = new Date(b.updatedAt || b.createdAt).getTime();
     return timeB - timeA;
   });
 }
@@ -269,6 +329,27 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
   const [showThemePickerPopup, setShowThemePickerPopup] = useState(false);
   const [subscriptionPlanName, setSubscriptionPlanName] = useState('Premium');
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null);
+  const [activeProfileTab, setActiveProfileTab] = useState<ProfileContentTab>('posts');
+  const [favoriteItemTypeFilter, setFavoriteItemTypeFilter] = useState<string>('track');
+  const [favoriteSourceFilter, setFavoriteSourceFilter] = useState<string>('spotify');
+  const [favoriteItems, setFavoriteItems] = useState<FavoriteItemResponse[]>([]);
+  const [isFavoritesLoading, setIsFavoritesLoading] = useState(false);
+  const [isFavoritesRefreshing, setIsFavoritesRefreshing] = useState(false);
+  const [userPlaylists, setUserPlaylists] = useState<UserPlaylistResponse[]>([]);
+  const [isPlaylistsLoading, setIsPlaylistsLoading] = useState(false);
+  const [isPlaylistsRefreshing, setIsPlaylistsRefreshing] = useState(false);
+  const [showPlaylistEditor, setShowPlaylistEditor] = useState(false);
+  const [playlistEditorTarget, setPlaylistEditorTarget] = useState<UserPlaylistResponse | null>(null);
+  const [playlistNameInput, setPlaylistNameInput] = useState('');
+  const [playlistDescriptionInput, setPlaylistDescriptionInput] = useState('');
+  const [playlistThumbnailInput, setPlaylistThumbnailInput] = useState('');
+  const [playlistVisibilityInput, setPlaylistVisibilityInput] = useState<PlaylistVisibility>(1);
+  const [playlistEnabledInput, setPlaylistEnabledInput] = useState(true);
+  const [isUploadingPlaylistThumbnail, setIsUploadingPlaylistThumbnail] = useState(false);
+  const [showPlaylistThumbnailOptions, setShowPlaylistThumbnailOptions] = useState(false);
+  const [isSavingPlaylist, setIsSavingPlaylist] = useState(false);
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
+  const [selectedPlaylistPreview, setSelectedPlaylistPreview] = useState<UserPlaylistResponse | null>(null);
 
   const themeLabel = themePreference === 'system'
     ? `Tự động (${effectiveTheme === 'dark' ? 'Tối' : 'Sáng'})`
@@ -544,6 +625,301 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
     }
   };
 
+  const resetPlaylistEditor = useCallback(() => {
+    setPlaylistEditorTarget(null);
+    setPlaylistNameInput('');
+    setPlaylistDescriptionInput('');
+    setPlaylistThumbnailInput('');
+    setPlaylistVisibilityInput(1);
+    setPlaylistEnabledInput(true);
+    setShowPlaylistThumbnailOptions(false);
+  }, []);
+
+  const openCreatePlaylistEditor = useCallback(() => {
+    resetPlaylistEditor();
+    setShowPlaylistEditor(true);
+  }, [resetPlaylistEditor]);
+
+  const closePlaylistEditor = useCallback(() => {
+    if (isSavingPlaylist || isUploadingPlaylistThumbnail) return;
+    setShowPlaylistEditor(false);
+    resetPlaylistEditor();
+  }, [isSavingPlaylist, isUploadingPlaylistThumbnail, resetPlaylistEditor]);
+
+  const handlePlaylistEditorRequestClose = useCallback(() => {
+    if (showPlaylistThumbnailOptions) {
+      setShowPlaylistThumbnailOptions(false);
+      return;
+    }
+
+    closePlaylistEditor();
+  }, [closePlaylistEditor, showPlaylistThumbnailOptions]);
+
+  const openPlaylistThumbnailOptions = useCallback(() => {
+    if (isUploadingPlaylistThumbnail) return;
+    setShowPlaylistThumbnailOptions(true);
+  }, [isUploadingPlaylistThumbnail]);
+
+  const closePlaylistThumbnailOptions = useCallback(() => {
+    setShowPlaylistThumbnailOptions(false);
+  }, []);
+
+  const uploadPlaylistThumbnailAsset = useCallback(async (asset: ImagePicker.ImagePickerAsset) => {
+    setIsUploadingPlaylistThumbnail(true);
+    try {
+      const uploadResult = await uploadService.uploadImageToCloudinary({
+        uri: asset.uri,
+        fileName: asset.fileName,
+        mimeType: asset.mimeType,
+      });
+
+      if (!uploadResult.success || !uploadResult.data) {
+        throw new Error(uploadResult.message || 'Upload ảnh thất bại');
+      }
+
+      setPlaylistThumbnailInput(uploadResult.data);
+      showToast.success('Tải ảnh thành công', 'Thumbnail playlist đã được cập nhật');
+    } catch (error: any) {
+      showToast.error('Không thể tải ảnh', error?.message || 'Vui lòng thử lại sau');
+    } finally {
+      setIsUploadingPlaylistThumbnail(false);
+    }
+  }, []);
+
+  const handlePickPlaylistThumbnailFromLibrary = useCallback(async () => {
+    if (isUploadingPlaylistThumbnail) return;
+    setShowPlaylistThumbnailOptions(false);
+
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        if (!permission.canAskAgain) {
+          promptOpenSettings('Vui lòng cấp quyền thư viện ảnh trong Cài đặt để chọn thumbnail playlist.');
+          return;
+        }
+
+        showToast.warning('Chưa có quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh để tiếp tục');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        await uploadPlaylistThumbnailAsset(result.assets[0]);
+      }
+    } catch {
+      showToast.error('Không thể chọn ảnh', 'Vui lòng thử lại sau');
+    }
+  }, [isUploadingPlaylistThumbnail, uploadPlaylistThumbnailAsset]);
+
+  const handleTakePlaylistThumbnailPhoto = useCallback(async () => {
+    if (isUploadingPlaylistThumbnail) return;
+    setShowPlaylistThumbnailOptions(false);
+
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        if (!permission.canAskAgain) {
+          promptOpenSettings('Vui lòng cấp quyền camera trong Cài đặt để chụp thumbnail playlist.');
+          return;
+        }
+
+        showToast.warning('Chưa có quyền camera', 'Vui lòng cấp quyền camera để chụp ảnh');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        await uploadPlaylistThumbnailAsset(result.assets[0]);
+      }
+    } catch {
+      showToast.error('Không thể mở camera', 'Vui lòng thử lại sau');
+    }
+  }, [isUploadingPlaylistThumbnail, uploadPlaylistThumbnailAsset]);
+
+  const handleRemovePlaylistThumbnail = useCallback(() => {
+    if (isUploadingPlaylistThumbnail) return;
+    setPlaylistThumbnailInput('');
+    setShowPlaylistThumbnailOptions(false);
+  }, [isUploadingPlaylistThumbnail]);
+
+  const openPlaylistDetail = useCallback((playlist: UserPlaylistResponse) => {
+    setSelectedPlaylistId(playlist.id);
+    setSelectedPlaylistPreview(playlist);
+  }, []);
+
+  const closePlaylistDetail = useCallback(() => {
+    setSelectedPlaylistId(null);
+    setSelectedPlaylistPreview(null);
+  }, []);
+
+  const fetchFavoriteItems = useCallback(async (refresh = false) => {
+    if (!user?.userId) {
+      setFavoriteItems([]);
+      setIsFavoritesLoading(false);
+      setIsFavoritesRefreshing(false);
+      return;
+    }
+
+    if (refresh) {
+      setIsFavoritesRefreshing(true);
+    } else {
+      setIsFavoritesLoading(true);
+    }
+
+    try {
+      const result = await favoriteService.getFavorites({
+        itemType: favoriteItemTypeFilter,
+        source: favoriteSourceFilter,
+      });
+
+      if (result.success) {
+        setFavoriteItems(result.data);
+      } else {
+        setFavoriteItems([]);
+      }
+    } catch (error) {
+      console.log('[ProfileScreen] fetchFavoriteItems error:', error);
+      setFavoriteItems([]);
+    } finally {
+      setIsFavoritesLoading(false);
+      setIsFavoritesRefreshing(false);
+    }
+  }, [favoriteItemTypeFilter, favoriteSourceFilter, user?.userId]);
+
+  const fetchUserPlaylists = useCallback(async (refresh = false) => {
+    if (!user?.userId) {
+      setUserPlaylists([]);
+      setIsPlaylistsLoading(false);
+      setIsPlaylistsRefreshing(false);
+      return;
+    }
+
+    if (refresh) {
+      setIsPlaylistsRefreshing(true);
+    } else {
+      setIsPlaylistsLoading(true);
+    }
+
+    try {
+      const result = await userPlaylistService.getMyPlaylists();
+      if (result.success) {
+        setUserPlaylists(sortPlaylistsNewestFirst(result.data));
+      } else {
+        setUserPlaylists([]);
+        showToast.warning('Không thể tải playlist', result.message || 'Vui lòng thử lại sau');
+      }
+    } catch (error) {
+      console.log('[ProfileScreen] fetchUserPlaylists error:', error);
+      setUserPlaylists([]);
+    } finally {
+      setIsPlaylistsLoading(false);
+      setIsPlaylistsRefreshing(false);
+    }
+  }, [user?.userId]);
+
+  const handleSavePlaylist = useCallback(async () => {
+    const playlistName = playlistNameInput.trim();
+    const playlistThumbnailUrl = playlistThumbnailInput.trim();
+
+    if (isUploadingPlaylistThumbnail) {
+      showToast.warning('Ảnh đang được tải lên', 'Vui lòng đợi tải ảnh thumbnail hoàn tất');
+      return;
+    }
+
+    if (playlistName.length < 2) {
+      showToast.warning('Tên playlist chưa hợp lệ', 'Tên playlist phải có ít nhất 2 ký tự');
+      return;
+    }
+
+    setIsSavingPlaylist(true);
+    try {
+      if (playlistEditorTarget) {
+        const result = await userPlaylistService.updateUserPlaylist(playlistEditorTarget.id, {
+          playlistName,
+          description: playlistDescriptionInput.trim() || undefined,
+          thumbnailUrl: playlistThumbnailUrl || undefined,
+          visibility: playlistVisibilityInput,
+          isEnabled: playlistEnabledInput,
+        });
+
+        if (!result.success) {
+          throw new Error(result.message || 'Không thể cập nhật playlist');
+        }
+
+        showToast.success('Đã cập nhật playlist', 'Thông tin playlist đã được lưu');
+      } else {
+        const result = await userPlaylistService.createUserPlaylist({
+          playlistName,
+          description: playlistDescriptionInput.trim() || undefined,
+          thumbnailUrl: playlistThumbnailUrl || undefined,
+          visibility: playlistVisibilityInput,
+          isEnabled: playlistEnabledInput,
+        });
+
+        if (!result.success) {
+          throw new Error(result.message || 'Không thể tạo playlist');
+        }
+
+        showToast.success('Tạo playlist thành công', 'Playlist mới đã được thêm vào thư viện');
+      }
+
+      setShowPlaylistEditor(false);
+      resetPlaylistEditor();
+      await fetchUserPlaylists(true);
+    } catch (error: any) {
+      showToast.error('Lưu playlist thất bại', error?.message || 'Vui lòng thử lại sau');
+    } finally {
+      setIsSavingPlaylist(false);
+    }
+  }, [
+    fetchUserPlaylists,
+    playlistDescriptionInput,
+    playlistEditorTarget,
+    playlistEnabledInput,
+    isUploadingPlaylistThumbnail,
+    playlistNameInput,
+    playlistThumbnailInput,
+    playlistVisibilityInput,
+    resetPlaylistEditor,
+  ]);
+
+  const handlePlaylistDeleted = useCallback(async () => {
+    closePlaylistDetail();
+    await fetchUserPlaylists(true);
+  }, [closePlaylistDetail, fetchUserPlaylists]);
+
+  const handleFavoritesRefresh = useCallback(() => {
+    fetchFavoriteItems(true);
+  }, [fetchFavoriteItems]);
+
+  const handlePlaylistsRefresh = useCallback(() => {
+    fetchUserPlaylists(true);
+  }, [fetchUserPlaylists]);
+
+  useEffect(() => {
+    if (activeProfileTab === 'playlists') {
+      fetchUserPlaylists();
+    }
+  }, [activeProfileTab, fetchUserPlaylists]);
+
+  useEffect(() => {
+    if (activeProfileTab === 'favorites') {
+      fetchFavoriteItems();
+    }
+  }, [activeProfileTab, favoriteItemTypeFilter, favoriteSourceFilter, fetchFavoriteItems]);
+
   const fetchMyPosts = useCallback(async (pageNum = 1, refresh = false) => {
     if (!user?.userId) {
       if (pageNum === 1) {
@@ -637,6 +1013,20 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
   const handlePostsRefresh = useCallback(() => {
     fetchMyPosts(1, true);
   }, [fetchMyPosts]);
+
+  const handleScreenRefresh = useCallback(() => {
+    if (activeProfileTab === 'playlists') {
+      handlePlaylistsRefresh();
+      return;
+    }
+
+    if (activeProfileTab === 'favorites') {
+      handleFavoritesRefresh();
+      return;
+    }
+
+    handlePostsRefresh();
+  }, [activeProfileTab, handleFavoritesRefresh, handlePlaylistsRefresh, handlePostsRefresh]);
 
   const handleLikePost = useCallback(async (postId: string) => {
     const targetPost = myPosts.find((post) => post.id === postId);
@@ -760,7 +1150,12 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={isPostsRefreshing} onRefresh={handlePostsRefresh} colors={[palette.primary]} tintColor={palette.primary} />
+          <RefreshControl
+            refreshing={activeProfileTab === 'posts' ? isPostsRefreshing : activeProfileTab === 'playlists' ? isPlaylistsRefreshing : isFavoritesRefreshing}
+            onRefresh={handleScreenRefresh}
+            colors={[palette.primary]}
+            tintColor={palette.primary}
+          />
         }
       >
         {/* ── Profile Card ── */}
@@ -848,45 +1243,248 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
           </View>
         </View>
 
-        {/* ── Post List ── */}
-        {isPostsLoading ? (
-          <View style={styles.postsLoadingContainer}>
-            <ActivityIndicator size="large" color={palette.primary} />
-            <Text style={[styles.postsLoadingText, { color: palette.textSecondary }]}>Đang tải bài viết...</Text>
-          </View>
-        ) : myPosts.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={[styles.emptyStateIcon, { backgroundColor: palette.primary + '1A' }]}>
-              <Ionicons name="create-outline" size={28} color={palette.primary} />
-            </View>
-            <Text style={[styles.emptyStateTitle, { color: palette.textPrimary }]}>Bạn chưa có bài viết nào</Text>
-            <Text style={[styles.emptyStateSubtitle, { color: palette.textSecondary }]}>Hãy đăng bài đầu tiên để chia sẻ với cộng đồng!</Text>
-          </View>
-        ) : (
-          <>
-            {myPosts.map((post) => (
-              <BlogPostCard
-                key={post.id}
-                post={post}
-                onLike={() => handleLikePost(post.id)}
-                onNavigateToDetail={(postId) => setSelectedPostId(postId)}
-                showOwnerActions
-                onEdit={() => handleEditPost(post)}
-                onDelete={() => handleDeletePost(post.id)}
-              />
-            ))}
+        <View style={[styles.tabsContainer, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+          {profileContentTabs.map((tab) => {
+            const isActive = activeProfileTab === tab.key;
 
-            {!isPostsLoading && postsPage < postsTotalPages && myPosts.length > 0 && (
+            return (
               <TouchableOpacity
-                style={[styles.loadMoreButton, { backgroundColor: palette.surface, borderColor: palette.border }]}
-                activeOpacity={0.8}
-                onPress={() => fetchMyPosts(postsPage + 1)}
+                key={tab.key}
+                activeOpacity={0.85}
+                style={[
+                  styles.tabButton,
+                  isActive ? [styles.tabButtonActive, { backgroundColor: palette.primary }] : null,
+                ]}
+                onPress={() => setActiveProfileTab(tab.key)}
               >
-                <Text style={[styles.loadMoreText, { color: palette.primary }]}>Tải thêm bài viết</Text>
-                <Ionicons name="chevron-down" size={16} color={palette.primary} />
+                <Ionicons
+                  name={tab.icon}
+                  size={16}
+                  color={isActive ? '#FFFFFF' : palette.textSecondary}
+                  style={styles.tabButtonIcon}
+                />
+                <Text
+                  style={[
+                    styles.tabButtonText,
+                    { color: palette.textSecondary },
+                    isActive ? styles.tabButtonTextActive : null,
+                  ]}
+                >
+                  {tab.label}
+                </Text>
               </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {activeProfileTab === 'posts' && (
+          <>
+            <View style={styles.composerContainer}>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={[styles.composerCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
+                onPress={handleOpenCreatePost}
+              >
+                <View style={styles.composerCollapsed}>
+                  <Image source={{ uri: avatarUrl }} style={styles.composerAvatar} />
+                  <View style={[styles.composerPlaceholder, { backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9' }]}> 
+                    <Text style={[styles.composerPlaceholderText, { color: palette.textSecondary }]}>
+                      {`Bạn đang nghĩ gì${user?.firstName ? `, ${user.firstName}` : ''}?`}
+                    </Text>
+                  </View>
+                  <View style={[styles.composerQuickIcon, { backgroundColor: palette.primary + '1A' }]}> 
+                    <Ionicons name="create-outline" size={18} color={palette.primary} />
+                  </View>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {isPostsLoading ? (
+              <View style={styles.postsLoadingContainer}>
+                <ActivityIndicator size="large" color={palette.primary} />
+                <Text style={[styles.postsLoadingText, { color: palette.textSecondary }]}>Đang tải bài viết...</Text>
+              </View>
+            ) : myPosts.length === 0 ? (
+              <View style={styles.emptyState}>
+                <View style={[styles.emptyStateIcon, { backgroundColor: palette.primary + '1A' }]}>
+                  <Ionicons name="create-outline" size={28} color={palette.primary} />
+                </View>
+                <Text style={[styles.emptyStateTitle, { color: palette.textPrimary }]}>Bạn chưa có bài viết nào</Text>
+                <Text style={[styles.emptyStateSubtitle, { color: palette.textSecondary }]}>Hãy đăng bài đầu tiên để chia sẻ với cộng đồng!</Text>
+              </View>
+            ) : (
+              <>
+                {myPosts.map((post) => (
+                  <BlogPostCard
+                    key={post.id}
+                    post={post}
+                    onLike={() => handleLikePost(post.id)}
+                    onNavigateToDetail={(postId) => setSelectedPostId(postId)}
+                    showOwnerActions
+                    onEdit={() => handleEditPost(post)}
+                    onDelete={() => handleDeletePost(post.id)}
+                  />
+                ))}
+
+                {!isPostsLoading && postsPage < postsTotalPages && myPosts.length > 0 && (
+                  <TouchableOpacity
+                    style={[styles.loadMoreButton, { backgroundColor: palette.surface, borderColor: palette.border }]}
+                    activeOpacity={0.8}
+                    onPress={() => fetchMyPosts(postsPage + 1)}
+                  >
+                    <Text style={[styles.loadMoreText, { color: palette.primary }]}>Tải thêm bài viết</Text>
+                    <Ionicons name="chevron-down" size={16} color={palette.primary} />
+                  </TouchableOpacity>
+                )}
+              </>
             )}
           </>
+        )}
+
+        {activeProfileTab === 'playlists' && (
+          <View style={styles.tabSectionWrap}>
+            <View style={styles.tabSectionHeader}>
+              <Text style={[styles.tabSectionTitle, { color: palette.textPrimary }]}>Playlist của bạn ({userPlaylists.length})</Text>
+              <TouchableOpacity
+                style={[styles.smallActionButton, { backgroundColor: palette.primary }]}
+                activeOpacity={0.85}
+                onPress={openCreatePlaylistEditor}
+              >
+                <Ionicons name="add" size={15} color="#FFFFFF" />
+                <Text style={styles.smallActionButtonText}>Thêm</Text>
+              </TouchableOpacity>
+            </View>
+
+            {isPlaylistsLoading ? (
+              <View style={styles.postsLoadingContainer}>
+                <ActivityIndicator size="large" color={palette.primary} />
+                <Text style={[styles.postsLoadingText, { color: palette.textSecondary }]}>Đang tải playlist...</Text>
+              </View>
+            ) : userPlaylists.length === 0 ? (
+              <View style={styles.emptyState}>
+                <View style={[styles.emptyStateIcon, { backgroundColor: palette.primary + '1A' }]}>
+                  <Ionicons name="musical-notes-outline" size={28} color={palette.primary} />
+                </View>
+                <Text style={[styles.emptyStateTitle, { color: palette.textPrimary }]}>Chưa có playlist nào</Text>
+                <Text style={[styles.emptyStateSubtitle, { color: palette.textSecondary }]}>Tạo playlist đầu tiên để lưu danh sách nhạc của bạn.</Text>
+              </View>
+            ) : (
+              <View style={styles.playlistListWrap}>
+                {userPlaylists.map((playlist) => (
+                  <TouchableOpacity
+                    key={playlist.id}
+                    activeOpacity={0.9}
+                    onPress={() => openPlaylistDetail(playlist)}
+                    style={[styles.playlistItemCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
+                  >
+                    <View style={[styles.playlistThumbWrap, { backgroundColor: palette.primary + '1A' }]}> 
+                      {playlist.thumbnailUrl ? (
+                        <Image source={{ uri: playlist.thumbnailUrl }} style={styles.playlistThumbImage} />
+                      ) : (
+                        <Ionicons name="musical-notes" size={18} color={palette.primary} />
+                      )}
+                    </View>
+
+                    <View style={styles.playlistItemMain}>
+                      <Text style={[styles.playlistItemName, { color: palette.textPrimary }]} numberOfLines={1}>
+                        {playlist.playlistName}
+                      </Text>
+                      <Text style={[styles.playlistItemDescription, { color: palette.textSecondary }]} numberOfLines={2}>
+                        {playlist.description?.trim() || 'Chưa có mô tả cho playlist này'}
+                      </Text>
+                      <View style={styles.playlistItemMetaRow}>
+                        <Text style={[styles.playlistItemMetaText, { color: palette.textSecondary }]}>{playlist.totalTracks} bài hát</Text>
+                        <Text style={[styles.playlistItemMetaText, { color: palette.textSecondary }]}>•</Text>
+                        <Text style={[styles.playlistItemMetaText, { color: palette.textSecondary }]}>
+                          {getPlaylistVisibilityLabel(playlist.visibility)}
+                        </Text>
+                        <Text style={[styles.playlistItemMetaText, { color: playlist.isEnabled ? '#10B981' : '#F59E0B' }]}> 
+                          {playlist.isEnabled ? 'Đang bật' : 'Đang tắt'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {activeProfileTab === 'favorites' && (
+          <View style={styles.tabSectionWrap}>
+            <View style={[styles.filterSectionCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+              <Text style={[styles.filterSectionLabel, { color: palette.textPrimary }]}>Loại nội dung</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipsRow}>
+                {favoriteItemTypeOptions.map((option) => {
+                  const isSelected = favoriteItemTypeFilter === option.value;
+                  return (
+                    <TouchableOpacity
+                      key={option.value}
+                      onPress={() => setFavoriteItemTypeFilter(option.value)}
+                      style={[
+                        styles.filterChip,
+                        { borderColor: palette.border, backgroundColor: palette.background },
+                        isSelected ? { backgroundColor: palette.primary, borderColor: palette.primary } : null,
+                      ]}
+                    >
+                      <Text style={[styles.filterChipText, { color: isSelected ? '#FFFFFF' : palette.textSecondary }]}>{option.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {isFavoritesLoading ? (
+              <View style={styles.postsLoadingContainer}>
+                <ActivityIndicator size="large" color={palette.primary} />
+                <Text style={[styles.postsLoadingText, { color: palette.textSecondary }]}>Đang tải nhạc yêu thích...</Text>
+              </View>
+            ) : favoriteItems.length === 0 ? (
+              <View style={styles.emptyState}>
+                <View style={[styles.emptyStateIcon, { backgroundColor: palette.primary + '1A' }]}>
+                  <Ionicons name="heart-outline" size={28} color={palette.primary} />
+                </View>
+                <Text style={[styles.emptyStateTitle, { color: palette.textPrimary }]}>Chưa có mục yêu thích</Text>
+                <Text style={[styles.emptyStateSubtitle, { color: palette.textSecondary }]}>Thử đổi bộ lọc hoặc thêm nhạc vào danh sách yêu thích.</Text>
+              </View>
+            ) : (
+              <View style={styles.favoriteListWrap}>
+                {favoriteItems.map((item) => (
+                  <View
+                    key={item.id}
+                    style={[styles.favoriteItemCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
+                  >
+                    <View style={[styles.favoriteThumbWrap, { backgroundColor: palette.primary + '1A' }]}> 
+                      {item.imgUrl ? (
+                        <Image source={{ uri: item.imgUrl }} style={styles.favoriteThumbImage} />
+                      ) : (
+                        <Ionicons name="musical-note-outline" size={18} color={palette.primary} />
+                      )}
+                    </View>
+
+                    <View style={styles.favoriteItemMain}>
+                      <Text style={[styles.favoriteItemName, { color: palette.textPrimary }]} numberOfLines={1}>
+                        {item.name?.trim() || item.itemId}
+                      </Text>
+                      <Text style={[styles.favoriteItemSub, { color: palette.textSecondary }]} numberOfLines={1}>
+                        {item.artistName?.trim() || item.albumName?.trim() || 'Không có thông tin nghệ sĩ'}
+                      </Text>
+                      <View style={styles.favoriteMetaRow}>
+                        <View style={[styles.favoriteMetaBadge, { backgroundColor: palette.primary + '1F' }]}> 
+                          <Text style={[styles.favoriteMetaBadgeText, { color: palette.primary }]}>{item.itemType}</Text>
+                        </View>
+                        <View style={[styles.favoriteMetaBadge, { backgroundColor: '#DCFCE7' }]}> 
+                          <Text style={[styles.favoriteMetaBadgeText, { color: '#16A34A' }]}>{item.source}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
         )}
 
         {/* Bottom spacer */}
@@ -1003,6 +1601,189 @@ export default function ProfileScreen({ onBackToHome, onNavigateToForgotPassword
             <Text style={[styles.uploadBlockingText, { color: palette.textPrimary }]}>{profileImageLoadingText}</Text>
             <Text style={[styles.uploadBlockingHint, { color: palette.textSecondary }]}>Vui lòng đợi trong giây lát...</Text>
           </View>
+        </View>
+      </Modal>
+
+      <PlaylistDetailModal
+        visible={!!selectedPlaylistId}
+        playlistId={selectedPlaylistId}
+        initialPlaylist={selectedPlaylistPreview}
+        onClose={closePlaylistDetail}
+        onPlaylistsChanged={() => fetchUserPlaylists(true)}
+        onPlaylistDeleted={handlePlaylistDeleted}
+      />
+
+      <Modal
+        visible={showPlaylistEditor}
+        transparent
+        animationType="slide"
+        onRequestClose={handlePlaylistEditorRequestClose}
+      >
+        <View style={styles.playlistSheetOverlay}>
+          <Pressable style={styles.playlistSheetBackdrop} onPress={closePlaylistEditor} />
+
+          <KeyboardAvoidingView
+            style={styles.playlistSheetKeyboardWrap}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={0}
+          >
+            <View style={[styles.playlistSheetCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+              <View style={styles.playlistSheetHandle}>
+                <View style={[styles.playlistSheetHandleBar, { backgroundColor: palette.border }]} />
+              </View>
+
+              <View style={[styles.popupHeader, { borderBottomColor: palette.border }]}> 
+                <Text style={[styles.popupTitle, { color: palette.textPrimary }]}>
+                  {playlistEditorTarget ? 'Chỉnh sửa playlist' : 'Tạo playlist mới'}
+                </Text>
+                <TouchableOpacity onPress={closePlaylistEditor} disabled={isSavingPlaylist || isUploadingPlaylistThumbnail}>
+                  <Ionicons name="close" size={18} color={palette.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                style={styles.playlistSheetScroll}
+                contentContainerStyle={styles.playlistSheetScrollContent}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.playlistEditorBody}>
+                  <Text style={[styles.playlistEditorLabel, { color: palette.textSecondary }]}>Tên playlist</Text>
+                  <FormTextField
+                    value={playlistNameInput}
+                    onChangeText={setPlaylistNameInput}
+                    placeholder="Nhập tên playlist"
+                    placeholderTextColor={palette.textMuted}
+                    inputContainerStyle={[
+                      styles.playlistEditorInput,
+                      { borderColor: palette.border, backgroundColor: palette.background },
+                    ]}
+                    style={[styles.playlistEditorInputText, { color: palette.textPrimary }]}
+                  />
+
+                  <Text style={[styles.playlistEditorLabel, styles.playlistEditorSectionGap, { color: palette.textSecondary }]}>Mô tả</Text>
+                  <FormTextField
+                    value={playlistDescriptionInput}
+                    onChangeText={setPlaylistDescriptionInput}
+                    placeholder="Mô tả ngắn cho playlist (không bắt buộc)"
+                    placeholderTextColor={palette.textMuted}
+                    multiline
+                    numberOfLines={3}
+                    inputContainerStyle={[
+                      styles.playlistEditorInput,
+                      styles.playlistEditorInputMultiline,
+                      { borderColor: palette.border, backgroundColor: palette.background },
+                    ]}
+                    style={[styles.playlistEditorInputText, styles.playlistEditorInputTextMultiline, { color: palette.textPrimary }]}
+                  />
+
+                  <Text style={[styles.playlistEditorLabel, styles.playlistEditorSectionGap, { color: palette.textSecondary }]}>Ảnh bìa playlist</Text>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={openPlaylistThumbnailOptions}
+                    disabled={isUploadingPlaylistThumbnail}
+                    style={[styles.playlistThumbnailPreview, { borderColor: palette.border, backgroundColor: palette.background }]}
+                  >
+                    {playlistThumbnailInput ? (
+                      <Image source={{ uri: playlistThumbnailInput }} style={styles.playlistThumbnailImage} />
+                    ) : (
+                      <View style={styles.playlistThumbnailEmpty}>
+                        <Ionicons name="image-outline" size={24} color={palette.textMuted} />
+                        <Text style={[styles.playlistThumbnailEmptyText, { color: palette.textMuted }]}>Nhấn để chọn ảnh bìa</Text>
+                      </View>
+                    )}
+
+                    <View style={styles.playlistThumbnailEditBadge}>
+                      <Ionicons name="camera-outline" size={14} color="#FFFFFF" />
+                    </View>
+
+                    {isUploadingPlaylistThumbnail && (
+                      <View style={styles.playlistThumbnailLoadingOverlay}>
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  <View style={styles.playlistVisibilityInlineRow}>
+                    <Text style={[styles.playlistVisibilityPromptText, { color: palette.textSecondary }]}>hãy công khai playlist này</Text>
+                    <Switch
+                      value={playlistVisibilityInput === 0}
+                      onValueChange={(nextValue) => setPlaylistVisibilityInput(nextValue ? 0 : 1)}
+                      thumbColor={playlistVisibilityInput === 0 ? '#FFFFFF' : '#F3F4F6'}
+                      trackColor={{ false: '#F59E0B66', true: '#10B98199' }}
+                      ios_backgroundColor="#F59E0B66"
+                    />
+                  </View>
+                </View>
+              </ScrollView>
+
+              <View style={[styles.playlistEditorFooter, { borderTopColor: palette.border }]}> 
+                <TouchableOpacity
+                  style={[styles.playlistEditorFooterButton, styles.playlistEditorCancelButton, { borderColor: palette.border }]}
+                  onPress={closePlaylistEditor}
+                  disabled={isSavingPlaylist || isUploadingPlaylistThumbnail}
+                >
+                  <Text style={[styles.playlistEditorCancelText, { color: palette.textSecondary }]}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.playlistEditorFooterButton, styles.playlistEditorSaveButton, { backgroundColor: palette.primary }]}
+                  onPress={handleSavePlaylist}
+                  disabled={isSavingPlaylist || isUploadingPlaylistThumbnail}
+                >
+                  {isSavingPlaylist || isUploadingPlaylistThumbnail ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.playlistEditorSaveText}>{playlistEditorTarget ? 'Lưu thay đổi' : 'Tạo playlist'}</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+
+          {showPlaylistThumbnailOptions && (
+            <View style={styles.popupOverlay}>
+              <Pressable style={StyleSheet.absoluteFill} onPress={closePlaylistThumbnailOptions} />
+
+              <View style={[styles.popupCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+                <View style={[styles.popupHeader, { borderBottomColor: palette.border }]}> 
+                  <Text style={[styles.popupTitle, { color: palette.textPrimary }]}>Ảnh bìa playlist</Text>
+                  <TouchableOpacity onPress={closePlaylistThumbnailOptions}>
+                    <Ionicons name="close" size={18} color={palette.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.popupOption, { borderBottomColor: palette.border }]}
+                  onPress={() => void handlePickPlaylistThumbnailFromLibrary()}
+                  disabled={isUploadingPlaylistThumbnail}
+                >
+                  <Ionicons name="images-outline" size={18} color="#55C5F1" />
+                  <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>Chọn ảnh từ thư viện</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.popupOption, { borderBottomColor: palette.border }]}
+                  onPress={() => void handleTakePlaylistThumbnailPhoto()}
+                  disabled={isUploadingPlaylistThumbnail}
+                >
+                  <Ionicons name="camera-outline" size={18} color="#A78BFA" />
+                  <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>Chụp ảnh mới</Text>
+                </TouchableOpacity>
+
+                {!!playlistThumbnailInput && (
+                  <TouchableOpacity
+                    style={[styles.popupOption, { borderBottomColor: palette.border }]}
+                    onPress={handleRemovePlaylistThumbnail}
+                    disabled={isUploadingPlaylistThumbnail}
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                    <Text style={[styles.popupOptionText, styles.popupOptionDangerText]}>Xóa ảnh bìa</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          )}
         </View>
       </Modal>
 
@@ -1423,7 +2204,7 @@ const styles = StyleSheet.create({
   // Tabs
   tabsContainer: {
     flexDirection: 'row',
-    marginHorizontal: 20,
+    marginHorizontal: 5,
     marginBottom: 20,
     backgroundColor: 'white',
     borderRadius: 16,
@@ -1433,9 +2214,15 @@ const styles = StyleSheet.create({
   },
   tabButton: {
     flex: 1,
+    flexDirection: 'row',
+    gap: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingVertical: 10,
     borderRadius: 12,
-    alignItems: 'center',
+  },
+  tabButtonIcon: {
+    marginTop: 1,
   },
   tabButtonActive: {
     backgroundColor: '#55C5F1',
@@ -1452,6 +2239,592 @@ const styles = StyleSheet.create({
   },
   tabButtonTextActive: {
     color: 'white',
+  },
+  tabActionBar: {
+    marginHorizontal: 20,
+    marginBottom: 10,
+    alignItems: 'flex-end',
+  },
+  tabActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  tabActionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  tabSectionWrap: {
+    paddingHorizontal: 20,
+  },
+  tabSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  tabSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  smallActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  smallActionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  playlistListWrap: {
+    gap: 10,
+  },
+  playlistItemCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  playlistThumbWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  playlistThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  playlistItemMain: {
+    flex: 1,
+    marginLeft: 10,
+    marginRight: 8,
+  },
+  playlistItemName: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  playlistItemDescription: {
+    marginTop: 3,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  playlistItemMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+    flexWrap: 'wrap',
+  },
+  playlistItemMetaText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  playlistItemActions: {
+    gap: 8,
+  },
+  playlistItemActionButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playlistDetailContainer: {
+    flex: 1,
+  },
+  playlistDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 54 : 20,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+  },
+  playlistDetailHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  playlistDetailHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  playlistDetailHeaderButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playlistDetailLoadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  playlistDetailLoadingText: {
+    marginTop: 10,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  playlistDetailScroll: {
+    flex: 1,
+  },
+  playlistDetailScrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 28,
+    gap: 14,
+  },
+  playlistHeroCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  playlistHeroThumb: {
+    width: 92,
+    height: 92,
+    borderRadius: 16,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playlistHeroThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  playlistHeroContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  playlistHeroTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  playlistHeroDescription: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  playlistHeroMetaRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  playlistHeroBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  playlistHeroBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  playlistTracksSection: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 12,
+  },
+  playlistTracksHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  playlistTracksTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  playlistTracksAddButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  playlistTracksAddButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  playlistTracksLoadingWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+  },
+  playlistTracksLoadingText: {
+    marginTop: 8,
+    fontSize: 13,
+  },
+  playlistTracksEmptyWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+  },
+  playlistTracksEmptyText: {
+    marginTop: 8,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  playlistTracksEmptyHint: {
+    marginTop: 6,
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  playlistTracksList: {
+    gap: 2,
+  },
+  playlistTrackItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  playlistTrackItemLast: {
+    borderBottomWidth: 0,
+  },
+  playlistTrackIndexBubble: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  playlistTrackIndexText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  playlistTrackInfo: {
+    flex: 1,
+  },
+  playlistTrackTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  playlistTrackSub: {
+    marginTop: 2,
+    fontSize: 11,
+  },
+  playlistTrackDuration: {
+    fontSize: 11,
+    marginLeft: 8,
+    minWidth: 34,
+    textAlign: 'right',
+  },
+  playlistTrackRemoveButton: {
+    marginLeft: 8,
+    padding: 2,
+  },
+  addTrackModalBody: {
+    paddingHorizontal: 14,
+    paddingTop: 12,
+  },
+  addTrackList: {
+    marginTop: 8,
+  },
+  addTrackListContent: {
+    paddingBottom: 10,
+  },
+  addTrackItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  addTrackArtworkWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  addTrackArtworkImage: {
+    width: '100%',
+    height: '100%',
+  },
+  addTrackInfo: {
+    flex: 1,
+  },
+  addTrackTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  addTrackSub: {
+    marginTop: 2,
+    fontSize: 11,
+  },
+  addTrackDuration: {
+    fontSize: 11,
+    marginRight: 8,
+  },
+  filterSectionCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+  },
+  filterSectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  filterSectionLabelSpaced: {
+    marginTop: 14,
+  },
+  filterChipsRow: {
+    paddingTop: 8,
+    paddingRight: 4,
+    gap: 8,
+  },
+  filterChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  filterChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  favoriteListWrap: {
+    gap: 10,
+  },
+  favoriteItemCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  favoriteThumbWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  favoriteThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  favoriteItemMain: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  favoriteItemName: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  favoriteItemSub: {
+    marginTop: 3,
+    fontSize: 12,
+  },
+  favoriteMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  favoriteMetaBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  favoriteMetaBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  playlistSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  playlistSheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  playlistSheetKeyboardWrap: {
+    justifyContent: 'flex-end',
+  },
+  playlistSheetCard: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    maxHeight: '96%',
+    overflow: 'hidden',
+  },
+  playlistSheetHandle: {
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+  playlistSheetHandleBar: {
+    width: 46,
+    height: 4,
+    borderRadius: 999,
+  },
+  playlistSheetScroll: {
+    flexGrow: 0,
+  },
+  playlistSheetScrollContent: {
+    paddingBottom: 16,
+  },
+  playlistEditorBody: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  playlistEditorLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  playlistEditorSectionGap: {
+    marginTop: 10,
+  },
+  playlistEditorInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    minHeight: 44,
+    paddingHorizontal: 12,
+  },
+  playlistEditorInputMultiline: {
+    alignItems: 'flex-start',
+    minHeight: 88,
+    paddingTop: 10,
+  },
+  playlistEditorInputText: {
+    fontSize: 14,
+    paddingVertical: 10,
+  },
+  playlistEditorInputTextMultiline: {
+    textAlignVertical: 'top',
+    minHeight: 66,
+  },
+  playlistThumbnailPreview: {
+    borderWidth: 1,
+    borderRadius: 12,
+    height: 156,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  playlistThumbnailImage: {
+    width: '100%',
+    height: '100%',
+  },
+  playlistThumbnailEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playlistThumbnailEmptyText: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  playlistThumbnailEditBadge: {
+    position: 'absolute',
+    right: 10,
+    bottom: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playlistThumbnailLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playlistVisibilityInlineRow: {
+    marginTop: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  playlistVisibilityPromptText: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+    paddingRight: 10,
+  },
+  playlistVisibilityWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  playlistVisibilityOption: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  playlistVisibilityOptionText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  playlistEditorFooter: {
+    borderTopWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  playlistEditorFooterButton: {
+    flex: 1,
+    borderRadius: 12,
+    minHeight: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playlistEditorCancelButton: {
+    borderWidth: 1,
+  },
+  playlistEditorSaveButton: {
+    borderWidth: 0,
+  },
+  playlistEditorCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  playlistEditorSaveText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 
   postsLoadingContainer: {

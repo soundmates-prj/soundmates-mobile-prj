@@ -1,16 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import React, { useCallback, useState } from 'react';
+import * as Haptics from 'expo-haptics';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
     useAnimatedStyle,
     useSharedValue,
     withSpring,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
 import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
-import { blogService } from '../../api';
 
 export interface SharedMusic {
     trackId: string;
@@ -87,6 +86,11 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
     const [isLikedLocal, setIsLikedLocal] = useState(post.isLiked);
     const [likeCountLocal, setLikeCountLocal] = useState(post.reactionCount);
 
+    useEffect(() => {
+        setIsLikedLocal(post.isLiked);
+        setLikeCountLocal(post.reactionCount);
+    }, [post.id, post.isLiked, post.reactionCount]);
+
     const displayName = post.userFullName || post.userId.substring(0, 10);
     const avatarUri = post.userAvatarUrl
         || `https://api.dicebear.com/7.x/initials/png?seed=${post.userId}&backgroundColor=55C5F1`;
@@ -109,7 +113,16 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
     }));
 
     return (
-        <View style={[styles.card, { backgroundColor: palette.surface, ...palette.shadow.small }]}>
+        <View
+            style={[
+                styles.card,
+                {
+                    backgroundColor: palette.surface,
+                    borderColor: palette.border,
+                    ...palette.shadow.small,
+                },
+            ]}
+        >
             {/* Header: Avatar & User Info */}
             <View style={styles.cardHeader}>
                 <View style={styles.userInfo}>
@@ -220,14 +233,19 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
 
 const styles = StyleSheet.create({
     card: {
-        marginBottom: 10,
+        marginHorizontal: 16,
+        marginBottom: 14,
+        borderRadius: 16,
+        borderWidth: 1,
         overflow: 'hidden',
     },
     cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: 12,
+        paddingHorizontal: 14,
+        paddingTop: 12,
+        paddingBottom: 10,
     },
     userInfo: {
         flexDirection: 'row',
@@ -235,9 +253,9 @@ const styles = StyleSheet.create({
         gap: 10,
     },
     avatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 38,
+        height: 38,
+        borderRadius: 19,
         backgroundColor: '#F3F4F6',
     },
     username: {
@@ -245,7 +263,7 @@ const styles = StyleSheet.create({
         fontWeight: '700',
     },
     timeAgo: {
-        fontSize: 11,
+        fontSize: 12,
     },
     moreButton: {
         padding: 4,
@@ -289,25 +307,25 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     textOnlyContent: {
-        padding: 20,
+        padding: 18,
         minHeight: 150,
         justifyContent: 'center',
     },
     textTitle: {
-        fontSize: 18,
+        fontSize: 17,
         fontWeight: '800',
         marginBottom: 8,
     },
     textContent: {
         fontSize: 15,
-        lineHeight: 22,
+        lineHeight: 23,
     },
     actionsBar: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 8,
-        paddingVertical: 10,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
     },
     leftActions: {
         flexDirection: 'row',
@@ -318,7 +336,7 @@ const styles = StyleSheet.create({
     },
     cardFooter: {
         paddingHorizontal: 16,
-        paddingBottom: 16,
+        paddingBottom: 14,
     },
     likesCount: {
         fontSize: 14,

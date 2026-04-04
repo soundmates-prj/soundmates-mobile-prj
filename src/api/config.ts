@@ -138,4 +138,14 @@ export const FAVORITE_ENDPOINTS = {
     ME_FAVORITES: '/me/favorites',
 };
 
+export const USER_PLAYLIST_ENDPOINTS = {
+    USER_PLAYLIST: '/userplaylist',
+    USER_PLAYLIST_DETAIL: (playlistId: string) => `/userplaylist/${playlistId}`,
+    USER_PLAYLIST_TRACKS: (playlistId: string) => `/userplaylist/${playlistId}/tracks`,
+};
+
+export const MUSIC_CATALOG_ENDPOINTS = {
+    LIST: '/musiccatalog',
+};
+
 export default API_CONFIG;
