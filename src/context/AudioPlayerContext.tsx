@@ -1,5 +1,6 @@
 import { Audio } from 'expo-av';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { LiveSessionResult, NowPlayingData, livestreamService } from '../api';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -45,17 +46,23 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const loadingUrlRef = useRef<string | null>(null);
   const nowPlayingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeSessionIdRef = useRef<string | null>(null);
+  const appStateRef = useRef(AppState.currentState);
 
   // ── Audio Mode Setup ──────────────────────────────────────────────────────
-  useEffect(() => {
-    Audio.setAudioModeAsync({
+  const configureAudioMode = useCallback(async () => {
+    await Audio.setAudioModeAsync({
       allowsRecordingIOS: false,
       playsInSilentModeIOS: true,
       staysActiveInBackground: true,
       shouldDuckAndroid: true,
       playThroughEarpieceAndroid: false,
-    }).catch(() => {});
+    });
   }, []);
+
+  useEffect(() => {
+    void configureAudioMode().catch(() => {});
+  }, [configureAudioMode]);
 
   // ── Elapsed timer ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -90,14 +97,18 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   ]);
 
   // ── NowPlaying polling ─────────────────────────────────────────────────────
-  const startNowPlayingPolling = useCallback(() => {
+  const startNowPlayingPolling = useCallback((sessionId?: string) => {
+    activeSessionIdRef.current = sessionId || null;
+
     if (nowPlayingIntervalRef.current) clearInterval(nowPlayingIntervalRef.current);
     const poll = async () => {
       try {
-        const data = await livestreamService.getNowPlaying();
+        const data = activeSessionIdRef.current
+          ? await livestreamService.getNowPlayingBySession(activeSessionIdRef.current)
+          : await livestreamService.getNowPlaying();
         setNowPlaying(data);
       } catch {
-        // silent
+        setNowPlaying(null);
       }
     };
     void poll(); // immediate first call
@@ -105,6 +116,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const stopNowPlayingPolling = useCallback(() => {
+    activeSessionIdRef.current = null;
     if (nowPlayingIntervalRef.current) {
       clearInterval(nowPlayingIntervalRef.current);
       nowPlayingIntervalRef.current = null;
@@ -113,20 +125,41 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
 
   // ── Internal stream management ─────────────────────────────────────────────
   const unloadSound = useCallback(async () => {
-    if (soundRef.current) {
+    const currentSound = soundRef.current;
+    soundRef.current = null;
+
+    if (currentSound) {
       try {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
+        currentSound.setOnPlaybackStatusUpdate(null);
       } catch {
         // ignore
       }
-      soundRef.current = null;
+
+      try {
+        await currentSound.pauseAsync();
+      } catch {
+        // ignore
+      }
+
+      try {
+        await currentSound.stopAsync();
+      } catch {
+        // ignore
+      }
+
+      try {
+        await currentSound.unloadAsync();
+      } catch {
+        // ignore
+      }
     }
+
     setIsPlaying(false);
   }, []);
 
   const createAndPlay = useCallback(async (url: string, muted: boolean) => {
     loadingUrlRef.current = url;
+    await configureAudioMode().catch(() => {});
     await unloadSound();
     setIsLoading(true);
 
@@ -143,7 +176,11 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
 
       // CRITICAL: If a new request arrived while we were loading, discard this one
       if (loadingUrlRef.current !== url) {
-        await sound.unloadAsync();
+        try {
+          await sound.unloadAsync();
+        } catch {
+          // ignore
+        }
         return;
       }
 
@@ -157,47 +194,109 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         setIsLoading(false);
       }
     }
-  }, [unloadSound]);
+  }, [configureAudioMode, unloadSound]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const prevState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      const becameActive =
+        (prevState === 'background' || prevState === 'inactive')
+        && nextState === 'active';
+
+      if (!becameActive) {
+        return;
+      }
+
+      void (async () => {
+        await configureAudioMode().catch(() => {});
+
+        const sound = soundRef.current;
+        if (!sound) {
+          if (isLoading) {
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        try {
+          const status = await sound.getStatusAsync();
+          if (!('isLoaded' in status) || !status.isLoaded) {
+            soundRef.current = null;
+            setIsPlaying(false);
+            if (isLoading) {
+              setIsLoading(false);
+            }
+          }
+        } catch {
+          soundRef.current = null;
+          setIsPlaying(false);
+          if (isLoading) {
+            setIsLoading(false);
+          }
+        }
+      })();
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [configureAudioMode, isLoading]);
 
   // ── Public Actions ─────────────────────────────────────────────────────────
   const loadSession = useCallback((session: LiveSessionResult) => {
     const url = livestreamService.getListenUrl(session.streamUrl ?? undefined);
+    setActiveSession(session);
+    setNowPlaying(null);
+    startNowPlayingPolling(session.id);
     
     // GUARD: If we are already playing this exact stream, don't reload
     if (url === streamUrl && isPlaying) {
       return;
     }
 
-    setActiveSession(session);
     setStreamUrl(url);
-    setNowPlaying(null);
-    startNowPlayingPolling();
     void createAndPlay(url, isMuted);
   }, [createAndPlay, isMuted, isPlaying, startNowPlayingPolling, streamUrl]);
 
   const togglePlayback = useCallback(async () => {
     if (isLoading) return;
-    if (!soundRef.current) {
+    const sound = soundRef.current;
+
+    if (!sound) {
       if (streamUrl) {
         await createAndPlay(streamUrl, isMuted);
       }
       return;
     }
+
     try {
-      const status = await soundRef.current.getStatusAsync();
+      const status = await sound.getStatusAsync();
       if ('isLoaded' in status && status.isLoaded) {
         if (status.isPlaying) {
-          await soundRef.current.pauseAsync();
+          await sound.pauseAsync();
           setIsPlaying(false);
         } else {
-          await soundRef.current.playAsync();
-          setIsPlaying(true);
+          await configureAudioMode().catch(() => {});
+          await sound.playAsync();
+
+          const postPlayStatus = await sound.getStatusAsync();
+          if ('isLoaded' in postPlayStatus && postPlayStatus.isLoaded && postPlayStatus.isPlaying) {
+            setIsPlaying(true);
+          } else if (streamUrl) {
+            await createAndPlay(streamUrl, isMuted);
+          }
         }
+      } else if (streamUrl) {
+        soundRef.current = null;
+        await createAndPlay(streamUrl, isMuted);
       }
     } catch {
+      soundRef.current = null;
       if (streamUrl) await createAndPlay(streamUrl, isMuted);
     }
-  }, [createAndPlay, isLoading, isMuted, streamUrl]);
+  }, [configureAudioMode, createAndPlay, isLoading, isMuted, streamUrl]);
 
   const toggleMute = useCallback(async () => {
     const newMuted = !isMuted;
@@ -210,11 +309,13 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   }, [isMuted]);
 
   const stopAndUnload = useCallback(async () => {
+    loadingUrlRef.current = null;
     await unloadSound();
     stopNowPlayingPolling();
     setActiveSession(null);
     setNowPlaying(null);
     setStreamUrl('');
+    setIsLoading(false);
   }, [stopNowPlayingPolling, unloadSound]);
 
   // ── Cleanup on unmount ─────────────────────────────────────────────────────

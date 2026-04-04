@@ -6,11 +6,13 @@ import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme'
 import {
     blogService,
     favoriteService,
+    LiveScheduleResult,
     livestreamService,
     NowPlayingData,
     PopularPostResponse,
     spotifyService,
-    SpotifyTrack
+    SpotifyTrack,
+    userPlaylistService,
 } from '../../api';
 import { BlogPostCard, DisplayPost } from '../../components/blog/BlogPostCard';
 import FormTextField from '../../components/ui/FormTextField';
@@ -19,6 +21,7 @@ import BlogScreen from '../blog/BlogScreen';
 import CreatePostScreen from '../blog/CreatePostScreen';
 import PostDetailScreen from '../blog/PostDetailScreen';
 import BottomNavigation, { TabName } from '../BottomNavigation';
+import LiveSessionsScreen from '../live/LiveSessionsScreen';
 import PodcastScreen from '../podcast/PodcastScreen';
 import ProfileScreen from '../profile/ProfileScreen';
 import SearchResultsScreen, { SearchResultBundle } from '../search/SearchResultsScreen';
@@ -30,20 +33,102 @@ import {
 } from './HomeScreen.cards';
 import {
     PLAYLIST_TABS,
+    PlaylistItem,
     PLAYLISTS,
     PlaylistTab,
     PODCASTS,
-    SCHEDULE_ITEMS,
+    ScheduleItem,
     SEARCH_MIN_CHARS,
     SearchSuggestionItem,
     TOP_HIT_PLAYLISTS,
 } from './HomeScreen.data';
 import styles from './HomeScreen.styles';
 
+const PLAYLIST_VISIBILITY_CATEGORY_MAP: Record<number, PlaylistTab> = {
+    0: 'Thịnh Hành',
+    1: 'Acoustic',
+    2: 'Bolero',
+};
+
+const parseTimeParts = (rawTime?: string | null): { hour: number; minute: number } => {
+    if (!rawTime) return { hour: 0, minute: 0 };
+    const [hourText = '0', minuteText = '0'] = rawTime.split(':');
+    const hour = Number(hourText);
+    const minute = Number(minuteText);
+
+    return {
+        hour: Number.isNaN(hour) ? 0 : hour,
+        minute: Number.isNaN(minute) ? 0 : minute,
+    };
+};
+
+const formatClock = (rawTime?: string | null): string => {
+    if (!rawTime) return '--:--';
+    const [hour = '00', minute = '00'] = rawTime.split(':');
+    return `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
+};
+
+const parseDateOnly = (rawDate?: string | null): Date | null => {
+    if (!rawDate) return null;
+    const parsed = new Date(`${rawDate}T00:00:00`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const isSameDate = (a: Date, b: Date): boolean =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+const isDateAllowedByMask = (date: Date, mask?: number): boolean => {
+    if (!mask || mask <= 0) return true;
+    const flag = 1 << date.getDay();
+    return (mask & flag) !== 0;
+};
+
+const buildDateTimeFromTime = (baseDate: Date, rawTime?: string | null): Date => {
+    const { hour, minute } = parseTimeParts(rawTime);
+    const result = new Date(baseDate);
+    result.setHours(hour, minute, 0, 0);
+    return result;
+};
+
+const getOccurrenceOnDate = (schedule: LiveScheduleResult, targetDate: Date): Date | null => {
+    const startBoundary = parseDateOnly(schedule.startDate);
+    if (!startBoundary) return null;
+
+    const endBoundary = parseDateOnly(schedule.endDate);
+    if (endBoundary) {
+        endBoundary.setHours(23, 59, 59, 999);
+    }
+
+    const normalizedTarget = new Date(targetDate);
+    normalizedTarget.setHours(0, 0, 0, 0);
+
+    if (normalizedTarget < startBoundary) {
+        return null;
+    }
+
+    if (endBoundary && normalizedTarget > endBoundary) {
+        return null;
+    }
+
+    if (!schedule.isRecurring) {
+        if (!isSameDate(normalizedTarget, startBoundary)) {
+            return null;
+        }
+
+        return buildDateTimeFromTime(normalizedTarget, schedule.startTime);
+    }
+
+    if (!isDateAllowedByMask(normalizedTarget, schedule.daysOfWeek)) {
+        return null;
+    }
+
+    return buildDateTimeFromTime(normalizedTarget, schedule.startTime);
+};
+
 interface HomeScreenProps {
     initialTab?: TabName;
     onLogout?: () => void;
-    onNavigateToLive?: () => void;
+    onNavigateToLiveSession?: (sessionId: string) => void;
     onNavigateToForgotPassword?: () => void;
     onNavigateToSubscription?: () => void;
 }
@@ -51,7 +136,7 @@ interface HomeScreenProps {
 export default function HomeScreen({
     initialTab = 'home',
     onLogout,
-    onNavigateToLive,
+    onNavigateToLiveSession,
     onNavigateToForgotPassword,
     onNavigateToSubscription,
 }: HomeScreenProps) {
@@ -62,6 +147,10 @@ export default function HomeScreen({
     const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
     const [communityPosts, setCommunityPosts] = useState<DisplayPost[]>([]);
     const [isCommunityLoading, setIsCommunityLoading] = useState(false);
+    const [personalPlaylists, setPersonalPlaylists] = useState<PlaylistItem[] | null>(null);
+    const [isPlaylistLoading, setIsPlaylistLoading] = useState(false);
+    const [todaySchedules, setTodaySchedules] = useState<ScheduleItem[]>([]);
+    const [isScheduleLoading, setIsScheduleLoading] = useState(false);
     const [liveBannerData, setLiveBannerData] = useState<NowPlayingData | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [showSearchScreen, setShowSearchScreen] = useState(false);
@@ -72,17 +161,24 @@ export default function HomeScreen({
     const [searchResultBundle, setSearchResultBundle] = useState<SearchResultBundle | null>(null);
     const [isSearchingSuggestions, setIsSearchingSuggestions] = useState(false);
     const [isSearchingResults, setIsSearchingResults] = useState(false);
+    const [suggestionFavoriteTrackIds, setSuggestionFavoriteTrackIds] = useState<Set<string>>(new Set());
     const [activePlaylistTab, setActivePlaylistTab] = useState<PlaylistTab>('Mới');
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const suggestionRequestIdRef = useRef(0);
 
     const filteredPlaylists = useMemo(() => {
+        if (personalPlaylists) {
+            return personalPlaylists;
+        }
+
         if (activePlaylistTab === 'Mới') {
             return PLAYLISTS;
         }
 
         return PLAYLISTS.filter((item) => item.category === activePlaylistTab);
-    }, [activePlaylistTab]);
+    }, [activePlaylistTab, personalPlaylists]);
+
+    const shouldShowPlaylistTabs = !personalPlaylists;
 
     const featuredPlaylist = filteredPlaylists[0] || PLAYLISTS[0];
     const playlistCarouselItems = useMemo(
@@ -120,9 +216,13 @@ export default function HomeScreen({
             id: `track-${track.id}`,
             source: 'spotify',
             category: 'track',
+            trackId: track.id,
             title: track.name,
             subtitle: track.artists?.map((artist) => artist.name).join(', ') || 'Spotify Track',
+            artistName: track.artists?.map((artist) => artist.name).join(', ') || '',
+            albumName: track.album?.name || '',
             imageUrl: track.album?.images?.[0]?.url,
+            previewUrl: track.preview_url || undefined,
         }));
 
         return fromTracks.slice(0, 10);
@@ -169,7 +269,26 @@ export default function HomeScreen({
         setSearchResultBundle(null);
     }, []);
 
-    const handleAddFavoriteTrack = useCallback(async (track: SpotifyTrack) => {
+    const fetchFavoriteTrackIds = useCallback(async () => {
+        try {
+            const result = await favoriteService.getFavorites({
+                itemType: 'track',
+                source: 'spotify',
+                page: 1,
+                pageSize: 200,
+            });
+
+            if (!result.success) {
+                return;
+            }
+
+            setSuggestionFavoriteTrackIds(new Set(result.data.map((item) => item.itemId)));
+        } catch (error) {
+            console.log('[HomeScreen] fetchFavoriteTrackIds error:', error);
+        }
+    }, []);
+
+    const handleAddFavoriteTrack = useCallback(async (track: SpotifyTrack): Promise<{ success: boolean; message?: string }> => {
         try {
             const result = await favoriteService.addFavorite({
                 itemType: 'track',
@@ -183,12 +302,52 @@ export default function HomeScreen({
                 rawJson: JSON.stringify(track),
             });
 
-            Alert.alert('Đã thêm vào yêu thích', result.message || 'Bạn đã thêm bài hát vào mục yêu thích.');
+            return {
+                success: true,
+                message: result.message || 'Bạn đã thêm bài hát vào mục yêu thích.',
+            };
         } catch (error: any) {
             console.log('[HomeScreen] handleAddFavoriteTrack error:', error);
-            Alert.alert('Không thể thêm vào yêu thích', error?.response?.data?.message || 'Vui lòng thử lại sau.');
+
+            return {
+                success: false,
+                message: error?.response?.data?.message || 'Vui lòng thử lại sau.',
+            };
         }
     }, []);
+
+    const handleAddFavoriteSuggestion = useCallback(async (item: SearchSuggestionItem) => {
+        if (suggestionFavoriteTrackIds.has(item.trackId)) {
+            return;
+        }
+
+        try {
+            const result = await favoriteService.addFavorite({
+                itemType: 'track',
+                itemId: item.trackId,
+                source: item.source,
+                name: item.title,
+                artistName: item.artistName || item.subtitle,
+                albumName: item.albumName || '',
+                imgUrl: item.imageUrl,
+                previewUrl: item.previewUrl,
+            });
+
+            if (result.success) {
+                setSuggestionFavoriteTrackIds((prev) => {
+                    const next = new Set(prev);
+                    next.add(item.trackId);
+                    return next;
+                });
+                return;
+            }
+
+            Alert.alert('Không thể thêm vào yêu thích', result.message || 'Vui lòng thử lại sau.');
+        } catch (error: any) {
+            console.log('[HomeScreen] handleAddFavoriteSuggestion error:', error);
+            Alert.alert('Không thể thêm vào yêu thích', error?.response?.data?.message || 'Vui lòng thử lại sau.');
+        }
+    }, [suggestionFavoriteTrackIds]);
 
     const handleSubmitSearch = useCallback(() => {
         void executeSearch(searchInput);
@@ -198,6 +357,12 @@ export default function HomeScreen({
         setSearchInput(item.title);
         void executeSearch(item.title);
     }, [executeSearch]);
+
+    useEffect(() => {
+        if (showSearchScreen) {
+            void fetchFavoriteTrackIds();
+        }
+    }, [fetchFavoriteTrackIds, showSearchScreen]);
 
     useEffect(() => {
         const loop = Animated.loop(
@@ -223,7 +388,7 @@ export default function HomeScreen({
     }, [pulseAnim]);
 
     useEffect(() => {
-        if (initialTab === 'home' || initialTab === 'blog' || initialTab === 'podcast') {
+        if (initialTab === 'home' || initialTab === 'blog' || initialTab === 'podcast' || initialTab === 'profile' || initialTab === 'live') {
             setActiveTab(initialTab);
         }
     }, [initialTab]);
@@ -280,7 +445,7 @@ export default function HomeScreen({
         }
 
         if (tab === 'live') {
-            onNavigateToLive?.();
+            setActiveTab('live');
             return;
         }
 
@@ -288,7 +453,7 @@ export default function HomeScreen({
     };
 
     const handleLivePress = () => {
-        onNavigateToLive?.();
+        setActiveTab('live');
     };
 
     const handleToggleCommunityLike = useCallback((postId: string) => {
@@ -367,19 +532,108 @@ export default function HomeScreen({
         }
     }, []);
 
+    const fetchPersonalPlaylists = useCallback(async () => {
+        setIsPlaylistLoading(true);
+
+        try {
+            const result = await userPlaylistService.getMyPlaylists();
+            if (!result.success) {
+                setPersonalPlaylists(null);
+                return;
+            }
+
+            const mapped = (result.data || [])
+                .filter((item) => item.isEnabled)
+                .sort((a, b) => {
+                    const timeA = new Date(a.updatedAt || a.createdAt).getTime();
+                    const timeB = new Date(b.updatedAt || b.createdAt).getTime();
+                    return timeB - timeA;
+                })
+                .map((item, index) => ({
+                    id: item.id,
+                    title: item.playlistName,
+                    subtitle: `${item.totalTracks || 0} bài hát`,
+                    image: item.thumbnailUrl || PLAYLISTS[index % PLAYLISTS.length].image,
+                    category: PLAYLIST_VISIBILITY_CATEGORY_MAP[item.visibility] || 'Mới',
+                }));
+
+            setPersonalPlaylists(mapped);
+        } catch (error) {
+            console.log('[HomeScreen] fetchPersonalPlaylists error:', error);
+            setPersonalPlaylists(null);
+        } finally {
+            setIsPlaylistLoading(false);
+        }
+    }, []);
+
+    const fetchTodaySchedules = useCallback(async () => {
+        setIsScheduleLoading(true);
+
+        try {
+            const now = new Date();
+            const today = new Date(now);
+            today.setHours(0, 0, 0, 0);
+
+            const schedules = await livestreamService.getSchedules();
+
+            const mapped = schedules
+                .filter((schedule) => {
+                    const normalizedStatus = (schedule.liveSession?.status || schedule.status || '').toLowerCase();
+                    return normalizedStatus === 'scheduled' || normalizedStatus === 'live';
+                })
+                .map((schedule) => {
+                    const occurrenceAt = getOccurrenceOnDate(schedule, today);
+                    if (!occurrenceAt) {
+                        return null;
+                    }
+
+                    const status = (schedule.liveSession?.status || schedule.status || '').toLowerCase();
+                    const endAt = buildDateTimeFromTime(today, schedule.endTime);
+                    if (endAt < occurrenceAt) {
+                        endAt.setDate(endAt.getDate() + 1);
+                    }
+
+                    const isLiveByTime = now >= occurrenceAt && now <= endAt;
+                    const isLive = status === 'live' || isLiveByTime;
+
+                    return {
+                        id: schedule.id,
+                        time: formatClock(schedule.startTime),
+                        period: isLive ? 'Đang phát' : 'Sắp tới',
+                        title: schedule.title || schedule.liveSession?.sessionName || 'Phiên live sắp diễn ra',
+                        host: schedule.liveSession?.station?.stationName || 'Chưa cập nhật',
+                        isLive,
+                        occurrenceAt,
+                    };
+                })
+                .filter((item): item is ScheduleItem & { occurrenceAt: Date } => Boolean(item))
+                .sort((a, b) => a.occurrenceAt.getTime() - b.occurrenceAt.getTime())
+                .map(({ occurrenceAt: _occurrenceAt, ...item }) => item);
+
+            setTodaySchedules(mapped);
+        } catch (error) {
+            console.log('[HomeScreen] fetchTodaySchedules error:', error);
+            setTodaySchedules([]);
+        } finally {
+            setIsScheduleLoading(false);
+        }
+    }, []);
+
     const handleRefresh = useCallback(async () => {
         setIsRefreshing(true);
         try {
-            await Promise.all([fetchCommunityPosts(), fetchLiveBannerData()]);
+            await Promise.all([fetchCommunityPosts(), fetchLiveBannerData(), fetchTodaySchedules(), fetchPersonalPlaylists()]);
         } finally {
             setIsRefreshing(false);
         }
-    }, [fetchCommunityPosts, fetchLiveBannerData]);
+    }, [fetchCommunityPosts, fetchLiveBannerData, fetchTodaySchedules, fetchPersonalPlaylists]);
 
     useEffect(() => {
         if (activeTab === 'home') {
             fetchCommunityPosts();
             fetchLiveBannerData();
+            fetchTodaySchedules();
+            fetchPersonalPlaylists();
         }
 
         const intervalId = setInterval(() => {
@@ -389,7 +643,7 @@ export default function HomeScreen({
         }, 10000);
 
         return () => clearInterval(intervalId);
-    }, [activeTab, fetchCommunityPosts, fetchLiveBannerData]);
+    }, [activeTab, fetchCommunityPosts, fetchLiveBannerData, fetchTodaySchedules, fetchPersonalPlaylists]);
 
     const liveBannerTitle = liveBannerData?.stationName || 'SoundMate Radio';
     const liveBannerHost = liveBannerData?.streamerName || 'Emily_vui';
@@ -476,9 +730,28 @@ export default function HomeScreen({
                                             <Text numberOfLines={1} style={[styles.suggestionSubtitle, { color: palette.textSecondary }]}>{item.subtitle}</Text>
                                         </View>
 
-                                        <View style={[styles.suggestionTag, { backgroundColor: isDarkMode ? '#1E3A8A' : '#DBEAFE' }]}>
-                                            <Text style={[styles.suggestionTagText, { color: isDarkMode ? '#BFDBFE' : '#1D4ED8' }]}>{item.source}</Text>
-                                        </View>
+                                        <TouchableOpacity
+                                            activeOpacity={0.85}
+                                            style={[
+                                                styles.suggestionFavoriteButton,
+                                                {
+                                                    backgroundColor: suggestionFavoriteTrackIds.has(item.trackId)
+                                                        ? 'rgba(239, 68, 68, 0.16)'
+                                                        : isDarkMode
+                                                            ? '#1E3A8A'
+                                                            : '#DBEAFE',
+                                                },
+                                            ]}
+                                            onPress={() => {
+                                                void handleAddFavoriteSuggestion(item);
+                                            }}
+                                        >
+                                            <Ionicons
+                                                name={suggestionFavoriteTrackIds.has(item.trackId) ? 'heart' : 'heart-outline'}
+                                                size={16}
+                                                color={suggestionFavoriteTrackIds.has(item.trackId) ? '#EF4444' : isDarkMode ? '#BFDBFE' : '#1D4ED8'}
+                                            />
+                                        </TouchableOpacity>
                                     </TouchableOpacity>
                                 ))
                             )}
@@ -522,12 +795,18 @@ export default function HomeScreen({
                         />
                     ) : activeTab === 'podcast' ? (
                         <PodcastScreen />
+                    ) : activeTab === 'live' ? (
+                        <LiveSessionsScreen
+                            onBack={() => setActiveTab('home')}
+                            onSelectSession={(sessionId) => onNavigateToLiveSession?.(sessionId)}
+                            onTabPress={handleTabPress}
+                        />
                     ) : activeTab === 'profile' ? (
                         <ProfileScreen
                             hideBottomNav
                             onNavigateToCreatePost={() => setShowCreatePost(true)}
                             onBackToHome={(tab = 'home') => {
-                                if (tab === 'blog' || tab === 'podcast' || tab === 'home') {
+                                if (tab === 'blog' || tab === 'podcast' || tab === 'home' || tab === 'live') {
                                     setActiveTab(tab);
                                     return;
                                 }
@@ -581,29 +860,6 @@ export default function HomeScreen({
                                         </TouchableOpacity>
                                     </View>
                                 </View>
-
-                                {/* <View style={styles.heroContent}>
-                                    <View style={styles.quickActionRow}>
-                                        <TouchableOpacity style={styles.quickActionButton} activeOpacity={0.9} onPress={openSearch}>
-                                            <Ionicons name="search" size={16} color="#FFFFFF" />
-                                            <Text style={styles.quickActionText}>Tim nhanh</Text>
-                                        </TouchableOpacity>
-
-                                        <TouchableOpacity style={styles.quickActionButton} activeOpacity={0.9} onPress={handleLivePress}>
-                                            <Ionicons name="radio" size={16} color="#FFFFFF" />
-                                            <Text style={styles.quickActionText}>Vao live</Text>
-                                        </TouchableOpacity>
-
-                                        <TouchableOpacity
-                                            style={styles.quickActionButton}
-                                            activeOpacity={0.9}
-                                            onPress={() => setActiveTab('blog')}
-                                        >
-                                            <Ionicons name="chatbubbles" size={16} color="#FFFFFF" />
-                                            <Text style={styles.quickActionText}>Cong dong</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                </View> */}
                             </LinearGradient>
 
                             <TouchableOpacity
@@ -681,187 +937,209 @@ export default function HomeScreen({
                                     end={{ x: 1, y: 1 }}
                                     style={styles.schedulePanel}
                                 >
-                                    {SCHEDULE_ITEMS.map((item, index) => (
-                                        <View
-                                            key={item.id}
-                                            style={[
-                                                styles.scheduleCard,
-                                                {
-                                                    backgroundColor: palette.surface,
-                                                    borderColor: palette.border,
-                                                },
-                                            ]}
-                                        >
-                                            <View style={styles.scheduleTimelineCol}>
-                                                <View
-                                                    style={[
-                                                        styles.scheduleTimelineDot,
-                                                        {
-                                                            backgroundColor: item.isLive ? '#EF4444' : palette.primary,
-                                                        },
-                                                    ]}
-                                                />
-                                                {index < SCHEDULE_ITEMS.length - 1 ? (
+                                    {isScheduleLoading ? (
+                                        <View style={styles.searchLoadingBlock}>
+                                            <ActivityIndicator size="small" color={palette.primary} />
+                                            <Text style={[styles.searchHintText, { color: palette.textSecondary }]}>Đang tải lịch phát sóng...</Text>
+                                        </View>
+                                    ) : todaySchedules.length === 0 ? (
+                                        <Text style={[styles.searchHintText, { color: palette.textSecondary }]}>Hôm nay chưa có phiên live theo lịch.</Text>
+                                    ) : (
+                                        todaySchedules.map((item, index) => (
+                                            <View
+                                                key={item.id}
+                                                style={[
+                                                    styles.scheduleCard,
+                                                    {
+                                                        backgroundColor: palette.surface,
+                                                        borderColor: palette.border,
+                                                    },
+                                                ]}
+                                            >
+                                                <View style={styles.scheduleTimelineCol}>
                                                     <View
                                                         style={[
-                                                            styles.scheduleTimelineLine,
-                                                            { backgroundColor: isDarkMode ? '#334155' : '#BFDBFE' },
-                                                        ]}
-                                                    />
-                                                ) : null}
-                                            </View>
-
-                                            <View style={styles.scheduleContentWrap}>
-                                                <View style={styles.scheduleTopRow}>
-                                                    <Text style={[styles.scheduleTime, { color: palette.primary }]}>{item.time}</Text>
-                                                    <View
-                                                        style={[
-                                                            styles.scheduleStatusPill,
+                                                            styles.scheduleTimelineDot,
                                                             {
-                                                                backgroundColor: item.isLive
-                                                                    ? '#FEE2E2'
-                                                                    : isDarkMode
-                                                                        ? '#1F2937'
-                                                                        : '#E2E8F0',
+                                                                backgroundColor: item.isLive ? '#EF4444' : palette.primary,
                                                             },
                                                         ]}
-                                                    >
-                                                        <Text
+                                                    />
+                                                    {index < todaySchedules.length - 1 ? (
+                                                        <View
                                                             style={[
-                                                                styles.scheduleStatusText,
+                                                                styles.scheduleTimelineLine,
+                                                                { backgroundColor: isDarkMode ? '#334155' : '#BFDBFE' },
+                                                            ]}
+                                                        />
+                                                    ) : null}
+                                                </View>
+
+                                                <View style={styles.scheduleContentWrap}>
+                                                    <View style={styles.scheduleTopRow}>
+                                                        <Text style={[styles.scheduleTime, { color: palette.primary }]}>{item.time}</Text>
+                                                        <View
+                                                            style={[
+                                                                styles.scheduleStatusPill,
                                                                 {
-                                                                    color: item.isLive ? '#B91C1C' : palette.textSecondary,
+                                                                    backgroundColor: item.isLive
+                                                                        ? '#FEE2E2'
+                                                                        : isDarkMode
+                                                                            ? '#1F2937'
+                                                                            : '#E2E8F0',
                                                                 },
                                                             ]}
                                                         >
-                                                            {item.period}
-                                                        </Text>
+                                                            <Text
+                                                                style={[
+                                                                    styles.scheduleStatusText,
+                                                                    {
+                                                                        color: item.isLive ? '#B91C1C' : palette.textSecondary,
+                                                                    },
+                                                                ]}
+                                                            >
+                                                                {item.period}
+                                                            </Text>
+                                                        </View>
                                                     </View>
-                                                </View>
 
-                                                <Text style={[styles.scheduleTitle, { color: palette.textPrimary }]} numberOfLines={1}>
-                                                    {item.title}
-                                                </Text>
-                                                <Text style={[styles.scheduleHost, { color: palette.textSecondary }]} numberOfLines={1}>
-                                                    Host: {item.host}
-                                                </Text>
-                                            </View>
-                                            <View style={styles.scheduleActionCol}>
-                                                <TouchableOpacity
-                                                    activeOpacity={0.85}
-                                                    style={[
-                                                        styles.scheduleAction,
-                                                        item.isLive
-                                                            ? { backgroundColor: palette.primary }
-                                                            : { backgroundColor: isDarkMode ? '#1F2937' : '#F1F5F9' },
-                                                    ]}
-                                                    onPress={() => {
-                                                        if (item.isLive) {
-                                                            handleLivePress();
-                                                            return;
-                                                        }
-
-                                                        Alert.alert('Thông báo', `Đã bật thông báo cho ${item.title}.`);
-                                                    }}
-                                                >
-                                                    <Text
-                                                        style={[
-                                                            styles.scheduleActionText,
-                                                            { color: item.isLive ? '#FFFFFF' : palette.textPrimary },
-                                                        ]}
-                                                    >
-                                                        {item.isLive ? 'Tham gia' : 'Nhắc tôi'}
+                                                    <Text style={[styles.scheduleTitle, { color: palette.textPrimary }]} numberOfLines={1}>
+                                                        {item.title}
                                                     </Text>
-                                                </TouchableOpacity>
+                                                    <Text style={[styles.scheduleHost, { color: palette.textSecondary }]} numberOfLines={1}>
+                                                        Host: {item.host}
+                                                    </Text>
+                                                </View>
+                                                <View style={styles.scheduleActionCol}>
+                                                    <TouchableOpacity
+                                                        activeOpacity={0.85}
+                                                        style={[
+                                                            styles.scheduleAction,
+                                                            item.isLive
+                                                                ? { backgroundColor: palette.primary }
+                                                                : { backgroundColor: isDarkMode ? '#1F2937' : '#F1F5F9' },
+                                                        ]}
+                                                        onPress={() => {
+                                                            if (item.isLive) {
+                                                                handleLivePress();
+                                                                return;
+                                                            }
+
+                                                            Alert.alert('Thông báo', `Đã bật thông báo cho ${item.title}.`);
+                                                        }}
+                                                    >
+                                                        <Text
+                                                            style={[
+                                                                styles.scheduleActionText,
+                                                                { color: item.isLive ? '#FFFFFF' : palette.textPrimary },
+                                                            ]}
+                                                        >
+                                                            {item.isLive ? 'Tham gia' : 'Nhắc tôi'}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                </View>
                                             </View>
-                                        </View>
-                                    ))}
+                                        ))
+                                    )}
                                 </LinearGradient>
                             </View>
 
                             <View style={styles.sectionBlock}>
                                 <SectionHeader title="Playlist cá nhân" titleColor={palette.primary} />
 
-                                <ScrollView
-                                    horizontal
-                                    showsHorizontalScrollIndicator={false}
-                                    contentContainerStyle={styles.playlistTabScrollContent}
-                                >
-                                    {PLAYLIST_TABS.map((tab) => {
-                                        const isActive = tab === activePlaylistTab;
+                                {shouldShowPlaylistTabs && (
+                                    <ScrollView
+                                        horizontal
+                                        showsHorizontalScrollIndicator={false}
+                                        contentContainerStyle={styles.playlistTabScrollContent}
+                                    >
+                                        {PLAYLIST_TABS.map((tab) => {
+                                            const isActive = tab === activePlaylistTab;
 
-                                        return (
-                                            <TouchableOpacity
-                                                key={tab}
-                                                style={[
-                                                    styles.playlistTabChip,
-                                                    {
-                                                        backgroundColor: isActive
-                                                            ? palette.primary
-                                                            : isDarkMode
-                                                                ? '#1F2937'
-                                                                : '#EEF2FF',
-                                                    },
-                                                ]}
-                                                activeOpacity={0.85}
-                                                onPress={() => setActivePlaylistTab(tab)}
-                                            >
-                                                <Text
+                                            return (
+                                                <TouchableOpacity
+                                                    key={tab}
                                                     style={[
-                                                        styles.playlistTabChipText,
+                                                        styles.playlistTabChip,
                                                         {
-                                                            color: isActive ? '#FFFFFF' : palette.textSecondary,
+                                                            backgroundColor: isActive
+                                                                ? palette.primary
+                                                                : isDarkMode
+                                                                    ? '#1F2937'
+                                                                    : '#EEF2FF',
                                                         },
                                                     ]}
+                                                    activeOpacity={0.85}
+                                                    onPress={() => setActivePlaylistTab(tab)}
                                                 >
-                                                    {tab}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        );
-                                    })}
-                                </ScrollView>
+                                                    <Text
+                                                        style={[
+                                                            styles.playlistTabChipText,
+                                                            {
+                                                                color: isActive ? '#FFFFFF' : palette.textSecondary,
+                                                            },
+                                                        ]}
+                                                    >
+                                                        {tab}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </ScrollView>
+                                )}
 
-                                <TouchableOpacity
-                                    style={styles.playlistFeaturedCard}
-                                    activeOpacity={0.92}
-                                >
-                                    <Image source={{ uri: featuredPlaylist.image }} style={styles.playlistFeaturedImage} />
-                                    <LinearGradient
-                                        colors={['rgba(2,6,23,0.78)', 'rgba(2,6,23,0.16)']}
-                                        start={{ x: 0, y: 1 }}
-                                        end={{ x: 0, y: 0 }}
-                                        style={styles.playlistFeaturedOverlay}
-                                    />
-
-                                    <View style={styles.playlistFeaturedBadge}>
-                                        <Ionicons name="sparkles" size={12} color="#FFFFFF" />
-                                        <Text style={styles.playlistFeaturedBadgeText}>Đề cử cho bạn</Text>
+                                {isPlaylistLoading ? (
+                                    <View style={styles.searchLoadingBlock}>
+                                        <ActivityIndicator size="small" color={palette.primary} />
+                                        <Text style={[styles.searchHintText, { color: palette.textSecondary }]}>Đang tải playlist cá nhân...</Text>
                                     </View>
+                                ) : personalPlaylists && personalPlaylists.length === 0 ? (
+                                    <Text style={[styles.searchHintText, { color: palette.textSecondary }]}>Bạn chưa có playlist cá nhân.</Text>
+                                ) : (
+                                    <>
+                                        <TouchableOpacity
+                                            style={styles.playlistFeaturedCard}
+                                            activeOpacity={0.92}
+                                        >
+                                            <Image source={{ uri: featuredPlaylist.image }} style={styles.playlistFeaturedImage} />
+                                            <LinearGradient
+                                                colors={['rgba(2,6,23,0.78)', 'rgba(2,6,23,0.16)']}
+                                                start={{ x: 0, y: 1 }}
+                                                end={{ x: 0, y: 0 }}
+                                                style={styles.playlistFeaturedOverlay}
+                                            />
 
-                                    <View style={styles.playlistFeaturedInfo}>
-                                        <Text style={styles.playlistFeaturedTitle} numberOfLines={1}>{featuredPlaylist.title}</Text>
-                                        <Text style={styles.playlistFeaturedSubtitle} numberOfLines={1}>{featuredPlaylist.subtitle}</Text>
+                                            {/* <View style={styles.playlistFeaturedBadge}>
+                                                <Ionicons name="sparkles" size={12} color="#FFFFFF" />
+                                                <Text style={styles.playlistFeaturedBadgeText}>Đề cử cho bạn</Text>
+                                            </View> */}
 
-                                        <View style={styles.playlistFeaturedFooter}>
-                                            <View style={styles.playlistFeaturedChip}>
-                                                <Text style={styles.playlistFeaturedChipText}>{featuredPlaylist.category}</Text>
+                                            <View style={styles.playlistFeaturedInfo}>
+                                                <Text style={styles.playlistFeaturedTitle} numberOfLines={1}>{featuredPlaylist.title}</Text>
+                                                <Text style={styles.playlistFeaturedSubtitle} numberOfLines={1}>{featuredPlaylist.subtitle}</Text>
+
+                                                <View style={styles.playlistFeaturedFooter}>
+                                                    <View style={styles.playlistFeaturedChip}>
+                                                        <Text style={styles.playlistFeaturedChipText}>{featuredPlaylist.category}</Text>
+                                                    </View>
+                                                    <View style={styles.playlistFeaturedPlayButton}>
+                                                        <Ionicons name="play" size={15} color="#0F172A" />
+                                                    </View>
+                                                </View>
                                             </View>
-                                            <View style={styles.playlistFeaturedPlayButton}>
-                                                <Ionicons name="play" size={15} color="#0F172A" />
-                                            </View>
-                                        </View>
-                                    </View>
-                                </TouchableOpacity>
+                                        </TouchableOpacity>
 
-                                <ScrollView
-                                    horizontal
-                                    showsHorizontalScrollIndicator={false}
-                                    contentContainerStyle={styles.horizontalScrollContent}
-                                >
-                                    {playlistCarouselItems.map((item) => (
-                                        <MyPlaylistCard key={item.id} item={item} palette={palette} isDarkMode={isDarkMode} />
-                                    ))}
-                                </ScrollView>
+                                        <ScrollView
+                                            horizontal
+                                            showsHorizontalScrollIndicator={false}
+                                            contentContainerStyle={styles.horizontalScrollContent}
+                                        >
+                                            {playlistCarouselItems.map((item) => (
+                                                <MyPlaylistCard key={item.id} item={item} palette={palette} isDarkMode={isDarkMode} />
+                                            ))}
+                                        </ScrollView>
+                                    </>
+                                )}
                             </View>
 
                             <LinearGradient
@@ -917,25 +1195,6 @@ export default function HomeScreen({
                             </LinearGradient>
 
                             <View style={styles.communitySection}>
-                                {/* <LinearGradient
-                                    colors={isDarkMode ? ['#1F2937', '#0B1120'] : ['#1E90D6', '#55C5F1']}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={styles.premiumCard}
-                                >
-                                    <View style={styles.premiumGlow} />
-                                    <Text style={[styles.premiumTag, { color: '#E0F2FE' }]}>PREMIUM</Text>
-                                    <Text style={styles.premiumTitle}>Mở khóa đặc quyền âm nhạc không giới hạn</Text>
-                                    <Text style={[styles.premiumDesc, { color: '#E2E8F0' }]}>
-                                        Khong quang cao, chat luong cao hon va uu tien vao phong live hot ngay khi bat dau.
-                                    </Text>
-                                    <TouchableOpacity
-                                        activeOpacity={0.9}
-                                        style={[styles.premiumButton, { backgroundColor: '#FFFFFF' }]}
-                                    >
-                                        <Text style={[styles.premiumButtonText, { color: '#0F172A' }]}>Kham pha goi</Text>
-                                    </TouchableOpacity>
-                                </LinearGradient> */}
 
                                 <SectionHeader
                                     title="Cộng đồng"
@@ -964,7 +1223,9 @@ export default function HomeScreen({
                         </ScrollView>
                     )}
 
-                    <BottomNavigation activeTab={activeTab} onTabPress={handleTabPress} onLogout={onLogout} />
+                    {activeTab !== 'live' && (
+                        <BottomNavigation activeTab={activeTab} onTabPress={handleTabPress} onLogout={onLogout} />
+                    )}
                 </>
             )}
         </View>

@@ -114,6 +114,48 @@ const replaceLocalhostWithApiHost = (rawUrl: string): string => {
     }
 };
 
+const inferVnpSecureHashType = (secureHash?: string | null): string | undefined => {
+    if (!secureHash) {
+        return undefined;
+    }
+
+    const normalized = secureHash.trim();
+    if (normalized.length === 128) {
+        return 'SHA512';
+    }
+
+    if (normalized.length === 64) {
+        return 'SHA256';
+    }
+
+    return undefined;
+};
+
+const ensureVnpSecureHashType = (rawUrl: string): string => {
+    if (!rawUrl) {
+        return rawUrl;
+    }
+
+    try {
+        const parsedUrl = new URL(rawUrl);
+        const existingType = parsedUrl.searchParams.get('vnp_SecureHashType');
+
+        if (existingType) {
+            return parsedUrl.toString();
+        }
+
+        const inferredType = inferVnpSecureHashType(parsedUrl.searchParams.get('vnp_SecureHash'));
+        if (!inferredType) {
+            return parsedUrl.toString();
+        }
+
+        parsedUrl.searchParams.set('vnp_SecureHashType', inferredType);
+        return parsedUrl.toString();
+    } catch {
+        return rawUrl;
+    }
+};
+
 // =====================================================
 // SERVICE
 // =====================================================
@@ -220,7 +262,9 @@ export const paymentService = {
         message?: string;
         callbackUrl?: string;
     }> {
-        const resolvedCallbackUrl = replaceLocalhostWithApiHost(callbackUrl);
+        const resolvedCallbackUrl = ensureVnpSecureHashType(
+            replaceLocalhostWithApiHost(callbackUrl)
+        );
 
         try {
             const response = await authApiClient.get<ApiResponse<PaymentCallbackVerificationResponse>>(
@@ -240,6 +284,13 @@ export const paymentService = {
             try {
                 const parsedUrl = new URL(resolvedCallbackUrl);
                 const params = Object.fromEntries(parsedUrl.searchParams.entries());
+
+                if (!params.vnp_SecureHashType) {
+                    const inferredType = inferVnpSecureHashType(params.vnp_SecureHash);
+                    if (inferredType) {
+                        params.vnp_SecureHashType = inferredType;
+                    }
+                }
 
                 const fallbackResponse = await authApiClient.get<ApiResponse<PaymentCallbackVerificationResponse>>(
                     PAYMENT_ENDPOINTS.VNPAY_CALLBACK,

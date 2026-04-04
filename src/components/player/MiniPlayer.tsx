@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect } from 'react';
 import {
@@ -24,7 +25,19 @@ type MinimalPalette = {
   textSecondary: string;
 };
 
+const formatDuration = (seconds?: number): string => {
+  if (!Number.isFinite(seconds) || !seconds || seconds < 0) {
+    return '0:00';
+  }
+
+  const total = Math.floor(seconds);
+  const minutes = Math.floor(total / 60);
+  const remaining = total % 60;
+  return `${minutes}:${remaining.toString().padStart(2, '0')}`;
+};
+
 export default function MiniPlayer() {
+  const navigation = useNavigation<any>();
   const { isDarkMode } = useTheme();
   const palette: MinimalPalette = isDarkMode
     ? { primary: '#FF6B35', textPrimary: '#FFFFFF', textSecondary: '#9CA3AF' }
@@ -35,28 +48,44 @@ export default function MiniPlayer() {
   } = useAudioPlayer();
 
   // Don't render if there's no active session
-  if (!activeSession || (!isPlaying && !isLoading && !nowPlaying)) {
+  if (!activeSession) {
     return null;
   }
 
   // Data
   const track = nowPlaying?.currentTrack;
   const artUrl = track?.artUrl || activeSession?.thumbnailUrl || undefined;
-  const title = track?.title || activeSession?.sessionName || 'Live Stream';
+  const sessionName = activeSession?.sessionName || 'Phiên live';
+  const title = track?.title || 'Đang chờ bài hát';
   const subtitle = track?.artist || nowPlaying?.streamerName || activeSession?.stationName || '';
   const duration = track?.duration || 0;
   const progress = duration > 0 ? Math.min((displayElapsed / duration) * 100, 100) : 0;
+  const timeText = duration > 0
+    ? `${formatDuration(displayElapsed)} / ${formatDuration(duration)}`
+    : formatDuration(displayElapsed);
+
+  const handleOpenLive = () => {
+    const sessionId = activeSession?.id;
+    if (!sessionId) {
+      return;
+    }
+
+    navigation.navigate('Live', { sessionId });
+  };
 
   return (
     <MiniPlayerContent
       palette={palette}
       isDarkMode={isDarkMode}
       artUrl={artUrl}
+      sessionName={sessionName}
       title={title}
       subtitle={subtitle}
+      timeText={timeText}
       progress={progress}
       isPlaying={isPlaying}
       isLoading={isLoading}
+      onOpenLive={handleOpenLive}
       onToggle={togglePlayback}
       onDismiss={stopAndUnload}
     />
@@ -64,14 +93,17 @@ export default function MiniPlayer() {
 }
 
 function MiniPlayerContent({
-  palette, isDarkMode, artUrl, title, subtitle,
-  progress, isPlaying, isLoading, onToggle, onDismiss,
+  palette, isDarkMode, artUrl, sessionName, title, subtitle, timeText,
+  progress, isPlaying, isLoading, onOpenLive, onToggle, onDismiss,
 }: {
   palette: MinimalPalette;
   isDarkMode: boolean;
   artUrl?: string;
+  sessionName: string;
   title: string; subtitle: string;
+  timeText: string;
   progress: number; isPlaying: boolean; isLoading: boolean;
+  onOpenLive: () => void;
   onToggle: () => void; onDismiss: () => void;
 }) {
   // Pulsing animation for playback dots
@@ -116,32 +148,38 @@ function MiniPlayerContent({
       </View>
 
       <View style={styles.row}>
-        {/* Album art */}
-        <View style={styles.artWrapper}>
-          {artUrl ? (
-            <Image source={{ uri: artUrl }} style={styles.art} />
-          ) : (
-            <View style={[styles.artPlaceholder, { backgroundColor: palette.primary + '30' }]}>
-              <Ionicons name="musical-note" size={18} color={palette.primary} />
-            </View>
-          )}
-          {/* Playing dots */}
-          {isPlaying && (
-            <View style={styles.playingDotsOverlay}>
-              <Animated.View style={[styles.playingDot, { backgroundColor: palette.primary }, dot1Style]} />
-              <Animated.View style={[styles.playingDot, { backgroundColor: palette.primary }, dot2Style]} />
-              <Animated.View style={[styles.playingDot, { backgroundColor: palette.primary }, dot3Style]} />
-            </View>
-          )}
-        </View>
+        <TouchableOpacity style={styles.contentTapArea} activeOpacity={0.85} onPress={onOpenLive}>
+          {/* Album art */}
+          <View style={styles.artWrapper}>
+            {artUrl ? (
+              <Image source={{ uri: artUrl }} style={styles.art} />
+            ) : (
+              <View style={[styles.artPlaceholder, { backgroundColor: palette.primary + '30' }]}>
+                <Ionicons name="musical-note" size={18} color={palette.primary} />
+              </View>
+            )}
+            {/* Playing dots */}
+            {isPlaying && (
+              <View style={styles.playingDotsOverlay}>
+                <Animated.View style={[styles.playingDot, { backgroundColor: palette.primary }, dot1Style]} />
+                <Animated.View style={[styles.playingDot, { backgroundColor: palette.primary }, dot2Style]} />
+                <Animated.View style={[styles.playingDot, { backgroundColor: palette.primary }, dot3Style]} />
+              </View>
+            )}
+          </View>
 
-        {/* Track info */}
-        <View style={styles.info}>
-          <Text style={[styles.title, { color: palette.textPrimary }]} numberOfLines={1}>{title}</Text>
-          {!!subtitle && (
-            <Text style={[styles.subtitle, { color: palette.textSecondary }]} numberOfLines={1}>{subtitle}</Text>
-          )}
-        </View>
+          {/* Track info */}
+          <View style={styles.info}>
+            <Text style={[styles.sessionName, { color: palette.textSecondary }]} numberOfLines={1}>{sessionName}</Text>
+            <Text style={[styles.title, { color: palette.textPrimary }]} numberOfLines={1}>{title}</Text>
+            <View style={styles.metaRow}>
+              {!!subtitle && (
+                <Text style={[styles.subtitle, { color: palette.textSecondary }]} numberOfLines={1}>{subtitle}</Text>
+              )}
+              <Text style={[styles.timeText, { color: palette.textSecondary }]} numberOfLines={1}>{timeText}</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
 
         {/* Controls */}
         <View style={styles.controls}>
@@ -195,6 +233,12 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 4,
   },
+  contentTapArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   artWrapper: {
     width: 42,
     height: 42,
@@ -223,13 +267,30 @@ const styles = StyleSheet.create({
   info: {
     flex: 1,
   },
+  sessionName: {
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 1,
+  },
   title: {
     fontSize: 14,
     fontWeight: '600',
   },
-  subtitle: {
-    fontSize: 12,
+  metaRow: {
     marginTop: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  subtitle: {
+    flex: 1,
+    fontSize: 12,
+  },
+  timeText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   controls: {
     flexDirection: 'row',

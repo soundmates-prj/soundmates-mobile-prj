@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import React, { useMemo } from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, Dimensions } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
-import { SpotifyTrack } from '../../api';
+import { favoriteService, SpotifyTrack } from '../../api';
+import { showToast } from '../../components/ui/Toast';
 import { useTheme } from '../../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
@@ -20,7 +20,10 @@ interface SearchResultsScreenProps {
   isLoading: boolean;
   onBackToSuggestions: () => void;
   onOpenSpotifyLink: (url: string) => void;
-  onAddFavoriteTrack: (track: SpotifyTrack) => void;
+  onAddFavoriteTrack: (track: SpotifyTrack) => Promise<{
+    success: boolean;
+    message?: string;
+  }>;
 }
 
 export default function SearchResultsScreen({
@@ -33,6 +36,69 @@ export default function SearchResultsScreen({
   const { isDarkMode } = useTheme();
   const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
   const tracks = data?.tracks || [];
+  const [isAddingFavorite, setIsAddingFavorite] = useState(false);
+  const [favoritedTrackIds, setFavoritedTrackIds] = useState<Set<string>>(new Set());
+
+  const loadFavoritedTracks = useCallback(async () => {
+    try {
+      const result = await favoriteService.getFavorites({
+        itemType: 'track',
+        source: 'spotify',
+        page: 1,
+        pageSize: 200,
+      });
+
+      if (!result.success) {
+        return;
+      }
+
+      setFavoritedTrackIds(new Set(result.data.map((item) => item.itemId)));
+    } catch (error) {
+      console.log('[SearchResultsScreen] loadFavoritedTracks error:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadFavoritedTracks();
+  }, [loadFavoritedTracks, query]);
+
+  const handleAddFavorite = useCallback(async (track: SpotifyTrack) => {
+    if (favoritedTrackIds.has(track.id)) {
+      showToast.info('Đã có trong yêu thích', 'Bài hát này đã nằm trong danh sách yêu thích.');
+      return;
+    }
+
+    if (isAddingFavorite) {
+      return;
+    }
+
+    setIsAddingFavorite(true);
+
+    try {
+      const result = await onAddFavoriteTrack(track);
+
+      if (result.success) {
+        setFavoritedTrackIds((prev) => {
+          const next = new Set(prev);
+          next.add(track.id);
+          return next;
+        });
+
+        showToast.success('Đã thêm vào yêu thích', result.message || 'Bài hát đã được thêm vào danh sách yêu thích.');
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        return;
+      }
+
+      showToast.error('Không thể thêm vào yêu thích', result.message || 'Vui lòng thử lại sau.');
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } catch (error) {
+      console.log('[SearchResultsScreen] handleAddFavorite error:', error);
+      showToast.error('Không thể thêm vào yêu thích', 'Vui lòng thử lại sau.');
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsAddingFavorite(false);
+    }
+  }, [favoritedTrackIds, isAddingFavorite, onAddFavoriteTrack]);
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
@@ -51,38 +117,42 @@ export default function SearchResultsScreen({
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.bodyContent}
         >
-          {tracks.map((track, idx) => (
-            <Animated.View key={track.id} entering={FadeInDown.delay(idx * 50)}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  if (track.external_urls?.spotify) onOpenSpotifyLink(track.external_urls.spotify);
-                }}
-                style={[styles.trackCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
-              >
-                <Image
-                  source={{ uri: track.album?.images?.[0]?.url || 'https://i.pravatar.cc/100?img=12' }}
-                  style={styles.trackImage}
-                />
-                <View style={styles.trackInfo}>
-                  <Text numberOfLines={1} style={[styles.trackName, { color: palette.textPrimary }]}>{track.name}</Text>
-                  <Text numberOfLines={1} style={[styles.artistName, { color: palette.textSecondary }]}>
-                    {track.artists?.map((a) => a.name).join(', ')}
-                  </Text>
-                </View>
+          {tracks.map((track, idx) => {
+            const isFavorited = favoritedTrackIds.has(track.id);
+
+            return (
+              <Animated.View key={track.id} entering={FadeInDown.delay(idx * 50)}>
                 <TouchableOpacity
+                  activeOpacity={0.7}
                   onPress={() => {
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                    onAddFavoriteTrack(track);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    if (track.external_urls?.spotify) onOpenSpotifyLink(track.external_urls.spotify);
                   }}
-                  style={[styles.favBtn, { backgroundColor: palette.primary + '15' }]}
+                  style={[styles.trackCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
                 >
-                  <Ionicons name="heart-outline" size={20} color={palette.primary} />
+                  <Image
+                    source={{ uri: track.album?.images?.[0]?.url || 'https://i.pravatar.cc/100?img=12' }}
+                    style={styles.trackImage}
+                  />
+                  <View style={styles.trackInfo}>
+                    <Text numberOfLines={1} style={[styles.trackName, { color: palette.textPrimary }]}>{track.name}</Text>
+                    <Text numberOfLines={1} style={[styles.artistName, { color: palette.textSecondary }]}>
+                      {track.artists?.map((a) => a.name).join(', ')}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    disabled={isAddingFavorite}
+                    onPress={() => {
+                      void handleAddFavorite(track);
+                    }}
+                    style={[styles.favBtn, { backgroundColor: isFavorited ? 'rgba(239, 68, 68, 0.16)' : palette.primary + '15' }]}
+                  >
+                    <Ionicons name={isFavorited ? 'heart' : 'heart-outline'} size={20} color={isFavorited ? '#EF4444' : palette.primary} />
+                  </TouchableOpacity>
                 </TouchableOpacity>
-              </TouchableOpacity>
-            </Animated.View>
-          ))}
+              </Animated.View>
+            );
+          })}
 
           {tracks.length === 0 && (
             <View style={styles.emptyState}>
@@ -91,6 +161,15 @@ export default function SearchResultsScreen({
             </View>
           )}
         </ScrollView>
+      )}
+
+      {isAddingFavorite && (
+        <View style={styles.favoriteLoadingOverlay}>
+          <View style={[styles.favoriteLoadingCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+            <ActivityIndicator size="small" color={palette.primary} />
+            <Text style={[styles.favoriteLoadingText, { color: palette.textPrimary }]}>Đang thêm vào yêu thích...</Text>
+          </View>
+        </View>
       )}
     </View>
   );
@@ -102,7 +181,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: 10,
     paddingBottom: 15,
     borderBottomWidth: 1,
   },
@@ -170,5 +249,27 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 15,
     fontWeight: '500',
+  },
+  favoriteLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(2, 6, 23, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  favoriteLoadingCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    minWidth: 220,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  favoriteLoadingText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

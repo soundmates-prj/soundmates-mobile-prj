@@ -2,31 +2,31 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    KeyboardAvoidingView,
-    Linking,
-    Modal,
-    Platform,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SoundMateColors, SoundMateLightColors } from '../../../../constants/theme';
 import {
-    FavoriteItemResponse,
-    favoriteService,
-    PlaylistTrackResponse,
-    PlaylistVisibility,
-    uploadService,
-    UserPlaylistResponse,
-    userPlaylistService,
+  FavoriteItemResponse,
+  favoriteService,
+  PlaylistTrackResponse,
+  PlaylistVisibility,
+  uploadService,
+  UserPlaylistResponse,
+  userPlaylistService,
 } from '../../../api';
 import FormTextField from '../../../components/ui/FormTextField';
 import { showToast } from '../../../components/ui/Toast';
@@ -56,9 +56,9 @@ const normalizePlaylistVisibility = (
 
 const getPlaylistVisibilityLabel = (visibility: number | undefined): string => {
   const normalized = normalizePlaylistVisibility(visibility);
-  if (normalized === 0) return 'Cong khai';
-  if (normalized === 2) return 'Khong liet ke';
-  return 'Rieng tu';
+  if (normalized === 0) return 'Công khai';
+  if (normalized === 2) return 'Không liệt kê';
+  return 'Riêng tư';
 };
 
 const formatDurationSeconds = (value?: number): string => {
@@ -129,8 +129,8 @@ export default function PlaylistDetailModal({
 
       if (!playlistResult.success || !playlistResult.data) {
         showToast.warning(
-          'Khong the tai playlist',
-          playlistResult.message || 'Vui long thu lai sau',
+          'Không thể tải playlist',
+          playlistResult.message || 'Vui lòng thử lại sau',
         );
         return;
       }
@@ -142,13 +142,13 @@ export default function PlaylistDetailModal({
       } else {
         setPlaylistTracks([]);
         showToast.warning(
-          'Khong the tai danh sach bai hat',
-          trackResult.message || 'Vui long thu lai sau',
+          'Không thể tải danh sách bài hát',
+          trackResult.message || 'Vui lòng thử lại sau',
         );
       }
     } catch (error) {
       console.log('[PlaylistDetailModal] loadDetail error:', error);
-      showToast.error('Khong the tai playlist', 'Vui long thu lai sau');
+      showToast.error('Không thể tải playlist', 'Vui lòng thử lại sau');
     } finally {
       setIsLoadingDetail(false);
     }
@@ -192,11 +192,11 @@ export default function PlaylistDetailModal({
 
   const promptOpenSettings = useCallback((message: string) => {
     Alert.alert(
-      'Can cap quyen',
+      'Cần cấp quyền',
       message,
       [
-        { text: 'De sau', style: 'cancel' },
-        { text: 'Mo cai dat', onPress: () => Linking.openSettings() },
+        { text: 'Để sau', style: 'cancel' },
+        { text: 'Mở cài đặt', onPress: () => Linking.openSettings() },
       ],
       { cancelable: true },
     );
@@ -213,13 +213,13 @@ export default function PlaylistDetailModal({
         });
 
         if (!uploadResult.success || !uploadResult.data) {
-          throw new Error(uploadResult.message || 'Upload anh that bai');
+          throw new Error(uploadResult.message || 'Upload ảnh thất bại');
         }
 
         setPlaylistThumbnailInput(uploadResult.data);
-        showToast.success('Tai anh thanh cong', 'Thumbnail playlist da duoc cap nhat');
+        showToast.success('Tải ảnh thành công', 'Ảnh bìa playlist đã được cập nhật');
       } catch (error: any) {
-        showToast.error('Khong the tai anh', error?.message || 'Vui long thu lai sau');
+        showToast.error('Không thể tải ảnh', error?.message || 'Vui lòng thử lại sau');
       } finally {
         setIsUploadingPlaylistThumbnail(false);
       }
@@ -236,14 +236,14 @@ export default function PlaylistDetailModal({
       if (!permission.granted) {
         if (!permission.canAskAgain) {
           promptOpenSettings(
-            'Vui long cap quyen thu vien anh trong Cai dat de chon thumbnail playlist.',
+            'Vui lòng cấp quyền thư viện ảnh trong Cài đặt để chọn ảnh bìa playlist.',
           );
           return;
         }
 
         showToast.warning(
-          'Chua co quyen truy cap',
-          'Vui long cap quyen thu vien anh de tiep tuc',
+          'Chưa có quyền truy cập',
+          'Vui lòng cấp quyền thư viện ảnh để tiếp tục',
         );
         return;
       }
@@ -259,7 +259,7 @@ export default function PlaylistDetailModal({
         await uploadPlaylistThumbnailAsset(result.assets[0]);
       }
     } catch {
-      showToast.error('Khong the chon anh', 'Vui long thu lai sau');
+      showToast.error('Không thể chọn ảnh', 'Vui lòng thử lại sau');
     }
   }, [isUploadingPlaylistThumbnail, promptOpenSettings, uploadPlaylistThumbnailAsset]);
 
@@ -272,12 +272,12 @@ export default function PlaylistDetailModal({
       if (!permission.granted) {
         if (!permission.canAskAgain) {
           promptOpenSettings(
-            'Vui long cap quyen camera trong Cai dat de chup thumbnail playlist.',
+            'Vui lòng cấp quyền camera trong Cài đặt để chụp ảnh bìa playlist.',
           );
           return;
         }
 
-        showToast.warning('Chua co quyen camera', 'Vui long cap quyen camera de chup anh');
+        showToast.warning('Chưa có quyền camera', 'Vui lòng cấp quyền camera để chụp ảnh');
         return;
       }
 
@@ -292,7 +292,7 @@ export default function PlaylistDetailModal({
         await uploadPlaylistThumbnailAsset(result.assets[0]);
       }
     } catch {
-      showToast.error('Khong the mo camera', 'Vui long thu lai sau');
+      showToast.error('Không thể mở camera', 'Vui lòng thử lại sau');
     }
   }, [isUploadingPlaylistThumbnail, promptOpenSettings, uploadPlaylistThumbnailAsset]);
 
@@ -311,12 +311,12 @@ export default function PlaylistDetailModal({
     const playlistThumbnailUrl = playlistThumbnailInput.trim();
 
     if (isUploadingPlaylistThumbnail) {
-      showToast.warning('Anh dang duoc tai len', 'Vui long doi tai anh thumbnail hoan tat');
+      showToast.warning('Ảnh đang được tải lên', 'Vui lòng đợi tải ảnh thumbnail hoàn tất');
       return;
     }
 
     if (playlistName.length < 2) {
-      showToast.warning('Ten playlist chua hop le', 'Ten playlist phai co it nhat 2 ky tu');
+      showToast.warning('Tên playlist chưa hợp lệ', 'Tên playlist phải có ít nhất 2 ký tự');
       return;
     }
 
@@ -331,15 +331,15 @@ export default function PlaylistDetailModal({
       });
 
       if (!result.success) {
-        throw new Error(result.message || 'Khong the cap nhat playlist');
+        throw new Error(result.message || 'Không thể cập nhật playlist');
       }
 
-      showToast.success('Da cap nhat playlist', 'Thong tin playlist da duoc luu');
+      showToast.success('Đã cập nhật playlist', 'Thông tin playlist đã được lưu');
       setShowPlaylistEditor(false);
       resetEditorForm();
       await Promise.all([loadDetail(), onPlaylistsChanged?.()]);
     } catch (error: any) {
-      showToast.error('Luu playlist that bai', error?.message || 'Vui long thu lai sau');
+      showToast.error('Lưu playlist thất bại', error?.message || 'Vui lòng thử lại sau');
     } finally {
       setIsSavingPlaylist(false);
     }
@@ -363,24 +363,24 @@ export default function PlaylistDetailModal({
     }
 
     Alert.alert(
-      'Xoa playlist',
-      `Ban co chac chan muon xoa playlist "${playlistDetail.playlistName}"?`,
+      'Xóa playlist',
+      `Bạn có chắc chắn muốn xóa playlist "${playlistDetail.playlistName}"?`,
       [
-        { text: 'Huy', style: 'cancel' },
+        { text: 'Hủy', style: 'cancel' },
         {
-          text: 'Xoa',
+          text: 'Xóa',
           style: 'destructive',
           onPress: async () => {
             const result = await userPlaylistService.deleteUserPlaylist(playlistId);
             if (!result.success) {
               showToast.error(
-                'Xoa playlist that bai',
-                result.message || 'Vui long thu lai sau',
+                'Xóa playlist thất bại',
+                result.message || 'Vui lòng thử lại sau',
               );
               return;
             }
 
-            showToast.success('Da xoa playlist', 'Playlist da duoc xoa khoi thu vien cua ban');
+            showToast.success('Đã xóa playlist', 'Playlist đã được xóa khỏi thư viện của bạn');
             await Promise.all([onPlaylistDeleted?.(playlistId), onPlaylistsChanged?.()]);
             onClose();
           },
@@ -400,8 +400,8 @@ export default function PlaylistDetailModal({
 
       if (!result.success) {
         showToast.warning(
-          'Khong the tai nhac yeu thich',
-          result.message || 'Vui long thu lai sau',
+          'Không thể tải nhạc yêu thích',
+          result.message || 'Vui lòng thử lại sau',
         );
         setFavoriteTracks([]);
         return;
@@ -411,7 +411,7 @@ export default function PlaylistDetailModal({
     } catch (error) {
       console.log('[PlaylistDetailModal] loadFavoriteTracks error:', error);
       setFavoriteTracks([]);
-      showToast.error('Khong the tai nhac yeu thich', 'Vui long thu lai sau');
+      showToast.error('Không thể tải nhạc yêu thích', 'Vui lòng thử lại sau');
     } finally {
       setIsLoadingFavorites(false);
     }
@@ -477,19 +477,19 @@ export default function PlaylistDetailModal({
         selectedFavoriteMediaIds,
       );
       if (!result.success) {
-        throw new Error(result.message || 'Khong the them bai hat vao playlist');
+        throw new Error(result.message || 'Không thể thêm bài hát vào playlist');
       }
 
       showToast.success(
-        'Da them bai hat',
-        `Da them ${selectedFavoriteMediaIds.length} bai hat vao playlist`,
+        'Đã thêm bài hát',
+        `Đã thêm ${selectedFavoriteMediaIds.length} bài hát vào playlist`,
       );
 
       setShowAddTracksModal(false);
       setSelectedFavoriteMediaIds([]);
       await Promise.all([loadDetail(), onPlaylistsChanged?.()]);
     } catch (error: any) {
-      showToast.error('Them bai hat that bai', error?.message || 'Vui long thu lai sau');
+      showToast.error('Thêm bài hát thất bại', error?.message || 'Vui lòng thử lại sau');
     } finally {
       setIsSubmittingTracks(false);
     }
@@ -501,12 +501,12 @@ export default function PlaylistDetailModal({
     }
 
     Alert.alert(
-      'Xoa bai hat',
-      `Ban co muon xoa "${track.title}" khoi playlist khong?`,
+      'Xóa bài hát',
+      `Bạn có muốn xóa "${track.title}" khỏi playlist không?`,
       [
-        { text: 'Huy', style: 'cancel' },
+        { text: 'Hủy', style: 'cancel' },
         {
-          text: 'Xoa',
+          text: 'Xóa',
           style: 'destructive',
           onPress: async () => {
             const result = await userPlaylistService.removeTracksFromPlaylist(playlistId, [
@@ -515,13 +515,13 @@ export default function PlaylistDetailModal({
 
             if (!result.success) {
               showToast.error(
-                'Xoa bai hat that bai',
-                result.message || 'Vui long thu lai sau',
+                'Xóa bài hát thất bại',
+                result.message || 'Vui lòng thử lại sau',
               );
               return;
             }
 
-            showToast.success('Da xoa bai hat', 'Bai hat da duoc go khoi playlist');
+            showToast.success('Đã xóa bài hát', 'Bài hát đã được gỡ khỏi playlist');
             await Promise.all([loadDetail(), onPlaylistsChanged?.()]);
           },
         },
@@ -577,7 +577,7 @@ export default function PlaylistDetailModal({
             >
               <Ionicons name="arrow-back" size={20} color={palette.textPrimary} />
             </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: palette.textPrimary }]}>Chi tiet playlist</Text>
+            <Text style={[styles.headerTitle, { color: palette.textPrimary }]}>Chi tiết playlist</Text>
             <View style={styles.headerActions}>
               <TouchableOpacity
                 style={[styles.headerButton, { backgroundColor: palette.background }]}
@@ -599,11 +599,11 @@ export default function PlaylistDetailModal({
           {!playlistDetail && isLoadingDetail ? (
             <View style={styles.loadingWrap}>
               <ActivityIndicator size="large" color={palette.primary} />
-              <Text style={[styles.loadingText, { color: palette.textSecondary }]}>Dang tai playlist...</Text>
+              <Text style={[styles.loadingText, { color: palette.textSecondary }]}>Đang tải playlist...</Text>
             </View>
           ) : !playlistDetail ? (
             <View style={styles.loadingWrap}>
-              <Text style={[styles.loadingText, { color: palette.textSecondary }]}>Khong tim thay playlist</Text>
+              <Text style={[styles.loadingText, { color: palette.textSecondary }]}>Không tìm thấy playlist</Text>
             </View>
           ) : (
             <ScrollView
@@ -632,13 +632,13 @@ export default function PlaylistDetailModal({
                     {playlistDetail.playlistName}
                   </Text>
                   <Text style={[styles.heroDesc, { color: palette.textSecondary }]} numberOfLines={3}>
-                    {playlistDetail.description?.trim() || 'Chua co mo ta cho playlist nay'}
+                    {playlistDetail.description?.trim() || 'Chưa có mô tả cho playlist này'}
                   </Text>
 
                   <View style={styles.badgeRow}>
                     <View style={[styles.badge, { backgroundColor: palette.primary + '18' }]}> 
                       <Text style={[styles.badgeText, { color: palette.primary }]}>
-                        {playlistDetail.totalTracks} bai hat
+                        {playlistDetail.totalTracks} bài hát
                       </Text>
                     </View>
                     <View style={[styles.badge, { backgroundColor: '#E2E8F0' }]}> 
@@ -658,7 +658,7 @@ export default function PlaylistDetailModal({
                           { color: playlistDetail.isEnabled ? '#15803D' : '#B45309' },
                         ]}
                       >
-                        {playlistDetail.isEnabled ? 'Dang bat' : 'Dang tat'}
+                        {playlistDetail.isEnabled ? 'Đang bật' : 'Đang tắt'}
                       </Text>
                     </View>
                   </View>
@@ -667,26 +667,26 @@ export default function PlaylistDetailModal({
 
               <View style={[styles.sectionCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>Danh sach bai hat</Text>
+                  <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>Danh sách bài hát</Text>
                   <TouchableOpacity
                     style={[styles.addButton, { backgroundColor: palette.primary }]}
                     onPress={() => void openAddTrackModal()}
                   >
                     <Ionicons name="add" size={14} color="#FFFFFF" />
-                    <Text style={styles.addButtonText}>Them nhac</Text>
+                    <Text style={styles.addButtonText}>Thêm nhạc</Text>
                   </TouchableOpacity>
                 </View>
 
                 {isLoadingDetail && playlistTracks.length === 0 ? (
                   <View style={styles.centerWrap}>
                     <ActivityIndicator size="small" color={palette.primary} />
-                    <Text style={[styles.centerText, { color: palette.textSecondary }]}>Dang tai bai hat...</Text>
+                    <Text style={[styles.centerText, { color: palette.textSecondary }]}>Đang tải bài hát...</Text>
                   </View>
                 ) : playlistTracks.length === 0 ? (
                   <View style={styles.centerWrap}>
                     <Ionicons name="musical-note-outline" size={24} color={palette.textMuted} />
-                    <Text style={[styles.emptyTitle, { color: palette.textSecondary }]}>Playlist chua co bai hat nao.</Text>
-                    <Text style={[styles.emptyHint, { color: palette.textMuted }]}>Nhan Them nhac de them bai hat yeu thich.</Text>
+                    <Text style={[styles.emptyTitle, { color: palette.textSecondary }]}>Playlist chưa có bài hát nào.</Text>
+                    <Text style={[styles.emptyHint, { color: palette.textMuted }]}>Nhấn "Thêm nhạc" để thêm bài hát yêu thích.</Text>
                   </View>
                 ) : (
                   <View style={styles.trackList}>
@@ -708,7 +708,7 @@ export default function PlaylistDetailModal({
                             {track.title}
                           </Text>
                           <Text style={[styles.trackSub, { color: palette.textSecondary }]} numberOfLines={1}>
-                            {track.artist?.trim() || 'Unknown Artist'}
+                            {track.artist?.trim() || 'Không rõ nghệ sĩ'}
                             {track.album ? ` • ${track.album}` : ''}
                           </Text>
                         </View>
@@ -748,7 +748,7 @@ export default function PlaylistDetailModal({
                 </View>
 
                 <View style={[styles.sheetHeader, { borderBottomColor: palette.border }]}> 
-                  <Text style={[styles.sheetTitle, { color: palette.textPrimary }]}>Them nhac tu yeu thich</Text>
+                  <Text style={[styles.sheetTitle, { color: palette.textPrimary }]}>Thêm nhạc từ yêu thích</Text>
                   <TouchableOpacity
                     onPress={() => setShowAddTracksModal(false)}
                     disabled={isSubmittingTracks}
@@ -761,7 +761,7 @@ export default function PlaylistDetailModal({
                   <FormTextField
                     value={favoriteSearch}
                     onChangeText={setFavoriteSearch}
-                    placeholder="Tim theo ten bai hat, nghe si, album"
+                    placeholder="Tìm theo tên bài hát, nghệ sĩ, album"
                     placeholderTextColor={palette.textMuted}
                     inputContainerStyle={[
                       styles.input,
@@ -773,12 +773,12 @@ export default function PlaylistDetailModal({
                   {isLoadingFavorites ? (
                     <View style={styles.centerWrap}>
                       <ActivityIndicator size="small" color={palette.primary} />
-                      <Text style={[styles.centerText, { color: palette.textSecondary }]}>Dang tai danh sach yeu thich...</Text>
+                      <Text style={[styles.centerText, { color: palette.textSecondary }]}>Đang tải danh sách yêu thích...</Text>
                     </View>
                   ) : filteredFavoriteTracks.length === 0 ? (
                     <View style={styles.centerWrap}>
                       <Ionicons name="search-outline" size={22} color={palette.textMuted} />
-                      <Text style={[styles.emptyTitle, { color: palette.textSecondary }]}>Khong co bai hat phu hop</Text>
+                      <Text style={[styles.emptyTitle, { color: palette.textSecondary }]}>Không có bài hát phù hợp</Text>
                     </View>
                   ) : (
                     <ScrollView style={styles.addList} contentContainerStyle={styles.addListContent}>
@@ -809,15 +809,15 @@ export default function PlaylistDetailModal({
                                 {track.name?.trim() || track.id}
                               </Text>
                               <Text style={[styles.addSub, { color: palette.textSecondary }]} numberOfLines={1}>
-                                {track.artistName?.trim() || 'Khong ro nghe si'}
+                                {track.artistName?.trim() || 'Không rõ nghệ sĩ'}
                                 {track.albumName ? ` • ${track.albumName}` : ''}
                               </Text>
                               <Text style={[styles.addHint, { color: canAdd ? '#16A34A' : '#DC2626' }]}>
                                 {alreadyAdded
-                                  ? 'Da co trong playlist'
+                                  ? 'Đã có trong playlist'
                                   : canAdd
-                                    ? 'San sang them vao playlist'
-                                    : 'Khong ho tro them (id khong phai UUID)'}
+                                    ? 'Sẵn sàng thêm vào playlist'
+                                    : 'Không hỗ trợ thêm (ID không phải UUID)'}
                               </Text>
                             </View>
 
@@ -839,7 +839,7 @@ export default function PlaylistDetailModal({
                     onPress={() => setShowAddTracksModal(false)}
                     disabled={isSubmittingTracks}
                   >
-                    <Text style={[styles.cancelButtonText, { color: palette.textSecondary }]}>Dong</Text>
+                    <Text style={[styles.cancelButtonText, { color: palette.textSecondary }]}>Đóng</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -858,7 +858,7 @@ export default function PlaylistDetailModal({
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
                       <Text style={styles.saveButtonText}>
-                        Them {selectedFavoriteMediaIds.length > 0 ? `(${selectedFavoriteMediaIds.length})` : ''}
+                        Thêm {selectedFavoriteMediaIds.length > 0 ? `(${selectedFavoriteMediaIds.length})` : ''}
                       </Text>
                     )}
                   </TouchableOpacity>
@@ -882,7 +882,7 @@ export default function PlaylistDetailModal({
                   </View>
 
                   <View style={[styles.sheetHeader, { borderBottomColor: palette.border }]}> 
-                    <Text style={[styles.sheetTitle, { color: palette.textPrimary }]}>Chinh sua playlist</Text>
+                    <Text style={[styles.sheetTitle, { color: palette.textPrimary }]}>Chỉnh sửa playlist</Text>
                     <TouchableOpacity onPress={closeEditor} disabled={isSavingPlaylist || isUploadingPlaylistThumbnail}>
                       <Ionicons name="close" size={18} color={palette.textSecondary} />
                     </TouchableOpacity>
@@ -896,11 +896,11 @@ export default function PlaylistDetailModal({
                     showsVerticalScrollIndicator={false}
                   >
                     <View style={styles.editorBody}>
-                      <Text style={[styles.editorLabel, { color: palette.textSecondary }]}>Ten playlist</Text>
+                      <Text style={[styles.editorLabel, { color: palette.textSecondary }]}>Tên playlist</Text>
                       <FormTextField
                         value={playlistNameInput}
                         onChangeText={setPlaylistNameInput}
-                        placeholder="Nhap ten playlist"
+                        placeholder="Nhập tên playlist"
                         placeholderTextColor={palette.textMuted}
                         inputContainerStyle={[
                           styles.input,
@@ -909,11 +909,11 @@ export default function PlaylistDetailModal({
                         style={[styles.inputText, { color: palette.textPrimary }]}
                       />
 
-                      <Text style={[styles.editorLabel, styles.sectionGap, { color: palette.textSecondary }]}>Mo ta</Text>
+                      <Text style={[styles.editorLabel, styles.sectionGap, { color: palette.textSecondary }]}>Mô tả</Text>
                       <FormTextField
                         value={playlistDescriptionInput}
                         onChangeText={setPlaylistDescriptionInput}
-                        placeholder="Mo ta ngan cho playlist (khong bat buoc)"
+                        placeholder="Mô tả ngắn cho playlist (không bắt buộc)"
                         placeholderTextColor={palette.textMuted}
                         multiline
                         numberOfLines={3}
@@ -925,7 +925,7 @@ export default function PlaylistDetailModal({
                         style={[styles.inputText, styles.inputTextMultiline, { color: palette.textPrimary }]}
                       />
 
-                      <Text style={[styles.editorLabel, styles.sectionGap, { color: palette.textSecondary }]}>Anh bia playlist</Text>
+                      <Text style={[styles.editorLabel, styles.sectionGap, { color: palette.textSecondary }]}>Ảnh bìa playlist</Text>
                       <TouchableOpacity
                         activeOpacity={0.9}
                         onPress={() => setShowPlaylistThumbnailOptions(true)}
@@ -937,7 +937,7 @@ export default function PlaylistDetailModal({
                         ) : (
                           <View style={styles.thumbnailEmpty}>
                             <Ionicons name="image-outline" size={24} color={palette.textMuted} />
-                            <Text style={[styles.thumbnailEmptyText, { color: palette.textMuted }]}>Nhan de chon anh bia</Text>
+                            <Text style={[styles.thumbnailEmptyText, { color: palette.textMuted }]}>Nhấn để chọn ảnh bìa</Text>
                           </View>
                         )}
 
@@ -953,7 +953,7 @@ export default function PlaylistDetailModal({
                       </TouchableOpacity>
 
                       <View style={styles.visibilityRow}>
-                        <Text style={[styles.visibilityText, { color: palette.textSecondary }]}>Hay cong khai playlist nay</Text>
+                        <Text style={[styles.visibilityText, { color: palette.textSecondary }]}>Hãy công khai playlist này</Text>
                         <Switch
                           value={playlistVisibilityInput === 0}
                           onValueChange={(nextValue) => setPlaylistVisibilityInput(nextValue ? 0 : 1)}
@@ -971,7 +971,7 @@ export default function PlaylistDetailModal({
                       onPress={closeEditor}
                       disabled={isSavingPlaylist || isUploadingPlaylistThumbnail}
                     >
-                      <Text style={[styles.cancelButtonText, { color: palette.textSecondary }]}>Huy</Text>
+                      <Text style={[styles.cancelButtonText, { color: palette.textSecondary }]}>Hủy</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.footerButton, styles.saveButton, { backgroundColor: palette.primary }]}
@@ -981,7 +981,7 @@ export default function PlaylistDetailModal({
                       {isSavingPlaylist || isUploadingPlaylistThumbnail ? (
                         <ActivityIndicator size="small" color="#FFFFFF" />
                       ) : (
-                        <Text style={styles.saveButtonText}>Luu thay doi</Text>
+                        <Text style={styles.saveButtonText}>Lưu thay đổi</Text>
                       )}
                     </TouchableOpacity>
                   </View>
@@ -999,7 +999,7 @@ export default function PlaylistDetailModal({
 
               <View style={[styles.popupCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
                 <View style={[styles.sheetHeader, { borderBottomColor: palette.border }]}> 
-                  <Text style={[styles.sheetTitle, { color: palette.textPrimary }]}>Anh bia playlist</Text>
+                  <Text style={[styles.sheetTitle, { color: palette.textPrimary }]}>Ảnh bìa playlist</Text>
                   <TouchableOpacity onPress={() => setShowPlaylistThumbnailOptions(false)}>
                     <Ionicons name="close" size={18} color={palette.textSecondary} />
                   </TouchableOpacity>
@@ -1011,7 +1011,7 @@ export default function PlaylistDetailModal({
                   disabled={isUploadingPlaylistThumbnail}
                 >
                   <Ionicons name="images-outline" size={18} color="#55C5F1" />
-                  <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>Chon anh tu thu vien</Text>
+                  <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>Chọn ảnh từ thư viện</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1020,7 +1020,7 @@ export default function PlaylistDetailModal({
                   disabled={isUploadingPlaylistThumbnail}
                 >
                   <Ionicons name="camera-outline" size={18} color="#A78BFA" />
-                  <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>Chup anh moi</Text>
+                  <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>Chụp ảnh mới</Text>
                 </TouchableOpacity>
 
                 {!!playlistThumbnailInput && (
@@ -1030,7 +1030,7 @@ export default function PlaylistDetailModal({
                     disabled={isUploadingPlaylistThumbnail}
                   >
                     <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                    <Text style={[styles.popupOptionText, styles.popupOptionDangerText]}>Xoa anh bia</Text>
+                    <Text style={[styles.popupOptionText, styles.popupOptionDangerText]}>Xóa ảnh bìa</Text>
                   </TouchableOpacity>
                 )}
               </View>

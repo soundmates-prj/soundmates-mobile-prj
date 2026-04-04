@@ -29,9 +29,13 @@ export interface SearchSuggestionItem {
     id: string;
     source: 'spotify';
     category: 'track';
+    trackId: string;
     title: string;
     subtitle: string;
+    artistName?: string;
+    albumName?: string;
     imageUrl?: string;
+    previewUrl?: string;
 }
 
 export const SEARCH_MIN_CHARS = 2;

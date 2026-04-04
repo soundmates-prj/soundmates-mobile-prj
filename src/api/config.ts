@@ -122,7 +122,9 @@ export const PODCAST_ENDPOINTS = {
 export const LIVESTREAM_ENDPOINTS = {
     LIVE_SESSIONS: '/livesession',
     ACTIVE_SESSIONS: '/livesession/active',
+    SCHEDULES: '/schedule',
     LIVE_SESSION_DETAIL: (sessionId: string) => `/livesession/${sessionId}`,
+    NOW_PLAYING_BY_SESSION: (sessionId: string) => `/livesession/${sessionId}/now-playing`,
     CREATE_LIVE_SESSION: '/livesession',
     UPDATE_LIVE_SESSION: (sessionId: string) => `/livesession/${sessionId}`,
     START_LIVE_SESSION: (sessionId: string) => `/livesession/${sessionId}/start`,

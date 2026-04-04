@@ -19,6 +19,7 @@ import {
     HomeScreen,
     HostBroadcastScreen,
     HostLiveManagerScreen,
+    LiveSessionsScreen,
     LivestreamScreen,
     LoginScreen,
     OTPScreen,
@@ -42,7 +43,7 @@ const STORAGE_KEYS = {
 };
 
 // Define screens enum
-type HomeEntryTab = Extract<TabName, 'home' | 'blog' | 'podcast'>;
+type HomeEntryTab = Extract<TabName, 'home' | 'blog' | 'podcast' | 'profile'>;
 
 type RootStackParamList = {
     Login: undefined;
@@ -51,7 +52,8 @@ type RootStackParamList = {
     ProfileSetup: undefined;
     ForgotPassword: { prefillEmail?: string } | undefined;
     Home: undefined;
-    Live: undefined;
+    LiveSessions: undefined;
+    Live: { sessionId: string };
     HostLiveManager: undefined;
     HostBroadcast: { sessionId: string };
     Profile: undefined;
@@ -400,7 +402,8 @@ function AppContent() {
     }, [clearAuthTokens]);
 
     const handleBackToHome = useCallback((tab: TabName = 'home') => {
-        const entryTab: HomeEntryTab = tab === 'blog' || tab === 'podcast' ? tab : 'home';
+        const entryTab: HomeEntryTab =
+            tab === 'blog' || tab === 'podcast' || tab === 'profile' ? tab : 'home';
         setHomeEntryTab(entryTab);
         safeGoBack();
     }, [safeGoBack]);
@@ -562,15 +565,35 @@ function AppContent() {
                                     <HomeScreen
                                         initialTab={homeEntryTab}
                                         onLogout={handleLogout}
-                                        onNavigateToLive={() => props.navigation.navigate('Live')}
+                                        onNavigateToLiveSession={(sessionId) => props.navigation.navigate('Live', { sessionId })}
                                         onNavigateToForgotPassword={() => props.navigation.navigate('ForgotPassword', { prefillEmail: userEmail })}
                                         onNavigateToSubscription={handleNavigateToSubscription}
                                     />
                                 )}
                             </Stack.Screen>
 
+                            <Stack.Screen name="LiveSessions">
+                                {(props) => (
+                                    <LiveSessionsScreen
+                                        onBack={handleBackToHome}
+                                        onSelectSession={(sessionId) => props.navigation.navigate('Live', { sessionId })}
+                                        onTabPress={(tab) => {
+                                            const entryTab: HomeEntryTab =
+                                                tab === 'blog' || tab === 'podcast' || tab === 'profile' ? tab : 'home';
+                                            setHomeEntryTab(entryTab);
+                                            props.navigation.navigate('Home');
+                                        }}
+                                    />
+                                )}
+                            </Stack.Screen>
+
                             <Stack.Screen name="Live">
-                                {(props) => <LivestreamScreen onBack={handleBackToHome} />}
+                                {(props) => (
+                                    <LivestreamScreen
+                                        onBack={() => props.navigation.goBack()}
+                                        sessionId={(props.route.params as any)?.sessionId}
+                                    />
+                                )}
                             </Stack.Screen>
 
                             <Stack.Screen name="HostLiveManager">

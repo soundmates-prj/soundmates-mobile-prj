@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -19,12 +18,12 @@ import {
 import {
     livestreamService,
     type LiveSessionResult,
-    type NowPlayingData,
     type TrackInfo,
 } from '../../api/livestreamService';
-import { useUser } from '../../context/UserContext';
 import FormTextField from '../../components/ui/FormTextField';
 import { showToast } from '../../components/ui/Toast';
+import { useAudioPlayer } from '../../context/AudioPlayerContext';
+import { useUser } from '../../context/UserContext';
 
 interface ChatMessage {
   id: string;
@@ -304,14 +303,12 @@ function SidebarMenu({
   onClose,
   nowPlayingItems,
   isStreamMuted,
-  streamVolume,
   onToggleMute,
 }: {
   isOpen: boolean;
   onClose: () => void;
   nowPlayingItems: NowPlayingItem[];
   isStreamMuted: boolean;
-  streamVolume: number;
   onToggleMute: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<'music' | 'podcast'>('music');
@@ -374,20 +371,6 @@ function SidebarMenu({
                     <Text style={styles.sidebarSongDuration}>{song.duration}</Text>
                   </View>
                 ))}
-
-                <View style={styles.sidebarVolumeBox}>
-                  <View style={styles.sidebarVolumeRow}>
-                    <TouchableOpacity onPress={onToggleMute} style={styles.sidebarVolumeIconButton}>
-                      <Ionicons name={isStreamMuted ? 'volume-mute' : 'volume-high'} size={18} color="#6B7280" />
-                    </TouchableOpacity>
-                    <View style={styles.sidebarVolumeTrack}>
-                      <View style={[styles.sidebarVolumeFill, { width: `${Math.round(streamVolume * 100)}%` }]} />
-                    </View>
-                    <Text style={styles.sidebarVolumeText}>
-                      {isStreamMuted ? 'MUTE' : `${Math.round(streamVolume * 100)}%`}
-                    </Text>
-                  </View>
-                </View>
               </View>
             ) : (
               <View>
@@ -648,13 +631,22 @@ function ReactionPicker({ isOpen, onClose, onSelect }: { isOpen: boolean; onClos
   );
 }
 
-export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
+export default function LivestreamScreen({ onBack, sessionId }: { onBack: () => void; sessionId?: string }) {
   const { user } = useUser();
-  const [nowPlaying, setNowPlaying] = useState<NowPlayingData | null>(null);
+  const {
+    loadSession,
+    togglePlayback: toggleStreamPlayback,
+    toggleMute: toggleStreamMute,
+    isPlaying: isStreamPlaying,
+    isLoading: isStreamLoading,
+    isMuted: isStreamMuted,
+    nowPlaying,
+    displayElapsed,
+    activeSession: playerSession,
+  } = useAudioPlayer();
   const [activeSessions, setActiveSessions] = useState<LiveSessionResult[]>([]);
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(sessionId || null);
   const [isSessionsLoading, setIsSessionsLoading] = useState(true);
-  const [isNowPlayingLoading, setIsNowPlayingLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [inputMessage, setInputMessage] = useState('');
   const [showReactions, setShowReactions] = useState(false);
@@ -670,16 +662,6 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
   const dragX = useRef(new Animated.Value(0)).current;
   const storyTranslateX = useRef(new Animated.Value(0)).current;
   const storyOpacity = useRef(new Animated.Value(1)).current;
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const activeStreamUrlRef = useRef('');
-  const autoPlayedRef = useRef(false);
-  const [isStreamPlaying, setIsStreamPlaying] = useState(false);
-  const [isStreamLoading, setIsStreamLoading] = useState(false);
-  const [streamAvailability, setStreamAvailability] = useState<'checking' | 'ready' | 'unavailable'>('checking');
-  const [retryProbeTick, setRetryProbeTick] = useState(0);
-  const [isStreamMuted, setIsStreamMuted] = useState(false);
-  const [displayElapsed, setDisplayElapsed] = useState<number>(0);
-  const [streamVolume] = useState(0.8);
   const combinedTranslateX = useMemo(
     () => Animated.add(storyTranslateX, dragX),
     [dragX, storyTranslateX]
@@ -690,61 +672,30 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
     [activeSessions, selectedSessionId],
   );
 
-  const currentStationUuid = useMemo(
-    () => currentLiveSession?.stationId || undefined,
-    [currentLiveSession?.stationId],
-  );
+  const handleExitLive = useCallback(() => {
+    onBack();
+  }, [onBack]);
 
-  const fetchNowPlaying = useCallback(async (stationUuid?: string) => {
-    setIsNowPlayingLoading(true);
-    try {
-      const nowPlayingData = await livestreamService.getNowPlaying(stationUuid);
-      if (nowPlayingData) {
-        setNowPlaying(nowPlayingData);
-      }
-    } catch (error) {
-      console.log('[LivestreamScreen] getNowPlaying error:', error);
-    } finally {
-      setIsNowPlayingLoading(false);
+  useEffect(() => {
+    if (sessionId) {
+      setSelectedSessionId(sessionId);
     }
-  }, []);
+  }, [sessionId]);
 
   const fetchActiveSessions = useCallback(async () => {
     try {
-      const allSessions: LiveSessionResult[] = [];
-      let pageNumber = 1;
-      let totalPages = 1;
+      const activeLiveSessions = await livestreamService.getActiveSessions();
 
-      do {
-        const paged = await livestreamService.getLiveSessions({
-          pageNumber,
-          pageSize: 50,
-        });
-
-        allSessions.push(...(paged.items || []));
-        totalPages = paged.totalPages || 1;
-        pageNumber += 1;
-      } while (pageNumber <= totalPages);
-
-      const liveSessions = allSessions.filter(
-        (session) => session.status?.toLowerCase() === 'live',
-      );
-
-      const detailedLiveSessions = await Promise.all(
-        liveSessions.map(async (session) => {
-          try {
-            return await livestreamService.getLiveSession(session.id);
-          } catch {
-            return session;
-          }
-        }),
-      );
-
-      setActiveSessions(detailedLiveSessions);
+      setActiveSessions(activeLiveSessions);
       setSelectedSessionId((prev) => {
-        if (!detailedLiveSessions.length) return null;
-        if (prev && detailedLiveSessions.some((session) => session.id === prev)) return prev;
-        return detailedLiveSessions[0].id;
+        if (!activeLiveSessions.length) return null;
+
+        const preferredSessionId = sessionId || prev;
+        if (preferredSessionId && activeLiveSessions.some((session) => session.id === preferredSessionId)) {
+          return preferredSessionId;
+        }
+
+        return activeLiveSessions[0].id;
       });
     } catch (error) {
       console.log('Failed to fetch live sessions', error);
@@ -753,7 +704,7 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
     } finally {
       setIsSessionsLoading(false);
     }
-  }, []);
+  }, [sessionId]);
 
   useEffect(() => {
     fetchActiveSessions();
@@ -761,26 +712,17 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
     return () => clearInterval(interval);
   }, [fetchActiveSessions]);
 
-  // Fetch nowPlaying whenever the selected station changes
   useEffect(() => {
-    void fetchNowPlaying(currentStationUuid);
-    const pollInterval = setInterval(() => {
-      void fetchNowPlaying(currentStationUuid);
-    }, 8000);
-    return () => clearInterval(pollInterval);
-  }, [currentStationUuid, fetchNowPlaying]);
+    if (!currentLiveSession) {
+      return;
+    }
 
-  useEffect(() => {
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
-    }).catch((error) => {
-      console.log('[LivestreamScreen] setAudioMode error:', error);
-    });
-  }, []);
+    if (playerSession?.id === currentLiveSession.id) {
+      return;
+    }
+
+    loadSession(currentLiveSession);
+  }, [currentLiveSession, loadSession, playerSession?.id]);
 
   const liveTitle = currentLiveSession?.sessionName || nowPlaying?.stationName || LIVE_SESSION.title;
   const liveHost = nowPlaying?.streamerName || currentLiveSession?.stationName || LIVE_SESSION.host;
@@ -788,210 +730,10 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
   const liveListeners = nowPlaying?.totalListeners ?? currentLiveSession?.listenersCount ?? LIVE_SESSION.listeners;
   const currentArtUrl = nowPlaying?.currentTrack?.artUrl || null;
   const isLiveSession = activeSessions.length > 0;
-  const hasLiveStream = streamAvailability === 'ready';
-  const currentStreamUrl = useMemo(
-    () => livestreamService.normalizeStreamUrl(currentLiveSession?.streamUrl || undefined),
-    [currentLiveSession?.streamUrl],
-  );
+  const hasLiveStream = Boolean((currentLiveSession?.streamUrl || '').trim());
   const elapsedToRender = nowPlaying?.currentTrack
     ? displayElapsed
     : 0;
-
-  useEffect(() => {
-    if (!nowPlaying?.currentTrack) {
-      setDisplayElapsed(0);
-      return;
-    }
-
-    const baseElapsed = Math.max(0, Math.floor(nowPlaying.currentTrack.elapsed || 0));
-    const maxDuration = Math.max(0, Math.floor(nowPlaying.currentTrack.duration || 0));
-    const syncedAt = Date.now();
-
-    setDisplayElapsed(baseElapsed);
-
-    const intervalId = setInterval(() => {
-      const elapsedSeconds = Math.floor((Date.now() - syncedAt) / 1000);
-      const nextElapsed = baseElapsed + elapsedSeconds;
-      setDisplayElapsed(maxDuration > 0 ? Math.min(nextElapsed, maxDuration) : nextElapsed);
-    }, 1000);
-
-    return () => clearInterval(intervalId);
-  }, [
-    nowPlaying?.currentTrack?.shId,
-    nowPlaying?.currentTrack?.playedAt,
-    nowPlaying?.currentTrack?.elapsed,
-    nowPlaying?.currentTrack?.duration,
-  ]);
-
-  const unloadStream = useCallback(async () => {
-    const sound = soundRef.current;
-    soundRef.current = null;
-    activeStreamUrlRef.current = '';
-
-    if (sound) {
-      try {
-        sound.setOnPlaybackStatusUpdate(null);
-        await sound.unloadAsync();
-      } catch {
-        // Ignore cleanup errors.
-      }
-    }
-
-    setIsStreamPlaying(false);
-  }, []);
-
-  const startStream = useCallback(async () => {
-    if (!currentStreamUrl || isStreamLoading || !hasLiveStream) {
-      if (!currentStreamUrl) {
-        showToast.warning('Chưa có nguồn phát', 'Vui lòng đợi dữ liệu livestream cập nhật');
-      } else if (!hasLiveStream) {
-        showToast.info('Không có phiên live', 'Hiện đang không có phiên live nào');
-      }
-      return;
-    }
-
-    setIsStreamLoading(true);
-    try {
-      await unloadStream();
-      console.log('[LivestreamScreen] Starting stream with URL:', currentStreamUrl);
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: currentStreamUrl },
-        {
-          shouldPlay: true,
-          isMuted: isStreamMuted,
-          volume: streamVolume,
-          progressUpdateIntervalMillis: 500,
-        },
-        (status) => {
-          if (!status.isLoaded) {
-            if (status.error) {
-              console.log('[LivestreamScreen] playback error:', status.error);
-            }
-            setIsStreamPlaying(false);
-            return;
-          }
-
-          setIsStreamPlaying(status.isPlaying);
-        },
-      );
-
-      soundRef.current = sound;
-      activeStreamUrlRef.current = currentStreamUrl;
-      setIsStreamPlaying(true);
-      setStreamAvailability('ready');
-    } catch (error) {
-      console.log('[LivestreamScreen] startStream error:', error);
-      showToast.error('Không thể phát livestream', 'Kiểm tra kết nối mạng hoặc URL stream');
-      setIsStreamPlaying(false);
-      setStreamAvailability('unavailable');
-    } finally {
-      setIsStreamLoading(false);
-    }
-  }, [currentStreamUrl, hasLiveStream, isStreamLoading, isStreamMuted, streamVolume, unloadStream]);
-
-  const toggleStreamPlayback = useCallback(async () => {
-    if (isStreamLoading) return;
-
-    const sound = soundRef.current;
-    const isDifferentStream = activeStreamUrlRef.current !== currentStreamUrl;
-
-    if (!sound || isDifferentStream) {
-      await startStream();
-      return;
-    }
-
-    try {
-      const status = await sound.getStatusAsync();
-      if (!status.isLoaded) {
-        await startStream();
-        return;
-      }
-
-      if (status.isPlaying) {
-        await sound.pauseAsync();
-        setIsStreamPlaying(false);
-      } else {
-        await sound.playAsync();
-        setIsStreamPlaying(true);
-      }
-    } catch (error) {
-      console.log('[LivestreamScreen] toggleStreamPlayback error:', error);
-      await startStream();
-    }
-  }, [currentStreamUrl, isStreamLoading, startStream]);
-
-  const toggleStreamMute = useCallback(async () => {
-    const nextMuted = !isStreamMuted;
-    setIsStreamMuted(nextMuted);
-
-    if (soundRef.current) {
-      try {
-        await soundRef.current.setIsMutedAsync(nextMuted);
-      } catch (error) {
-        console.log('[LivestreamScreen] toggleStreamMute error:', error);
-      }
-    }
-  }, [isStreamMuted]);
-
-  useEffect(() => {
-    return () => {
-      void unloadStream();
-    };
-  }, [unloadStream]);
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    const probeStream = async () => {
-      if (!currentStreamUrl) {
-        setStreamAvailability('unavailable');
-        return;
-      }
-
-      setStreamAvailability('checking');
-
-      try {
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: currentStreamUrl },
-          {
-            shouldPlay: false,
-            isMuted: true,
-            volume: 0,
-          },
-        );
-
-        await sound.unloadAsync();
-
-        if (!isCancelled) {
-          setStreamAvailability('ready');
-        }
-      } catch (error) {
-        console.log('[LivestreamScreen] probeStream error:', error);
-        if (!isCancelled) {
-          setStreamAvailability('unavailable');
-          setIsStreamPlaying(false);
-        }
-      }
-    };
-
-    void probeStream();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [currentStreamUrl, retryProbeTick]);
-
-  useEffect(() => {
-    if (!currentStreamUrl || autoPlayedRef.current || streamAvailability !== 'ready') return;
-    autoPlayedRef.current = true;
-    void startStream();
-  }, [currentStreamUrl, startStream, streamAvailability]);
-
-  useEffect(() => {
-    if (!currentStreamUrl || !soundRef.current || !isStreamPlaying || streamAvailability !== 'ready') return;
-    if (activeStreamUrlRef.current === currentStreamUrl) return;
-    void startStream();
-  }, [currentStreamUrl, isStreamPlaying, startStream, streamAvailability]);
 
   const nowPlayingItems = useMemo(() => {
     if (!nowPlaying) return NOW_PLAYING;
@@ -1176,7 +918,7 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
     return (
       <LinearGradient colors={['#1E293B', '#334155', '#475569']} style={styles.container}>
         <View style={styles.liveLoadingTopBar}>
-          <TouchableOpacity onPress={onBack} style={styles.headerButton}>
+          <TouchableOpacity onPress={handleExitLive} style={styles.headerButton}>
             <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
@@ -1197,7 +939,7 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
       {/* <SafeAreaView style={styles.safeArea} edges={['top']}> */}
         <View style={styles.headerOverlay}>
           <View style={styles.headerRow}>
-            <TouchableOpacity onPress={onBack} style={styles.headerButton}>
+            <TouchableOpacity onPress={handleExitLive} style={styles.headerButton}>
               <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
             </TouchableOpacity>
 
@@ -1333,26 +1075,18 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
             </View>
           )}
 
-          {streamAvailability === 'unavailable' && (
+          {!hasLiveStream && (
             <View style={styles.noLiveCard}>
               <Ionicons name="radio-outline" size={16} color="#FBBF24" />
-              <Text style={styles.noLiveText}>Hiện đang không có phiên live nào</Text>
+              <Text style={styles.noLiveText}>Phiên live hiện chưa có nguồn phát</Text>
               <TouchableOpacity
                 style={styles.retryButton}
                 onPress={() => {
                   void fetchActiveSessions();
-                  setRetryProbeTick((prev) => prev + 1);
                 }}
               >
                 <Text style={styles.retryButtonText}>Thử lại</Text>
               </TouchableOpacity>
-            </View>
-          )}
-
-          {streamAvailability === 'checking' && (
-            <View style={styles.noLiveCard}>
-              <ActivityIndicator size="small" color="#7DD3FC" />
-              <Text style={styles.noLiveText}>Đang kiểm tra phiên live...</Text>
             </View>
           )}
         </View>
@@ -1467,7 +1201,6 @@ export default function LivestreamScreen({ onBack }: { onBack: () => void }) {
         onClose={() => setShowSidebar(false)}
         nowPlayingItems={nowPlayingItems}
         isStreamMuted={isStreamMuted}
-        streamVolume={streamVolume}
         onToggleMute={() => void toggleStreamMute()}
       />
       <ReactionPicker isOpen={showReactions} onClose={() => setShowReactions(false)} onSelect={handleReaction} />
@@ -2042,6 +1775,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalBackdrop: {
+    marginTop: 45,
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',

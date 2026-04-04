@@ -121,6 +121,13 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         textTransform: 'uppercase',
     },
+    suggestionFavoriteButton: {
+        width: 28,
+        height: 28,
+        borderRadius: 999,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     searchFallbackButton: {
         marginTop: 12,
         borderWidth: 1,

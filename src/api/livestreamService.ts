@@ -92,6 +92,46 @@ export interface LiveSessionResult {
   listenersCount: number;
 }
 
+export interface LiveScheduleStation {
+  id: string;
+  externalStationId?: number;
+  stationName?: string | null;
+  stationShortcode?: string;
+  description?: string | null;
+  streamUrl?: string;
+  publicPlayerUrl?: string;
+}
+
+export interface LiveScheduleSession {
+  id: string;
+  sessionName?: string;
+  description?: string | null;
+  status?: string;
+  hostUserId?: string;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  genre?: string | null;
+  thumbnailUrl?: string | null;
+  station?: LiveScheduleStation | null;
+}
+
+export interface LiveScheduleResult {
+  id: string;
+  liveSessionId: string;
+  startTime: string;
+  endTime: string;
+  title?: string;
+  status?: string;
+  isRecurring: boolean;
+  daysOfWeek?: number;
+  startDate: string;
+  endDate?: string | null;
+  createdBy?: string;
+  updatedBy?: string | null;
+  createdAt?: string;
+  liveSession?: LiveScheduleSession | null;
+}
+
 const api = authApiClient;
 
 const FALLBACK_STATION_UUID = 'e1cd49c9-c82f-4eec-8e9b-67b80a5ba0dc';
@@ -145,6 +185,15 @@ const normalizeNetworkUrl = (url?: string): string => {
 const normalizeTrackInfo = (track: TrackInfo): TrackInfo => ({
   ...track,
   artUrl: normalizeNetworkUrl(track.artUrl),
+});
+
+const normalizeNowPlayingData = (rawData: NowPlayingData): NowPlayingData => ({
+  ...rawData,
+  listenUrl: normalizeNetworkUrl(rawData.listenUrl),
+  publicPlayerUrl: normalizeNetworkUrl(rawData.publicPlayerUrl),
+  currentTrack: normalizeTrackInfo(rawData.currentTrack),
+  playingNext: normalizeTrackInfo(rawData.playingNext),
+  songHistory: rawData.songHistory.map(normalizeTrackInfo),
 });
 
 const extractShortcodeFromStreamUrl = (streamUrl?: string): string | null => {
@@ -241,6 +290,13 @@ export const livestreamService = {
     return response.data.data || [];
   },
 
+  async getSchedules(): Promise<LiveScheduleResult[]> {
+    const response = await api.get<ApiGatewayResponse<LiveScheduleResult[]>>(
+      LIVESTREAM_ENDPOINTS.SCHEDULES,
+    );
+    return response.data.data || [];
+  },
+
   async getLiveSession(sessionId: string): Promise<LiveSessionResult> {
     const response = await api.get<ApiGatewayResponse<LiveSessionResult>>(
       LIVESTREAM_ENDPOINTS.LIVE_SESSION_DETAIL(sessionId),
@@ -255,14 +311,26 @@ export const livestreamService = {
     );
 
     const rawData = response.data.data;
-    const normalizedData: NowPlayingData = {
-      ...rawData,
-      listenUrl: normalizeNetworkUrl(rawData.listenUrl),
-      publicPlayerUrl: normalizeNetworkUrl(rawData.publicPlayerUrl),
-      currentTrack: normalizeTrackInfo(rawData.currentTrack),
-      playingNext: normalizeTrackInfo(rawData.playingNext),
-      songHistory: rawData.songHistory.map(normalizeTrackInfo),
-    };
+    const normalizedData = normalizeNowPlayingData(rawData);
+
+    if (typeof normalizedData.externalStationId === 'number') {
+      cachedExternalStationId = normalizedData.externalStationId;
+    }
+
+    if (normalizedData.stationShortcode) {
+      cachedStationShortcode = normalizedData.stationShortcode;
+    }
+
+    return normalizedData;
+  },
+
+  async getNowPlayingBySession(sessionId: string): Promise<NowPlayingData> {
+    const response = await api.get<ApiGatewayResponse<NowPlayingData>>(
+      LIVESTREAM_ENDPOINTS.NOW_PLAYING_BY_SESSION(sessionId),
+    );
+
+    const rawData = response.data.data;
+    const normalizedData = normalizeNowPlayingData(rawData);
 
     if (typeof normalizedData.externalStationId === 'number') {
       cachedExternalStationId = normalizedData.externalStationId;
