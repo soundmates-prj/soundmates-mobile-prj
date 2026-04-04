@@ -525,6 +525,7 @@ export default function HomeScreen({
                     ) : activeTab === 'profile' ? (
                         <ProfileScreen
                             hideBottomNav
+                            onNavigateToCreatePost={() => setShowCreatePost(true)}
                             onBackToHome={(tab = 'home') => {
                                 if (tab === 'blog' || tab === 'podcast' || tab === 'home') {
                                     setActiveTab(tab);
