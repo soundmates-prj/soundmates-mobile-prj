@@ -20,8 +20,7 @@ import {
 } from 'react-native';
 import { SoundMateColors, SoundMateLightColors } from '../../../../constants/theme';
 import {
-  FavoriteItemResponse,
-  favoriteService,
+  MusicCatalogItemResponse,
   PlaylistTrackResponse,
   PlaylistVisibility,
   uploadService,
@@ -68,8 +67,8 @@ const formatDurationSeconds = (value?: number): string => {
   return `${minutes}:${`${seconds}`.padStart(2, '0')}`;
 };
 
-const isValidMediaId = (favoriteId?: string): favoriteId is string => {
-  return !!favoriteId && uuidRegex.test(favoriteId);
+const isValidMediaId = (mediaId?: string): mediaId is string => {
+  return !!mediaId && uuidRegex.test(mediaId);
 };
 
 export default function PlaylistDetailModal({
@@ -90,10 +89,10 @@ export default function PlaylistDetailModal({
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
 
   const [showAddTracksModal, setShowAddTracksModal] = useState(false);
-  const [favoriteTracks, setFavoriteTracks] = useState<FavoriteItemResponse[]>([]);
-  const [favoriteSearch, setFavoriteSearch] = useState('');
-  const [selectedFavoriteMediaIds, setSelectedFavoriteMediaIds] = useState<string[]>([]);
-  const [isLoadingFavorites, setIsLoadingFavorites] = useState(false);
+  const [catalogTracks, setCatalogTracks] = useState<MusicCatalogItemResponse[]>([]);
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [selectedCatalogMediaIds, setSelectedCatalogMediaIds] = useState<string[]>([]);
+  const [isLoadingCatalogTracks, setIsLoadingCatalogTracks] = useState(false);
   const [isSubmittingTracks, setIsSubmittingTracks] = useState(false);
 
   const [showPlaylistEditor, setShowPlaylistEditor] = useState(false);
@@ -389,49 +388,45 @@ export default function PlaylistDetailModal({
     );
   }, [onClose, onPlaylistDeleted, onPlaylistsChanged, playlistDetail, playlistId]);
 
-  const loadFavoriteTracks = useCallback(async () => {
-    setIsLoadingFavorites(true);
+  const loadMusicCatalogTracks = useCallback(async () => {
+    setIsLoadingCatalogTracks(true);
     try {
-      const result = await favoriteService.getFavorites({
-        itemType: 'track',
-        page: 1,
-        pageSize: 200,
-      });
+      const result = await userPlaylistService.getMusicCatalog();
 
       if (!result.success) {
         showToast.warning(
-          'Không thể tải nhạc yêu thích',
+          'Không thể tải kho nhạc hệ thống',
           result.message || 'Vui lòng thử lại sau',
         );
-        setFavoriteTracks([]);
+        setCatalogTracks([]);
         return;
       }
 
-      setFavoriteTracks(result.data);
+      setCatalogTracks(result.data);
     } catch (error) {
-      console.log('[PlaylistDetailModal] loadFavoriteTracks error:', error);
-      setFavoriteTracks([]);
-      showToast.error('Không thể tải nhạc yêu thích', 'Vui lòng thử lại sau');
+      console.log('[PlaylistDetailModal] loadMusicCatalogTracks error:', error);
+      setCatalogTracks([]);
+      showToast.error('Không thể tải kho nhạc hệ thống', 'Vui lòng thử lại sau');
     } finally {
-      setIsLoadingFavorites(false);
+      setIsLoadingCatalogTracks(false);
     }
   }, []);
 
   const openAddTrackModal = useCallback(async () => {
     setShowAddTracksModal(true);
-    setFavoriteSearch('');
-    setSelectedFavoriteMediaIds([]);
-    await loadFavoriteTracks();
-  }, [loadFavoriteTracks]);
+    setCatalogSearch('');
+    setSelectedCatalogMediaIds([]);
+    await loadMusicCatalogTracks();
+  }, [loadMusicCatalogTracks]);
 
   const playlistTrackMediaIds = useMemo(() => {
     return new Set(playlistTracks.map((track) => track.mediaFileId));
   }, [playlistTracks]);
 
-  const filteredFavoriteTracks = useMemo(() => {
-    const keyword = favoriteSearch.trim().toLowerCase();
+  const filteredCatalogTracks = useMemo(() => {
+    const keyword = catalogSearch.trim().toLowerCase();
 
-    return favoriteTracks.filter((track) => {
+    return catalogTracks.filter((track) => {
       const mediaId = track.id;
       if (isValidMediaId(mediaId) && playlistTrackMediaIds.has(mediaId)) {
         return false;
@@ -441,22 +436,22 @@ export default function PlaylistDetailModal({
         return true;
       }
 
-      const haystack = `${track.name || ''} ${track.artistName || ''} ${track.albumName || ''}`.toLowerCase();
+      const haystack = `${track.title || ''} ${track.artist || ''} ${track.album || ''}`.toLowerCase();
       return haystack.includes(keyword);
     });
-  }, [favoriteSearch, favoriteTracks, playlistTrackMediaIds]);
+  }, [catalogSearch, catalogTracks, playlistTrackMediaIds]);
 
-  const toggleFavoriteSelection = useCallback((favoriteItem: FavoriteItemResponse) => {
-    if (!isValidMediaId(favoriteItem.id)) {
+  const toggleCatalogSelection = useCallback((catalogItem: MusicCatalogItemResponse) => {
+    if (!isValidMediaId(catalogItem.id)) {
       return;
     }
 
-    const mediaId = favoriteItem.id;
+    const mediaId = catalogItem.id;
     if (playlistTrackMediaIds.has(mediaId)) {
       return;
     }
 
-    setSelectedFavoriteMediaIds((prev) => {
+    setSelectedCatalogMediaIds((prev) => {
       if (prev.includes(mediaId)) {
         return prev.filter((id) => id !== mediaId);
       }
@@ -465,8 +460,8 @@ export default function PlaylistDetailModal({
     });
   }, [playlistTrackMediaIds]);
 
-  const handleAddFavoritesToPlaylist = useCallback(async () => {
-    if (!playlistId || selectedFavoriteMediaIds.length === 0) {
+  const handleAddCatalogTracksToPlaylist = useCallback(async () => {
+    if (!playlistId || selectedCatalogMediaIds.length === 0) {
       return;
     }
 
@@ -474,7 +469,7 @@ export default function PlaylistDetailModal({
     try {
       const result = await userPlaylistService.addTracksToPlaylist(
         playlistId,
-        selectedFavoriteMediaIds,
+        selectedCatalogMediaIds,
       );
       if (!result.success) {
         throw new Error(result.message || 'Không thể thêm bài hát vào playlist');
@@ -482,18 +477,18 @@ export default function PlaylistDetailModal({
 
       showToast.success(
         'Đã thêm bài hát',
-        `Đã thêm ${selectedFavoriteMediaIds.length} bài hát vào playlist`,
+        `Đã thêm ${selectedCatalogMediaIds.length} bài hát vào playlist`,
       );
 
       setShowAddTracksModal(false);
-      setSelectedFavoriteMediaIds([]);
+      setSelectedCatalogMediaIds([]);
       await Promise.all([loadDetail(), onPlaylistsChanged?.()]);
     } catch (error: any) {
       showToast.error('Thêm bài hát thất bại', error?.message || 'Vui lòng thử lại sau');
     } finally {
       setIsSubmittingTracks(false);
     }
-  }, [loadDetail, onPlaylistsChanged, playlistId, selectedFavoriteMediaIds]);
+  }, [loadDetail, onPlaylistsChanged, playlistId, selectedCatalogMediaIds]);
 
   const handleRemoveTrack = useCallback((track: PlaylistTrackResponse) => {
     if (!playlistId) {
@@ -686,7 +681,7 @@ export default function PlaylistDetailModal({
                   <View style={styles.centerWrap}>
                     <Ionicons name="musical-note-outline" size={24} color={palette.textMuted} />
                     <Text style={[styles.emptyTitle, { color: palette.textSecondary }]}>Playlist chưa có bài hát nào.</Text>
-                    <Text style={[styles.emptyHint, { color: palette.textMuted }]}>Nhấn "Thêm nhạc" để thêm bài hát yêu thích.</Text>
+                    <Text style={[styles.emptyHint, { color: palette.textMuted }]}>Nhấn "Thêm nhạc" để thêm bài hát từ kho nhạc hệ thống.</Text>
                   </View>
                 ) : (
                   <View style={styles.trackList}>
@@ -709,13 +704,9 @@ export default function PlaylistDetailModal({
                           </Text>
                           <Text style={[styles.trackSub, { color: palette.textSecondary }]} numberOfLines={1}>
                             {track.artist?.trim() || 'Không rõ nghệ sĩ'}
-                            {track.album ? ` • ${track.album}` : ''}
+                            {/* {track.album ? ` • ${track.album}` : ''} */}
                           </Text>
                         </View>
-
-                        <Text style={[styles.trackDuration, { color: palette.textSecondary }]}>
-                          {formatDurationSeconds(track.durationSeconds)}
-                        </Text>
 
                         <TouchableOpacity
                           style={styles.trackRemoveButton}
@@ -748,7 +739,7 @@ export default function PlaylistDetailModal({
                 </View>
 
                 <View style={[styles.sheetHeader, { borderBottomColor: palette.border }]}> 
-                  <Text style={[styles.sheetTitle, { color: palette.textPrimary }]}>Thêm nhạc từ yêu thích</Text>
+                  <Text style={[styles.sheetTitle, { color: palette.textPrimary }]}>Thêm nhạc từ kho hệ thống</Text>
                   <TouchableOpacity
                     onPress={() => setShowAddTracksModal(false)}
                     disabled={isSubmittingTracks}
@@ -759,8 +750,8 @@ export default function PlaylistDetailModal({
 
                 <View style={styles.sheetBody}>
                   <FormTextField
-                    value={favoriteSearch}
-                    onChangeText={setFavoriteSearch}
+                    value={catalogSearch}
+                    onChangeText={setCatalogSearch}
                     placeholder="Tìm theo tên bài hát, nghệ sĩ, album"
                     placeholderTextColor={palette.textMuted}
                     inputContainerStyle={[
@@ -770,35 +761,35 @@ export default function PlaylistDetailModal({
                     style={[styles.inputText, { color: palette.textPrimary }]}
                   />
 
-                  {isLoadingFavorites ? (
+                  {isLoadingCatalogTracks ? (
                     <View style={styles.centerWrap}>
                       <ActivityIndicator size="small" color={palette.primary} />
-                      <Text style={[styles.centerText, { color: palette.textSecondary }]}>Đang tải danh sách yêu thích...</Text>
+                      <Text style={[styles.centerText, { color: palette.textSecondary }]}>Đang tải kho nhạc hệ thống...</Text>
                     </View>
-                  ) : filteredFavoriteTracks.length === 0 ? (
+                  ) : filteredCatalogTracks.length === 0 ? (
                     <View style={styles.centerWrap}>
                       <Ionicons name="search-outline" size={22} color={palette.textMuted} />
                       <Text style={[styles.emptyTitle, { color: palette.textSecondary }]}>Không có bài hát phù hợp</Text>
                     </View>
                   ) : (
                     <ScrollView style={styles.addList} contentContainerStyle={styles.addListContent}>
-                      {filteredFavoriteTracks.map((track) => {
+                      {filteredCatalogTracks.map((track) => {
                         const mediaId = track.id;
                         const canAdd = isValidMediaId(mediaId);
                         const alreadyAdded = canAdd && playlistTrackMediaIds.has(mediaId);
-                        const selected = canAdd && selectedFavoriteMediaIds.includes(mediaId);
+                        const selected = canAdd && selectedCatalogMediaIds.includes(mediaId);
 
                         return (
                           <TouchableOpacity
                             key={track.id}
                             activeOpacity={0.85}
                             style={[styles.addItem, { borderBottomColor: palette.border }]}
-                            onPress={() => toggleFavoriteSelection(track)}
+                            onPress={() => toggleCatalogSelection(track)}
                             disabled={!canAdd || alreadyAdded}
                           >
                             <View style={[styles.addThumbWrap, { backgroundColor: palette.primary + '1A' }]}> 
-                              {track.imgUrl ? (
-                                <Image source={{ uri: track.imgUrl }} style={styles.addThumbImage} />
+                              {track.artworkUrl ? (
+                                <Image source={{ uri: track.artworkUrl }} style={styles.addThumbImage} />
                               ) : (
                                 <Ionicons name="musical-note-outline" size={16} color={palette.primary} />
                               )}
@@ -806,11 +797,11 @@ export default function PlaylistDetailModal({
 
                             <View style={styles.addInfo}>
                               <Text style={[styles.addTitle, { color: palette.textPrimary }]} numberOfLines={1}>
-                                {track.name?.trim() || track.id}
+                                {track.title?.trim() || track.id}
                               </Text>
                               <Text style={[styles.addSub, { color: palette.textSecondary }]} numberOfLines={1}>
-                                {track.artistName?.trim() || 'Không rõ nghệ sĩ'}
-                                {track.albumName ? ` • ${track.albumName}` : ''}
+                                {track.artist?.trim() || 'Không rõ nghệ sĩ'}
+                                {track.album ? ` • ${track.album}` : ''}
                               </Text>
                               <Text style={[styles.addHint, { color: canAdd ? '#16A34A' : '#DC2626' }]}>
                                 {alreadyAdded
@@ -848,17 +839,17 @@ export default function PlaylistDetailModal({
                       styles.saveButton,
                       {
                         backgroundColor:
-                          selectedFavoriteMediaIds.length > 0 ? palette.primary : palette.border,
+                          selectedCatalogMediaIds.length > 0 ? palette.primary : palette.border,
                       },
                     ]}
-                    onPress={handleAddFavoritesToPlaylist}
-                    disabled={isSubmittingTracks || selectedFavoriteMediaIds.length === 0}
+                    onPress={handleAddCatalogTracksToPlaylist}
+                    disabled={isSubmittingTracks || selectedCatalogMediaIds.length === 0}
                   >
                     {isSubmittingTracks ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
                       <Text style={styles.saveButtonText}>
-                        Thêm {selectedFavoriteMediaIds.length > 0 ? `(${selectedFavoriteMediaIds.length})` : ''}
+                        Thêm {selectedCatalogMediaIds.length > 0 ? `(${selectedCatalogMediaIds.length})` : ''}
                       </Text>
                     )}
                   </TouchableOpacity>
