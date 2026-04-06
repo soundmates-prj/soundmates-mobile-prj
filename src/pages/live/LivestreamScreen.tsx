@@ -170,6 +170,10 @@ const STORIES: Story[] = [
   },
 ];
 
+const CHAT_VISIBLE_MESSAGE_COUNT = 3;
+const CHAT_ESTIMATED_ROW_HEIGHT = 60;
+const CHAT_VIEWPORT_MAX_HEIGHT = CHAT_VISIBLE_MESSAGE_COUNT * CHAT_ESTIMATED_ROW_HEIGHT;
+
 const formatDuration = (seconds?: number): string => {
   if (seconds === undefined || seconds === null || seconds < 0) return '0:00';
   const minutes = Math.floor(seconds / 60);
@@ -181,7 +185,7 @@ function StoryCard({ story }: { story: Story }) {
   return (
     <View style={styles.storyCard}>
       <View style={styles.storyBadgeRow}>
-        <Ionicons name="radio" size={12} color="#a5b4fc" />
+        <Ionicons name="radio" size={12} color="#A78BFA" />
         <Text style={styles.storyBadgeText}>ON AIR: STORY TIME</Text>
       </View>
 
@@ -208,26 +212,39 @@ function StoryCard({ story }: { story: Story }) {
 
 function ChatOverlay({ messages }: { messages: ChatMessage[] }) {
   const scrollRef = useRef<ScrollView>(null);
-  const handleContentSizeChange = useCallback(() => {
-    scrollRef.current?.scrollToEnd({ animated: false });
+
+  const scrollToBottom = useCallback((animated = false) => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated });
+    });
   }, []);
 
+  const handleContentSizeChange = useCallback(() => {
+    scrollToBottom(false);
+  }, [scrollToBottom]);
+
+  useEffect(() => {
+    scrollToBottom(false);
+  }, [messages.length, scrollToBottom]);
+
   return (
-    <View style={styles.chatOverlayContainer} pointerEvents="none">
+    <View style={styles.chatOverlayContainer} pointerEvents="box-none">
       <ScrollView
         ref={scrollRef}
         style={styles.chatOverlay}
-        contentContainerStyle={styles.chatOverlayContent}
+        contentContainerStyle={[styles.chatOverlayContent, styles.chatContentBottom]}
         showsVerticalScrollIndicator={false}
         onContentSizeChange={handleContentSizeChange}
+        onLayout={() => scrollToBottom(false)}
         keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
       >
         {messages.map((msg) => {
           const bubbleStyle = msg.isHost
             ? styles.chatBubbleHost
             : msg.isRequest
-            ? styles.chatBubbleRequest
-            : styles.chatBubble;
+              ? styles.chatBubbleRequest
+              : styles.chatBubble;
 
           return (
             <View key={msg.id} style={styles.chatRow}>
@@ -255,26 +272,38 @@ function ChatOverlay({ messages }: { messages: ChatMessage[] }) {
 
 function ChatPanel({ messages }: { messages: ChatMessage[] }) {
   const scrollRef = useRef<ScrollView>(null);
-  const handleContentSizeChange = useCallback(() => {
-    scrollRef.current?.scrollToEnd({ animated: false });
+
+  const scrollToBottom = useCallback((animated = false) => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated });
+    });
   }, []);
+
+  const handleContentSizeChange = useCallback(() => {
+    scrollToBottom(false);
+  }, [scrollToBottom]);
+
+  useEffect(() => {
+    scrollToBottom(false);
+  }, [messages.length, scrollToBottom]);
 
   return (
     <ScrollView
       ref={scrollRef}
       style={styles.chatPanel}
-      contentContainerStyle={styles.chatPanelContent}
+      contentContainerStyle={[styles.chatPanelContent, styles.chatContentBottom]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       nestedScrollEnabled
       onContentSizeChange={handleContentSizeChange}
+      onLayout={() => scrollToBottom(false)}
     >
       {messages.map((msg) => {
         const bubbleStyle = msg.isHost
           ? styles.chatBubbleHost
           : msg.isRequest
-          ? styles.chatBubbleRequest
-          : styles.chatBubble;
+            ? styles.chatBubbleRequest
+            : styles.chatBubble;
 
         return (
           <View key={msg.id} style={styles.chatRow}>
@@ -322,7 +351,7 @@ function SidebarMenu({
           <View style={styles.sidebarHeader}>
             <Text style={styles.sidebarTitle}>Playlist Live</Text>
             <TouchableOpacity onPress={onClose} style={styles.sidebarCloseButton}>
-              <Ionicons name="close" size={18} color="#1E293B" />
+              <Ionicons name="close" size={18} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
 
@@ -402,7 +431,7 @@ function SidebarMenu({
 
 interface RequestSongCandidate {
   id: string;
-  requestId: string;
+  mediaFileId?: string;
   title: string;
   artist: string;
   album?: string;
@@ -419,7 +448,6 @@ const buildFallbackCandidates = (songHistory: TrackInfo[]): RequestSongCandidate
 
     candidates.push({
       id: `history-${track.shId}`,
-      requestId: track.shId.toString(),
       title: track.title || 'Unknown',
       artist: track.artist || 'Unknown',
       album: track.album || '',
@@ -432,11 +460,15 @@ const buildFallbackCandidates = (songHistory: TrackInfo[]): RequestSongCandidate
 function RequestSongModal({
   isOpen,
   onClose,
+  liveSessionId,
+  stationId,
   songHistory,
   onRequestSuccess,
 }: {
   isOpen: boolean;
   onClose: () => void;
+  liveSessionId?: string;
+  stationId?: string;
   songHistory: TrackInfo[];
   onRequestSuccess: (songTitle: string) => void;
 }) {
@@ -448,10 +480,34 @@ function RequestSongModal({
 
   const loadCandidates = useCallback(async () => {
     setIsLoading(true);
-    // Live join flow no longer depends on station APIs, only keep local fallback list.
-    setCandidates(buildFallbackCandidates(songHistory));
-    setIsLoading(false);
-  }, [songHistory]);
+    try {
+      if (!stationId) {
+        setCandidates(buildFallbackCandidates(songHistory));
+        return;
+      }
+
+      const stationCatalog = await livestreamService.getStationMusicCatalog(stationId);
+
+      if (stationCatalog.length > 0) {
+        setCandidates(
+          stationCatalog.map((song) => ({
+            id: song.id,
+            mediaFileId: song.id,
+            title: song.title || 'Unknown',
+            artist: song.artist || 'Unknown',
+            album: song.album || '',
+          })),
+        );
+        return;
+      }
+
+      setCandidates(buildFallbackCandidates(songHistory));
+    } catch {
+      setCandidates(buildFallbackCandidates(songHistory));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [songHistory, stationId]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -472,8 +528,22 @@ function RequestSongModal({
   const handleRequestSong = async (candidate: RequestSongCandidate) => {
     if (isSubmittingId) return;
 
+    if (!liveSessionId) {
+      showToast.warning('Không có phiên live', 'Không tìm thấy phiên live để gửi yêu cầu');
+      return;
+    }
+
+    if (!candidate.mediaFileId) {
+      showToast.warning('Chưa đồng bộ bài hát', 'Bài hát này chưa có trong kho nhạc của phiên live');
+      return;
+    }
+
     setIsSubmittingId(candidate.id);
     try {
+      await livestreamService.createSongRequest(liveSessionId, {
+        mediaFileId: candidate.mediaFileId,
+      });
+
       setRequestedIds((prev) => {
         const next = new Set(prev);
         next.add(candidate.id);
@@ -481,10 +551,12 @@ function RequestSongModal({
       });
 
       onRequestSuccess(candidate.title);
-      showToast.success('Đã ghi nhận', `Bài "${candidate.title}" đã được ghi nhận`);
+      showToast.success('Đã gửi yêu cầu', `Bài "${candidate.title}" đã được gửi tới host`);
       onClose();
-    } catch {
-      showToast.error('Request thất bại', 'Vui lòng thử lại sau');
+    } catch (error: any) {
+      const apiMessage = error?.response?.data?.message || error?.response?.data?.Message;
+      const resolvedApiMessage = typeof apiMessage === 'string' ? apiMessage : undefined;
+      showToast.error('Yêu cầu thất bại', resolvedApiMessage || 'Vui lòng thử lại sau');
     } finally {
       setIsSubmittingId(null);
     }
@@ -498,7 +570,7 @@ function RequestSongModal({
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Request Bài Hát</Text>
             <TouchableOpacity onPress={onClose} style={styles.modalCloseButton}>
-              <Ionicons name="close" size={18} color="#1E293B" />
+              <Ionicons name="close" size={18} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
           <FormTextField
@@ -512,7 +584,7 @@ function RequestSongModal({
           <View style={styles.requestListContainer}>
             {isLoading ? (
               <View style={styles.requestEmptyState}>
-                <ActivityIndicator color="#55C5F1" />
+                <ActivityIndicator color="#8B5CF6" />
                 <Text style={styles.requestEmptyText}>Đang tải danh sách bài hát...</Text>
               </View>
             ) : filteredCandidates.length === 0 ? (
@@ -525,6 +597,7 @@ function RequestSongModal({
                 {filteredCandidates.map((song) => {
                   const requested = requestedIds.has(song.id);
                   const isSubmitting = isSubmittingId === song.id;
+                  const canRequest = Boolean(song.mediaFileId);
 
                   return (
                     <View key={song.id} style={styles.requestItem}>
@@ -539,15 +612,21 @@ function RequestSongModal({
                       </View>
 
                       <TouchableOpacity
-                        disabled={requested || !!isSubmittingId}
+                        disabled={!canRequest || requested || !!isSubmittingId}
                         style={[
                           styles.requestItemButton,
-                          (requested || isSubmitting) && styles.requestItemButtonDisabled,
+                          (!canRequest || requested || isSubmitting) && styles.requestItemButtonDisabled,
                         ]}
                         onPress={() => handleRequestSong(song)}
                       >
                         <Text style={styles.requestItemButtonText}>
-                          {requested ? 'Đã gửi' : isSubmitting ? 'Đang gửi...' : 'Request'}
+                          {requested
+                            ? 'Đã gửi'
+                            : isSubmitting
+                              ? 'Đang gửi...'
+                              : canRequest
+                                ? 'Yêu cầu'
+                                : 'Không hỗ trợ'}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -573,7 +652,7 @@ function SendPodcastModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Gửi Podcast</Text>
             <TouchableOpacity onPress={onClose} style={styles.modalCloseButton}>
-              <Ionicons name="close" size={18} color="#1E293B" />
+              <Ionicons name="close" size={18} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
           <FormTextField
@@ -601,34 +680,66 @@ function SendPodcastModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
   );
 }
 
-function ReactionPicker({ isOpen, onClose, onSelect }: { isOpen: boolean; onClose: () => void; onSelect: (label: string) => void }) {
-  const reactions = [
-    { icon: 'heart', color: '#EF4444', label: 'Love' },
-    { icon: 'thumbs-up', color: '#3B82F6', label: 'Like' },
-    { icon: 'happy', color: '#F59E0B', label: 'Haha' },
-    { icon: 'sparkles', color: '#10B981', label: 'Celebrate' },
-  ] as const;
+interface FloatingEmoji {
+  id: string;
+  icon: string;
+  color: string;
+  x: number;
+  animY: Animated.Value;
+  animOpacity: Animated.Value;
+  animScale: Animated.Value;
+}
+
+function FloatingEmojiView({ emoji, onDone }: { emoji: FloatingEmoji; onDone: (id: string) => void }) {
+  const rotation = useRef(`${(Math.random() - 0.5) * 20}deg`).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(emoji.animY, {
+        toValue: -280 - Math.random() * 120,
+        duration: 1800 + Math.random() * 600,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.timing(emoji.animScale, {
+          toValue: 1.3,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(emoji.animScale, {
+          toValue: 0.9,
+          duration: 1500 + Math.random() * 600,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.sequence([
+        Animated.delay(1000),
+        Animated.timing(emoji.animOpacity, {
+          toValue: 0,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start(() => onDone(emoji.id));
+  }, [emoji, onDone]);
 
   return (
-    <Modal visible={isOpen} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
-        <Pressable style={styles.modalBackdropTouchable} onPress={onClose} />
-        <View style={styles.reactionPicker}>
-          {reactions.map((reaction) => (
-            <TouchableOpacity
-              key={reaction.label}
-              onPress={() => {
-                onSelect(reaction.label);
-                onClose();
-              }}
-              style={[styles.reactionButton, { backgroundColor: `${reaction.color}20` }]}
-            >
-              <Ionicons name={reaction.icon} size={24} color={reaction.color} />
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-    </Modal>
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        bottom: 90,
+        left: emoji.x,
+        transform: [
+          { translateY: emoji.animY },
+          { scale: emoji.animScale },
+          { rotate: rotation },
+        ],
+        opacity: emoji.animOpacity,
+      }}
+    >
+      <Ionicons name={emoji.icon as any} size={30} color={emoji.color} />
+    </Animated.View>
   );
 }
 
@@ -651,6 +762,7 @@ export default function LivestreamScreen({ onBack, sessionId }: { onBack: () => 
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [inputMessage, setInputMessage] = useState('');
   const [showReactions, setShowReactions] = useState(false);
+  const [floatingEmojis, setFloatingEmojis] = useState<FloatingEmoji[]>([]);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showPodcastModal, setShowPodcastModal] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
@@ -897,8 +1009,6 @@ export default function LivestreamScreen({ onBack, sessionId }: { onBack: () => 
         onMoveShouldSetPanResponder: (_, gesture) =>
           Math.abs(gesture.dx) > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
         onPanResponderGrant: () => {
-          setIsPaused(true);
-          setIsStoryTouching(true);
           dragX.setValue(0);
         },
         onPanResponderMove: (_, gesture) => {
@@ -931,7 +1041,7 @@ export default function LivestreamScreen({ onBack, sessionId }: { onBack: () => 
       PanResponder.create({
         onStartShouldSetPanResponder: (event) => event.nativeEvent.pageX <= 24,
         onMoveShouldSetPanResponder: (_, gesture) =>
-          gesture.dx > 14 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
+          gesture.x0 <= 24 && gesture.dx > 14 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
         onPanResponderGrant: () => {
           screenSwipeTranslateX.stopAnimation();
           screenSwipeOpacity.stopAnimation();
@@ -989,9 +1099,34 @@ export default function LivestreamScreen({ onBack, sessionId }: { onBack: () => 
     setMessages((prev) => [...prev, requestMessage]);
   }, []);
 
-  const handleReaction = (label: string) => {
-    showToast.info('Đã gửi cảm xúc', label);
-  };
+  const REACTION_OPTIONS = useMemo(() => [
+    { icon: 'heart', color: '#EF4444', label: 'Love' },
+    { icon: 'thumbs-up', color: '#3B82F6', label: 'Like' },
+    { icon: 'happy', color: '#F59E0B', label: 'Haha' },
+    { icon: 'sparkles', color: '#10B981', label: 'Celebrate' },
+  ] as const, []);
+
+  const handleSpawnEmoji = useCallback((icon: string, color: string) => {
+    const screenW = Dimensions.get('window').width;
+    const newEmoji: FloatingEmoji = {
+      id: `${Date.now()}-${Math.random()}`,
+      icon,
+      color,
+      x: screenW - 50 - Math.random() * 60,
+      animY: new Animated.Value(0),
+      animOpacity: new Animated.Value(1),
+      animScale: new Animated.Value(0.3),
+    };
+    setFloatingEmojis((prev) => [...prev, newEmoji]);
+  }, []);
+
+  const handleRemoveEmoji = useCallback((id: string) => {
+    setFloatingEmojis((prev) => prev.filter((e) => e.id !== id));
+  }, []);
+
+  const handleReaction = useCallback((icon: string, color: string) => {
+    handleSpawnEmoji(icon, color);
+  }, [handleSpawnEmoji]);
 
   const isInitialLiveLoading = isSessionsLoading && !currentLiveSession;
 
@@ -1004,7 +1139,7 @@ export default function LivestreamScreen({ onBack, sessionId }: { onBack: () => 
           opacity: screenSwipeOpacity,
         }}
       >
-        <LinearGradient colors={['#1E293B', '#334155', '#475569']} style={styles.container}>
+        <LinearGradient colors={['#0B0F1A', '#131B2E', '#1A1040']} style={styles.container}>
           <View style={styles.liveLoadingTopBar}>
             <TouchableOpacity onPress={handleExitLive} style={styles.headerButton}>
               <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
@@ -1013,7 +1148,7 @@ export default function LivestreamScreen({ onBack, sessionId }: { onBack: () => 
 
           <View style={styles.liveLoadingContainer}>
             <View style={styles.liveLoadingCard}>
-              <ActivityIndicator size="large" color="#7DD3FC" />
+              <ActivityIndicator size="large" color="#A78BFA" />
               <Text style={styles.liveLoadingTitle}>Đang vào phòng live</Text>
               <Text style={styles.liveLoadingText}>Vui lòng đợi trong giây lát...</Text>
             </View>
@@ -1031,8 +1166,8 @@ export default function LivestreamScreen({ onBack, sessionId }: { onBack: () => 
         opacity: screenSwipeOpacity,
       }}
     >
-    <LinearGradient colors={['#1E293B', '#334155', '#475569']} style={styles.container}>
-      {/* <SafeAreaView style={styles.safeArea} edges={['top']}> */}
+      <LinearGradient colors={['#0B0F1A', '#131B2E', '#1A1040']} style={styles.container}>
+        {/* <SafeAreaView style={styles.safeArea} edges={['top']}> */}
         <View style={styles.headerOverlay}>
           <View style={styles.headerRow}>
             <TouchableOpacity onPress={handleExitLive} style={styles.headerButton}>
@@ -1075,251 +1210,271 @@ export default function LivestreamScreen({ onBack, sessionId }: { onBack: () => 
             </TouchableOpacity>
           </View>
         </View>
-      {/* </SafeAreaView> */}
+        {/* </SafeAreaView> */}
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        scrollEnabled={!isStoryTouching}
-      >
-        <View style={styles.titleSection}>
-          <Text style={styles.liveTitle}>{liveTitle}</Text>
-          <View style={styles.hostRow}>
-            <Image
-              source={{ uri: user?.profileImageUrl || LIVE_SESSION.hostAvatar }}
-              style={styles.hostAvatar}
-            />
-            <Text style={styles.hostName}>{liveHost}</Text>
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryText}>{liveCategory}</Text>
-            </View>
-          </View>
-
-          {isSessionsLoading ? (
-            <View style={styles.sessionListLoadingRow}>
-              <ActivityIndicator size="small" color="#7DD3FC" />
-              <Text style={styles.sessionListLoadingText}>Đang tải danh sách phiên live...</Text>
-            </View>
-          ) : activeSessions.length > 0 ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.sessionList}
-            >
-              {activeSessions.map((session) => {
-                const isSelected = session.id === currentLiveSession?.id;
-
-                return (
-                  <TouchableOpacity
-                    key={session.id}
-                    style={[styles.sessionChip, isSelected && styles.sessionChipActive]}
-                    onPress={() => setSelectedSessionId(session.id)}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.sessionChipTitle, isSelected && styles.sessionChipTitleActive]} numberOfLines={1}>
-                      {session.sessionName}
-                    </Text>
-                    <View style={styles.sessionChipMeta}>
-                      <Ionicons
-                        name="people"
-                        size={11}
-                        color={isSelected ? '#E0F2FE' : 'rgba(255,255,255,0.72)'}
-                      />
-                      <Text style={[styles.sessionChipMetaText, isSelected && styles.sessionChipMetaTextActive]}>
-                        {session.listenersCount}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          ) : null}
-
-          {nowPlaying?.currentTrack && (
-            <View style={styles.currentTrackCard}>
-              <View style={styles.currentTrackBadge}>
-                <Ionicons name="radio" size={12} color="#55C5F1" />
-                <Text style={styles.currentTrackBadgeText}>Đang phát</Text>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={!isStoryTouching}
+        >
+          <View style={styles.titleSection}>
+            <Text style={styles.liveTitle}>{liveTitle}</Text>
+            <View style={styles.hostRow}>
+              <Image
+                source={{ uri: user?.profileImageUrl || LIVE_SESSION.hostAvatar }}
+                style={styles.hostAvatar}
+              />
+              <Text style={styles.hostName}>{liveHost}</Text>
+              <View style={styles.categoryBadge}>
+                <Text style={styles.categoryText}>{liveCategory}</Text>
               </View>
-              <View style={styles.currentTrackRow}>
-                {currentArtUrl ? (
-                  <Image source={{ uri: currentArtUrl }} style={styles.currentTrackArt} />
-                ) : (
-                  <View style={[styles.currentTrackArt, styles.currentTrackArtFallback]}>
-                    <Ionicons name="musical-notes" size={20} color="#55C5F1" />
-                  </View>
-                )}
-                <View style={styles.currentTrackInfo}>
-                  <Text style={styles.currentTrackTitle} numberOfLines={1}>
-                    {nowPlaying.currentTrack.title || 'Unknown Track'}
-                  </Text>
-                  <Text style={styles.currentTrackArtist} numberOfLines={1}>
-                    {nowPlaying.currentTrack.artist || 'Unknown Artist'}
-                  </Text>
-                  <View style={styles.currentTrackMetaRow}>
-                    <Text style={styles.currentTrackMetaText}>
-                      {formatDuration(elapsedToRender)} / {formatDuration(nowPlaying.currentTrack.duration)}
-                    </Text>
-                    {nowPlaying.playingNext?.title ? (
-                      <Text style={styles.currentTrackMetaText} numberOfLines={1}>
-                        Tiếp theo: {nowPlaying.playingNext.title}
+            </View>
+
+            {isSessionsLoading ? (
+              <View style={styles.sessionListLoadingRow}>
+                <ActivityIndicator size="small" color="#A78BFA" />
+                <Text style={styles.sessionListLoadingText}>Đang tải danh sách phiên live...</Text>
+              </View>
+            ) : activeSessions.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.sessionList}
+              >
+                {activeSessions.map((session) => {
+                  const isSelected = session.id === currentLiveSession?.id;
+
+                  return (
+                    <TouchableOpacity
+                      key={session.id}
+                      style={[styles.sessionChip, isSelected && styles.sessionChipActive]}
+                      onPress={() => setSelectedSessionId(session.id)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[styles.sessionChipTitle, isSelected && styles.sessionChipTitleActive]} numberOfLines={1}>
+                        {session.sessionName}
                       </Text>
-                    ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            ) : null}
+
+            {nowPlaying?.currentTrack && (
+              <View style={styles.currentTrackCard}>
+                <View style={styles.currentTrackBadge}>
+                  <Ionicons name="radio" size={12} color="#A78BFA" />
+                  <Text style={styles.currentTrackBadgeText}>Đang phát</Text>
+                </View>
+                <View style={styles.currentTrackRow}>
+                  {currentArtUrl ? (
+                    <Image source={{ uri: currentArtUrl }} style={styles.currentTrackArt} />
+                  ) : (
+                    <View style={[styles.currentTrackArt, styles.currentTrackArtFallback]}>
+                      <Ionicons name="musical-notes" size={20} color="#A78BFA" />
+                    </View>
+                  )}
+                  <View style={styles.currentTrackInfo}>
+                    <Text style={styles.currentTrackTitle} numberOfLines={1}>
+                      {nowPlaying.currentTrack.title || 'Unknown Track'}
+                    </Text>
+                    <Text style={styles.currentTrackArtist} numberOfLines={1}>
+                      {nowPlaying.currentTrack.artist || 'Unknown Artist'}
+                    </Text>
+                    <View style={styles.currentTrackMetaRow}>
+                      <Text style={styles.currentTrackMetaText}>
+                        {formatDuration(elapsedToRender)} / {formatDuration(nowPlaying.currentTrack.duration)}
+                      </Text>
+                      {nowPlaying.playingNext?.title ? (
+                        <Text style={[styles.currentTrackMetaText, { maxWidth: 230 }]} numberOfLines={1}>
+                          Tiếp theo: {nowPlaying.playingNext.title}
+                        </Text>
+                      ) : null}
+                    </View>
                   </View>
                 </View>
               </View>
-            </View>
-          )}
+            )}
 
-          {!hasLiveStream && (
-            <View style={styles.noLiveCard}>
-              <Ionicons name="radio-outline" size={16} color="#FBBF24" />
-              <Text style={styles.noLiveText}>Phiên live hiện chưa có nguồn phát</Text>
-              <TouchableOpacity
-                style={styles.retryButton}
-                onPress={() => {
-                  void fetchActiveSessions();
-                }}
-              >
-                <Text style={styles.retryButtonText}>Thử lại</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.welcomeRow}>
-          <Text style={styles.welcomeText}>Chào mừng đến SoundMates trực tuyến</Text>
-        </View>
-
-        <View style={styles.progressRow}>
-          {STORIES.map((_, index) => (
-            <View key={index} style={styles.progressTrack}>
-              <Animated.View
-                style={[
-                  styles.progressFill,
-                  {
-                    width:
-                      index === currentStoryIndex
-                        ? `${storyProgress}%`
-                        : index < currentStoryIndex
-                        ? '100%'
-                        : '0%',
-                  },
-                ]}
-              />
-            </View>
-          ))}
-        </View>
-
-        {!isInputFocused && (
-          <>
-            <Animated.View
-              {...panResponder.panHandlers}
-              onTouchStart={() => {
-                setIsPaused(true);
-                setIsStoryTouching(true);
-              }}
-              onTouchEnd={() => {
-                setIsPaused(false);
-                setIsStoryTouching(false);
-              }}
-              onTouchCancel={() => {
-                setIsPaused(false);
-                setIsStoryTouching(false);
-              }}
-              style={[
-                styles.storyAnimatedWrapper,
-                {
-                  opacity: storyOpacity,
-                  transform: [{ translateX: combinedTranslateX }],
-                },
-              ]}
-            >
-              <StoryCard story={currentStory} />
-            </Animated.View>
-
-            <View style={styles.storyCounter}>
-              <Text style={styles.storyCounterText}>
-                {currentStoryIndex + 1} / {STORIES.length}
-              </Text>
-            </View>
-          </>
-        )}
-
-      </ScrollView>
-
-      {!isInputFocused && <ChatOverlay messages={messages} />}
-
-      <View style={[styles.bottomStack, { paddingBottom: keyboardHeight }]}>
-        {isInputFocused && <ChatPanel messages={messages} />}
-
-        <LinearGradient
-          colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0)']}
-          start={{ x: 0.5, y: 1 }}
-          end={{ x: 0.5, y: 0 }}
-          style={styles.bottomBar}
-        >
-          <View style={styles.bottomBarRow}>
-            <View style={styles.inputContainer}>
-              <FormTextField
-                containerStyle={styles.chatInputFieldWrap}
-                value={inputMessage}
-                onChangeText={setInputMessage}
-                onSubmitEditing={handleSendMessage}
-                onFocus={() => setIsInputFocused(true)}
-                onBlur={() => setIsInputFocused(false)}
-                placeholder="Nhập bình luận..."
-                placeholderTextColor="rgba(255,255,255,0.6)"
-                returnKeyType="send"
-                style={styles.input}
-              />
-              <TouchableOpacity
-                onPress={handleSendMessage}
-                disabled={!inputMessage.trim()}
-                style={[styles.sendButton, !inputMessage.trim() && styles.sendButtonDisabled]}
-              >
-                <Ionicons name="send" size={16} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-
-            {!isInputFocused && (
-              <>
-                <TouchableOpacity style={styles.actionButton} onPress={() => setShowReactions(true)}>
-                  <Ionicons name="happy" size={20} color="#FFFFFF" />
+            {!hasLiveStream && (
+              <View style={styles.noLiveCard}>
+                <Ionicons name="radio-outline" size={16} color="#FBBF24" />
+                <Text style={styles.noLiveText}>Phiên live hiện chưa có nguồn phát</Text>
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  onPress={() => {
+                    void fetchActiveSessions();
+                  }}
+                >
+                  <Text style={styles.retryButtonText}>Thử lại</Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity style={styles.actionButton} onPress={() => setShowRequestModal(true)}>
-                  <Ionicons name="musical-notes" size={20} color="#FFFFFF" />
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.actionButton} onPress={() => setShowPodcastModal(true)}>
-                  <Ionicons name="mic" size={20} color="#FFFFFF" />
-                </TouchableOpacity>
-              </>
+              </View>
             )}
           </View>
-        </LinearGradient>
-      </View>
 
-      <SidebarMenu
-        isOpen={showSidebar}
-        onClose={() => setShowSidebar(false)}
-        nowPlayingItems={nowPlayingItems}
-        isStreamMuted={isStreamMuted}
-        onToggleMute={() => void toggleStreamMute()}
-      />
-      <ReactionPicker isOpen={showReactions} onClose={() => setShowReactions(false)} onSelect={handleReaction} />
-      <RequestSongModal
-        isOpen={showRequestModal}
-        onClose={() => setShowRequestModal(false)}
-        songHistory={nowPlaying?.songHistory || []}
-        onRequestSuccess={handleRequestSuccess}
-      />
-      <SendPodcastModal isOpen={showPodcastModal} onClose={() => setShowPodcastModal(false)} />
+          <View style={styles.welcomeRow}>
+            <Text style={styles.welcomeText}>Chào mừng đến SoundMates trực tuyến</Text>
+          </View>
 
-      <View style={styles.edgeSwipeBackZone} {...edgeBackPanResponder.panHandlers} />
-    </LinearGradient>
+          <View style={styles.progressRow}>
+            {STORIES.map((_, index) => (
+              <View key={index} style={styles.progressTrack}>
+                <Animated.View
+                  style={[
+                    styles.progressFill,
+                    {
+                      width:
+                        index === currentStoryIndex
+                          ? `${storyProgress}%`
+                          : index < currentStoryIndex
+                            ? '100%'
+                            : '0%',
+                    },
+                  ]}
+                />
+              </View>
+            ))}
+          </View>
+
+          {!isInputFocused && (
+            <>
+              <Animated.View
+                {...panResponder.panHandlers}
+                style={[
+                  styles.storyAnimatedWrapper,
+                  {
+                    opacity: storyOpacity,
+                    transform: [{ translateX: combinedTranslateX }],
+                  },
+                ]}
+              >
+                <Pressable
+                  onPressIn={() => {
+                    setIsPaused(true);
+                    setIsStoryTouching(true);
+                  }}
+                  onPressOut={() => {
+                    setIsPaused(false);
+                    setIsStoryTouching(false);
+                  }}
+                  delayLongPress={200}
+                >
+                  <StoryCard story={currentStory} />
+                </Pressable>
+              </Animated.View>
+
+              <View style={styles.storyCounter}>
+                <Text style={styles.storyCounterText}>
+                  {currentStoryIndex + 1} / {STORIES.length}
+                </Text>
+              </View>
+            </>
+          )}
+
+        </ScrollView>
+
+        {!isInputFocused && <ChatOverlay messages={messages} />}
+
+        <View style={[styles.bottomStack, { paddingBottom: keyboardHeight }]}>
+          {isInputFocused && <ChatPanel messages={messages} />}
+
+          <LinearGradient
+            colors={['rgba(11,15,26,0.85)', 'rgba(11,15,26,0.5)', 'rgba(11,15,26,0)']}
+            start={{ x: 0.5, y: 1 }}
+            end={{ x: 0.5, y: 0 }}
+            style={styles.bottomBar}
+          >
+            <View style={styles.bottomBarRow}>
+              <View style={styles.inputContainer}>
+                <FormTextField
+                  containerStyle={styles.chatInputFieldWrap}
+                  value={inputMessage}
+                  onChangeText={setInputMessage}
+                  onSubmitEditing={handleSendMessage}
+                  onFocus={() => setIsInputFocused(true)}
+                  onBlur={() => setIsInputFocused(false)}
+                  placeholder="Nhập bình luận..."
+                  placeholderTextColor="rgba(255,255,255,0.6)"
+                  returnKeyType="send"
+                  style={styles.input}
+                />
+                <TouchableOpacity
+                  onPress={handleSendMessage}
+                  disabled={!inputMessage.trim()}
+                  style={[styles.sendButton, !inputMessage.trim() && styles.sendButtonDisabled]}
+                >
+                  <Ionicons name="send" size={16} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+
+              {!isInputFocused && (
+                <>
+                  <TouchableOpacity style={styles.actionButton} onPress={() => setShowReactions(true)}>
+                    <Ionicons name="happy" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.actionButton} onPress={() => setShowRequestModal(true)}>
+                    <Ionicons name="musical-notes" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.actionButton} onPress={() => setShowPodcastModal(true)}>
+                    <Ionicons name="mic" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </LinearGradient>
+        </View>
+
+        <SidebarMenu
+          isOpen={showSidebar}
+          onClose={() => setShowSidebar(false)}
+          nowPlayingItems={nowPlayingItems}
+          isStreamMuted={isStreamMuted}
+          onToggleMute={() => void toggleStreamMute()}
+        />
+        <RequestSongModal
+          isOpen={showRequestModal}
+          onClose={() => setShowRequestModal(false)}
+          liveSessionId={currentLiveSession?.id}
+          stationId={currentLiveSession?.stationId}
+          songHistory={nowPlaying?.songHistory || []}
+          onRequestSuccess={handleRequestSuccess}
+        />
+        <SendPodcastModal isOpen={showPodcastModal} onClose={() => setShowPodcastModal(false)} />
+
+        {/* Floating emoji animations */}
+        {floatingEmojis.map((emoji) => (
+          <FloatingEmojiView key={emoji.id} emoji={emoji} onDone={handleRemoveEmoji} />
+        ))}
+
+        {/* Inline Reaction Bar */}
+        {showReactions && (
+          <View style={styles.reactionBarContainer}>
+            <View style={styles.reactionPicker}>
+              {REACTION_OPTIONS.map((reaction) => (
+                <TouchableOpacity
+                  key={reaction.label}
+                  onPress={() => handleReaction(reaction.icon, reaction.color)}
+                  style={[styles.reactionButton, { backgroundColor: `${reaction.color}20` }]}
+                  activeOpacity={0.6}
+                >
+                  <Ionicons name={reaction.icon} size={26} color={reaction.color} />
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                onPress={() => setShowReactions(false)}
+                style={styles.reactionCloseBtn}
+              >
+                <Ionicons name="close" size={18} color="rgba(255,255,255,0.6)" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        <View style={styles.edgeSwipeBackZone} {...edgeBackPanResponder.panHandlers} />
+      </LinearGradient>
     </Animated.View>
   );
 }
@@ -1337,7 +1492,9 @@ const styles = StyleSheet.create({
   },
   headerOverlay: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 12,
+    paddingBottom: 8,
+    backgroundColor: 'rgba(11,15,26,0.5)',
   },
   liveLoadingTopBar: {
     paddingHorizontal: 16,
@@ -1352,13 +1509,13 @@ const styles = StyleSheet.create({
   liveLoadingCard: {
     width: '100%',
     maxWidth: 320,
-    borderRadius: 18,
-    paddingVertical: 24,
-    paddingHorizontal: 20,
+    borderRadius: 20,
+    paddingVertical: 28,
+    paddingHorizontal: 22,
     alignItems: 'center',
-    backgroundColor: 'rgba(15,23,42,0.46)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(125,211,252,0.35)',
+    borderColor: 'rgba(139,92,246,0.3)',
   },
   liveLoadingTitle: {
     marginTop: 12,
@@ -1381,7 +1538,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1397,6 +1556,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 6,
   },
   liveDot: {
     width: 6,
@@ -1413,7 +1577,9 @@ const styles = StyleSheet.create({
   listenerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
@@ -1427,26 +1593,31 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
+    borderColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   streamControlButtonActive: {
-    backgroundColor: '#55C5F1',
-    borderColor: '#7DD3FC',
+    backgroundColor: 'rgba(99,102,241,0.6)',
+    borderColor: 'rgba(139,92,246,0.5)',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 4,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingTop: 15,
+    paddingTop: 12,
     paddingHorizontal: 16,
-    paddingBottom: 140,
+    paddingBottom: 160,
   },
   titleSection: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   sessionListLoadingRow: {
     marginTop: 10,
@@ -1469,15 +1640,20 @@ const styles = StyleSheet.create({
     maxWidth: 170,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.45)',
-    backgroundColor: 'rgba(15,23,42,0.42)',
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     gap: 4,
   },
   sessionChipActive: {
-    borderColor: 'rgba(125,211,252,0.9)',
-    backgroundColor: 'rgba(85,197,241,0.28)',
+    borderColor: 'rgba(139,92,246,0.6)',
+    backgroundColor: 'rgba(99,102,241,0.18)',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   sessionChipTitle: {
     color: 'rgba(255,255,255,0.92)',
@@ -1501,21 +1677,22 @@ const styles = StyleSheet.create({
     color: '#E0F2FE',
   },
   liveTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
     color: '#FFFFFF',
-    marginBottom: 6,
+    marginBottom: 8,
+    letterSpacing: 0.3,
   },
   hostRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   hostAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderColor: 'rgba(139,92,246,0.6)',
     marginRight: 8,
   },
   hostName: {
@@ -1525,38 +1702,45 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   categoryBadge: {
-    backgroundColor: '#E0F2FE',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
+    backgroundColor: 'rgba(139,92,246,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.4)',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   categoryText: {
-    color: '#55C5F1',
+    color: '#C4B5FD',
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   currentTrackCard: {
-    marginTop: 10,
-    backgroundColor: 'rgba(15,23,42,0.45)',
+    marginTop: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
-    borderColor: 'rgba(85,197,241,0.35)',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 4,
+    borderColor: 'rgba(139,92,246,0.3)',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 6,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4,
   },
   noLiveCard: {
-    marginTop: 10,
+    marginTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 8,
-    backgroundColor: 'rgba(15,23,42,0.45)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.4)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderColor: 'rgba(251,191,36,0.25)',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   noLiveText: {
     color: 'rgba(255,255,255,0.92)',
@@ -1566,15 +1750,15 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginLeft: 'auto',
-    backgroundColor: 'rgba(85,197,241,0.22)',
+    backgroundColor: 'rgba(139,92,246,0.2)',
     borderWidth: 1,
-    borderColor: 'rgba(125,211,252,0.7)',
+    borderColor: 'rgba(139,92,246,0.5)',
     borderRadius: 999,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 5,
   },
   retryButtonText: {
-    color: '#E0F2FE',
+    color: '#C4B5FD',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -1597,7 +1781,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   currentTrackArtFallback: {
-    backgroundColor: 'rgba(85,197,241,0.15)',
+    backgroundColor: 'rgba(139,92,246,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1606,7 +1790,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   currentTrackBadgeText: {
-    color: '#BAE6FD',
+    color: '#C4B5FD',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1616,49 +1800,55 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   currentTrackArtist: {
-    color: 'rgba(255,255,255,0.78)',
+    color: 'rgba(255,255,255,0.65)',
     fontSize: 12,
+    marginTop: 2,
   },
   currentTrackMetaRow: {
-    marginTop: 4,
+    marginTop: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
   },
   currentTrackMetaText: {
-    color: '#BFDBFE',
+    color: '#A78BFA',
     fontSize: 11,
     flexShrink: 1,
+    fontWeight: '500',
   },
   welcomeRow: {
     alignSelf: 'flex-start',
-    backgroundColor: '#55C5F1',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: 'rgba(99,102,241,0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.4)',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 999,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   welcomeText: {
-    color: '#FFFFFF',
+    color: '#C4B5FD',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   progressRow: {
     flexDirection: 'row',
     gap: 4,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   progressTrack: {
     flex: 1,
-    height: 2,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: 999,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#A78BFA',
+    borderRadius: 999,
   },
   storyAnimatedWrapper: {
     alignSelf: 'stretch',
@@ -1672,34 +1862,35 @@ const styles = StyleSheet.create({
     zIndex: 60,
   },
   storyCard: {
-    backgroundColor: 'rgba(17,24,39,0.6)',
-    borderColor: 'rgba(99,102,241,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderColor: 'rgba(139,92,246,0.25)',
     borderWidth: 1,
     borderRadius: 20,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
+    padding: 18,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
     elevation: 8,
   },
   storyBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   storyBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#a5b4fc',
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#A78BFA',
+    letterSpacing: 1,
   },
   storyContent: {
     fontSize: 14,
-    lineHeight: 20,
-    color: '#E5E7EB',
+    lineHeight: 22,
+    color: 'rgba(255,255,255,0.85)',
     fontStyle: 'italic',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   storyFooterRow: {
     flexDirection: 'row',
@@ -1713,42 +1904,44 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   storyAuthorAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     borderWidth: 1,
-    borderColor: '#6B7280',
+    borderColor: 'rgba(139,92,246,0.4)',
   },
   storyAuthorText: {
     fontSize: 11,
-    color: '#9CA3AF',
+    color: 'rgba(255,255,255,0.5)',
   },
   storyCategoryBadge: {
-    backgroundColor: '#4F46E5',
+    backgroundColor: 'rgba(99,102,241,0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.4)',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
   },
   storyCategoryText: {
     fontSize: 9,
-    color: '#FFFFFF',
-    fontWeight: '600',
+    color: '#C4B5FD',
+    fontWeight: '700',
   },
   storyLikeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(99,102,241,0.2)',
-    paddingTop: 8,
+    borderTopColor: 'rgba(139,92,246,0.15)',
+    paddingTop: 10,
   },
   storyLikeText: {
     fontSize: 11,
-    color: '#9CA3AF',
+    color: 'rgba(255,255,255,0.5)',
   },
   storyTimestamp: {
     fontSize: 11,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.3)',
   },
   storyCounter: {
     alignItems: 'center',
@@ -1767,11 +1960,15 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   chatOverlay: {
-    maxHeight: 320,
+    maxHeight: CHAT_VIEWPORT_MAX_HEIGHT,
   },
   chatOverlayContent: {
     gap: 8,
     paddingBottom: 6,
+  },
+  chatContentBottom: {
+    flexGrow: 1,
+    justifyContent: 'flex-end',
   },
   chatRow: {
     flexDirection: 'row',
@@ -1791,18 +1988,22 @@ const styles = StyleSheet.create({
     maxWidth: '75%',
   },
   chatBubble: {
-    // backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   chatBubbleHost: {
-    backgroundColor: 'rgba(60,95,153,0.85)',
+    backgroundColor: 'rgba(99,102,241,0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.3)',
   },
   chatBubbleRequest: {
-    backgroundColor: 'rgba(85,197,241,0.85)',
+    backgroundColor: 'rgba(139,92,246,0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(167,139,250,0.4)',
   },
   chatAuthorText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#D1D5DB',
+    color: '#A78BFA',
     marginBottom: 4,
   },
   chatRequestRow: {
@@ -1843,7 +2044,7 @@ const styles = StyleSheet.create({
     // borderWidth: 1,
     // borderColor: 'rgba(255,255,255,0.2)',
     backgroundColor: 'transparent',
-    maxHeight: 240,
+    maxHeight: CHAT_VIEWPORT_MAX_HEIGHT,
   },
   chatPanelContent: {
     paddingHorizontal: 12,
@@ -1855,10 +2056,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: 'rgba(255,255,255,0.1)',
     paddingHorizontal: 16,
     paddingVertical: 6,
   },
@@ -1874,27 +2075,33 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#55C5F1',
+    backgroundColor: '#8B5CF6',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 3,
   },
   sendButtonDisabled: {
-    opacity: 0.4,
+    opacity: 0.3,
+    shadowOpacity: 0,
   },
   actionButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalBackdrop: {
     marginTop: 45,
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1903,48 +2110,61 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: 340,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
+    backgroundColor: '#1A1F35',
+    borderRadius: 24,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.2)',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 12,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1E293B',
+    color: '#FFFFFF',
   },
   modalCloseButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalInput: {
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     fontSize: 14,
-    color: '#1E293B',
-    marginBottom: 12,
+    color: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    marginBottom: 14,
   },
   modalTextarea: {
     minHeight: 120,
     textAlignVertical: 'top',
   },
   modalPrimaryButton: {
-    backgroundColor: '#55C5F1',
-    paddingVertical: 12,
-    borderRadius: 12,
+    backgroundColor: '#8B5CF6',
+    paddingVertical: 13,
+    borderRadius: 14,
     alignItems: 'center',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 4,
   },
   modalPrimaryText: {
     color: '#FFFFFF',
@@ -1963,30 +2183,30 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   requestItemMeta: {
     flex: 1,
     minWidth: 0,
   },
   requestItemTitle: {
-    color: '#0F172A',
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
   },
   requestItemArtist: {
     marginTop: 2,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.5)',
     fontSize: 12,
   },
   requestItemButton: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: '#55C5F1',
+    borderRadius: 12,
+    backgroundColor: '#8B5CF6',
   },
   requestItemButtonDisabled: {
-    backgroundColor: '#CBD5E1',
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
   requestItemButtonText: {
     color: '#FFFFFF',
@@ -1996,26 +2216,36 @@ const styles = StyleSheet.create({
   requestEmptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 24,
-    gap: 8,
+    paddingVertical: 28,
+    gap: 10,
   },
   requestEmptyText: {
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.45)',
     fontSize: 13,
   },
-  reactionPicker: {
+  reactionBarContainer: {
     position: 'absolute',
-    bottom: 90,
+    bottom: 80,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 40,
+  },
+  reactionPicker: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
-    backgroundColor: '#FFFFFF',
-    padding: 12,
+    backgroundColor: '#1A1F35',
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.25)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: 999,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 16,
-    elevation: 10,
+    elevation: 12,
   },
   reactionButton: {
     width: 48,
@@ -2024,18 +2254,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  reactionCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 2,
+  },
   sidebarPanel: {
     position: 'absolute',
     top: 0,
     right: 0,
     bottom: 0,
     width: 320,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#131725',
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(139,92,246,0.15)',
     shadowColor: '#000',
-    shadowOffset: { width: -4, height: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 10,
+    shadowOffset: { width: -6, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 14,
   },
   sidebarHeader: {
     flexDirection: 'row',
@@ -2044,25 +2285,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   sidebarTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1E293B',
+    color: '#FFFFFF',
   },
   sidebarCloseButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sidebarTabs: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   sidebarTab: {
     flex: 1,
@@ -2071,15 +2312,15 @@ const styles = StyleSheet.create({
   },
   sidebarTabActive: {
     borderBottomWidth: 2,
-    borderBottomColor: '#55C5F1',
+    borderBottomColor: '#8B5CF6',
   },
   sidebarTabText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.45)',
     fontWeight: '600',
   },
   sidebarTabTextActive: {
-    color: '#55C5F1',
+    color: '#C4B5FD',
   },
   sidebarContent: {
     paddingHorizontal: 20,
@@ -2088,31 +2329,40 @@ const styles = StyleSheet.create({
   sidebarSectionTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1E293B',
+    color: 'rgba(255,255,255,0.7)',
     marginBottom: 12,
+    letterSpacing: 0.3,
   },
   sidebarSongRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     marginBottom: 8,
   },
   sidebarSongRowActive: {
-    backgroundColor: '#E0F2FE',
+    backgroundColor: 'rgba(99,102,241,0.15)',
+    borderColor: 'rgba(139,92,246,0.3)',
   },
   sidebarSongIcon: {
     width: 40,
     height: 40,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   sidebarSongIconActive: {
-    backgroundColor: '#55C5F1',
+    backgroundColor: '#8B5CF6',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 3,
   },
   sidebarSongContent: {
     flex: 1,
@@ -2121,20 +2371,22 @@ const styles = StyleSheet.create({
   sidebarSongTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#FFFFFF',
   },
   sidebarSongArtist: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: 'rgba(255,255,255,0.45)',
   },
   sidebarSongDuration: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: 'rgba(255,255,255,0.35)',
   },
   sidebarVolumeBox: {
     marginTop: 12,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 14,
     padding: 12,
   },
   sidebarVolumeRow: {
@@ -2151,32 +2403,34 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 6,
     borderRadius: 999,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
   },
   sidebarVolumeFill: {
     width: '70%',
     height: '100%',
-    backgroundColor: '#55C5F1',
+    backgroundColor: '#8B5CF6',
   },
   sidebarVolumeText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: 'rgba(255,255,255,0.5)',
     fontWeight: '600',
   },
   sidebarPodcastRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     marginBottom: 12,
   },
   sidebarPodcastIcon: {
     width: 40,
     height: 40,
-    borderRadius: 10,
-    backgroundColor: '#55C5F1',
+    borderRadius: 12,
+    backgroundColor: '#8B5CF6',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,

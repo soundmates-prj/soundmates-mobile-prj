@@ -1,6 +1,6 @@
 import { API_HOST } from '@env';
 import authApiClient from './apiClient';
-import { API_CONFIG, LIVESTREAM_ENDPOINTS } from './config';
+import { API_CONFIG, LIVESTREAM_ENDPOINTS, MUSIC_CATALOG_ENDPOINTS } from './config';
 
 export interface TrackInfo {
   shId: number;
@@ -55,6 +55,36 @@ export interface SongRequestItem {
   artist: string;
   album: string;
   art: string;
+}
+
+export interface MusicCatalogItem {
+  id: string;
+  sourceType: string;
+  title: string;
+  artist: string;
+  album?: string | null;
+  artworkUrl?: string | null;
+  duration: number;
+  fileUrl: string;
+  fileType: string;
+  fileSize: number;
+  uploadedAt: string;
+}
+
+export interface SongRequestResult {
+  id: string;
+  liveSessionId: string;
+  mediaFileId: string;
+  requestedByUserId: string;
+  status: string;
+  reviewedByUserId?: string | null;
+  requestedAt: string;
+  reviewedAt?: string | null;
+  message?: string | null;
+  rejectReason?: string | null;
+  songTitle: string;
+  songArtist?: string | null;
+  songAlbum?: string | null;
 }
 
 interface ApiGatewayResponse<T> {
@@ -341,6 +371,30 @@ export const livestreamService = {
     }
 
     return normalizedData;
+  },
+
+  async getStationMusicCatalog(stationId: string): Promise<MusicCatalogItem[]> {
+    if (!stationId?.trim()) {
+      return [];
+    }
+
+    const response = await api.get<ApiGatewayResponse<MusicCatalogItem[]>>(
+      MUSIC_CATALOG_ENDPOINTS.STATION(stationId),
+    );
+
+    return response.data.data || [];
+  },
+
+  async createSongRequest(
+    sessionId: string,
+    payload: { mediaFileId: string; message?: string },
+  ): Promise<SongRequestResult> {
+    const response = await api.post<ApiGatewayResponse<SongRequestResult>>(
+      LIVESTREAM_ENDPOINTS.SONG_REQUESTS_BY_SESSION(sessionId),
+      payload,
+    );
+
+    return response.data.data;
   },
 
   async getRequestableSongs(): Promise<SongRequestItem[]> {

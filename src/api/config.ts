@@ -126,6 +126,7 @@ export const LIVESTREAM_ENDPOINTS = {
     SCHEDULES: '/schedule',
     LIVE_SESSION_DETAIL: (sessionId: string) => `/livesession/${sessionId}`,
     NOW_PLAYING_BY_SESSION: (sessionId: string) => `/livesession/${sessionId}/now-playing`,
+    SONG_REQUESTS_BY_SESSION: (sessionId: string) => `/livesession/${sessionId}/song-requests`,
     CREATE_LIVE_SESSION: '/livesession',
     UPDATE_LIVE_SESSION: (sessionId: string) => `/livesession/${sessionId}`,
     START_LIVE_SESSION: (sessionId: string) => `/livesession/${sessionId}/start`,
@@ -149,6 +150,7 @@ export const USER_PLAYLIST_ENDPOINTS = {
 
 export const MUSIC_CATALOG_ENDPOINTS = {
     LIST: '/musiccatalog',
+    STATION: (stationId: string) => `/musiccatalog/station/${stationId}`,
 };
 
 export default API_CONFIG;
