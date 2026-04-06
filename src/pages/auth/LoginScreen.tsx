@@ -1,8 +1,16 @@
+import {
+    VITE_GOOGLE_ANDROID_CLIENT_ID,
+    VITE_GOOGLE_CLIENT_ID,
+    VITE_GOOGLE_IOS_CLIENT_ID,
+    VITE_GOOGLE_WEB_CLIENT_ID,
+} from '@env';
 import { Ionicons } from '@expo/vector-icons';
+import * as Google from 'expo-auth-session/providers/google';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useCallback, useState } from 'react';
+import * as WebBrowser from 'expo-web-browser';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
     Image,
     Keyboard,
@@ -38,6 +46,8 @@ interface LoginScreenProps {
 
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
+WebBrowser.maybeCompleteAuthSession();
+
 export default function LoginScreen({
     onLoginSuccess,
     onNavigateToRegister,
@@ -50,6 +60,26 @@ export default function LoginScreen({
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+    const legacyGoogleClientId = useMemo(() => (VITE_GOOGLE_CLIENT_ID || '').trim(), []);
+    const googleWebClientId = useMemo(() => (VITE_GOOGLE_WEB_CLIENT_ID || '').trim(), []);
+    const googleAndroidClientId = useMemo(() => (VITE_GOOGLE_ANDROID_CLIENT_ID || '').trim(), []);
+    const googleIosClientId = useMemo(() => (VITE_GOOGLE_IOS_CLIENT_ID || '').trim(), []);
+
+    const resolvedWebClientId = googleWebClientId || legacyGoogleClientId;
+    const resolvedAndroidClientId = googleAndroidClientId || legacyGoogleClientId;
+    const resolvedIosClientId = googleIosClientId || legacyGoogleClientId;
+
+    const [googleRequest, , promptGoogleAsync] = Google.useIdTokenAuthRequest(
+        {
+            webClientId: resolvedWebClientId || undefined,
+            iosClientId: resolvedIosClientId || undefined,
+            androidClientId: resolvedAndroidClientId || undefined,
+            scopes: ['openid', 'profile', 'email'],
+            selectAccount: true,
+        },
+    );
 
     // Animation values
     const buttonScale = useSharedValue(1);
@@ -128,6 +158,85 @@ export default function LoginScreen({
             setIsLoading(false);
         }
     }, [emailOrUsername, isUnverifiedEmailMessage, onLoginSuccess, onUnverifiedEmail, password]);
+
+    const handleGoogleLogin = useCallback(async () => {
+        if (isLoading || isGoogleLoading) {
+            return;
+        }
+
+        if (!resolvedWebClientId && !resolvedAndroidClientId && !resolvedIosClientId) {
+            showToast.error(
+                'Thiếu cấu hình Google',
+                'Vui lòng cấu hình GOOGLE client ID trong .env (WEB/ANDROID/IOS).',
+            );
+            return;
+        }
+
+        // if (Constants.appOwnership === 'expo') {
+        //     showToast.warning(
+        //         'Google Login chưa hỗ trợ Expo Go',
+        //         'Hãy chạy Development Build (npx expo run:android hoặc run:ios) để đăng nhập Google.',
+        //     );
+        //     return;
+        // }
+
+        if (!googleRequest) {
+            showToast.warning('Google chưa sẵn sàng', 'Vui lòng thử lại sau vài giây.');
+            return;
+        }
+
+        setIsGoogleLoading(true);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+        try {
+            const result = await promptGoogleAsync();
+
+            if (result.type === 'error') {
+                const providerError = result.params?.error_description
+                    || result.params?.error
+                    || result.error?.message
+                    || 'Google từ chối yêu cầu đăng nhập.';
+                showToast.error('Google từ chối đăng nhập', providerError);
+                return;
+            }
+
+            if (result.type !== 'success') {
+                if (result.type !== 'dismiss' && result.type !== 'cancel') {
+                    showToast.warning('Đăng nhập Google bị gián đoạn', 'Vui lòng thử lại.');
+                }
+                return;
+            }
+
+            const idToken = result.params?.id_token;
+            if (!idToken) {
+                showToast.error('Lỗi Google', 'Không lấy được Google token.');
+                return;
+            }
+
+            const response = await authService.googleLogin({ idToken });
+            if (response.success && response.data) {
+                showToast.success('Đăng nhập Google thành công!', 'Chào mừng bạn quay trở lại!');
+                onLoginSuccess?.(response.data);
+                return;
+            }
+
+            showToast.error('Đăng nhập Google thất bại', response.message || 'Vui lòng thử lại sau.');
+        } catch (error: any) {
+            const message = error?.response?.data?.message || error?.message || 'Vui lòng thử lại sau.';
+            showToast.error('Lỗi đăng nhập Google', message);
+        } finally {
+            setIsGoogleLoading(false);
+        }
+    }, [
+        googleRequest,
+        isGoogleLoading,
+        isLoading,
+        onLoginSuccess,
+        promptGoogleAsync,
+        resolvedAndroidClientId,
+        resolvedIosClientId,
+        resolvedWebClientId,
+    ]);
 
     return (
         <View style={styles.container}>
@@ -234,7 +343,12 @@ export default function LoginScreen({
                                     </View>
 
                                     <View style={styles.socialButtons}>
-                                        <TouchableOpacity style={[styles.socialButton, { backgroundColor: palette.surface, borderColor: palette.border }]} activeOpacity={0.7}>
+                                        <TouchableOpacity
+                                            style={[styles.socialButton, { backgroundColor: palette.surface, borderColor: palette.border }]}
+                                            activeOpacity={0.7}
+                                            onPress={handleGoogleLogin}
+                                            disabled={isGoogleLoading || isLoading}
+                                        >
                                             <Ionicons name="logo-google" size={24} color="#DB4437" />
                                         </TouchableOpacity>
                                         <TouchableOpacity style={[styles.socialButton, { backgroundColor: palette.surface, borderColor: palette.border }]} activeOpacity={0.7}>

@@ -484,6 +484,30 @@ export const blogService = {
         }
     },
 
+    /**
+     * Move a post to Draft status
+     */
+    async savePostAsDraft(postId: string): Promise<{
+        success: boolean;
+        message?: string;
+    }> {
+        try {
+            const response = await authApiClient.post<ApiResponse<boolean>>(
+                `${BLOG_ENDPOINTS.POSTS}/${postId}/draft`
+            );
+            return {
+                success: response.data.success,
+                message: response.data.message,
+            };
+        } catch (error: any) {
+            console.log('[BlogService] savePostAsDraft error:', error);
+            return {
+                success: false,
+                message: error.response?.data?.message || 'Không thể lưu bài viết về nháp',
+            };
+        }
+    },
+
     // ─────────────────────────────────────
     // COMMENTS
     // ─────────────────────────────────────

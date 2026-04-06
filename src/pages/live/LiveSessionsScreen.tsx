@@ -1,14 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Image,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { LiveScheduleResult, LiveSessionResult, livestreamService } from '../../api';
@@ -19,6 +19,7 @@ interface LiveSessionsScreenProps {
   onBack: () => void;
   onSelectSession: (sessionId: string) => void;
   onTabPress: (tab: TabName) => void;
+  hideBottomNav?: boolean;
 }
 
 interface DayScheduleItem extends LiveScheduleResult {
@@ -217,7 +218,7 @@ const getRecurringSummary = (schedule: LiveScheduleResult): string => {
   return `Lặp lại: ${days.join(', ')}`;
 };
 
-export default function LiveSessionsScreen({ onBack, onSelectSession, onTabPress }: LiveSessionsScreenProps) {
+export default function LiveSessionsScreen({ onBack, onSelectSession, onTabPress, hideBottomNav = false }: LiveSessionsScreenProps) {
   const { isDarkMode } = useTheme();
   const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
   const weekScrollRef = useRef<ScrollView | null>(null);
@@ -589,7 +590,7 @@ export default function LiveSessionsScreen({ onBack, onSelectSession, onTabPress
         </ScrollView>
       )}
 
-      <BottomNavigation activeTab="live" onTabPress={handleBottomTabPress} />
+      {!hideBottomNav && <BottomNavigation activeTab="live" onTabPress={handleBottomTabPress} />}
     </View>
   );
 }

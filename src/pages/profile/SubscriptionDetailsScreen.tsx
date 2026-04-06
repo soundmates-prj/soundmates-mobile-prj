@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
+    PanResponder,
     RefreshControl,
     ScrollView,
     StyleSheet,
@@ -72,6 +73,21 @@ export default function SubscriptionDetailsScreen({ onBack }: SubscriptionDetail
   const [transactions, setTransactions] = useState<TransactionResponse[]>([]);
   const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
   const [transactionError, setTransactionError] = useState<string | null>(null);
+
+  const edgeBackPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: (event) => event.nativeEvent.pageX <= 24,
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          gesture.dx > 14 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
+        onPanResponderRelease: (_, gesture) => {
+          if (gesture.dx > 90 && Math.abs(gesture.vx) > 0.15) {
+            onBack();
+          }
+        },
+      }),
+    [onBack],
+  );
 
   const loadData = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
@@ -288,6 +304,8 @@ export default function SubscriptionDetailsScreen({ onBack }: SubscriptionDetail
           {activeTab === 'current' ? renderCurrentTab() : renderHistoryTab()}
         </ScrollView>
       )}
+
+      <View style={styles.edgeSwipeBackZone} {...edgeBackPanResponder.panHandlers} />
     </SafeAreaView>
   );
 }
@@ -295,6 +313,14 @@ export default function SubscriptionDetailsScreen({ onBack }: SubscriptionDetail
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  edgeSwipeBackZone: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 24,
+    zIndex: 20,
   },
   header: {
     height: 56,

@@ -5,10 +5,13 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Dimensions,
     Image,
     Keyboard,
+    PanResponder,
     Platform,
     RefreshControl,
+    Animated as RNAnimated,
     TextInput as RNTextInput,
     ScrollView,
     StyleSheet,
@@ -55,6 +58,80 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
     const [isLiked, setIsLiked] = useState(false);
     const [keyboardOffset, setKeyboardOffset] = useState(0);
     const inputRef = React.useRef<RNTextInput>(null);
+    const screenWidth = Dimensions.get('window').width;
+    const screenSwipeTranslateX = React.useRef(new RNAnimated.Value(0)).current;
+    const screenSwipeOpacity = React.useRef(new RNAnimated.Value(1)).current;
+
+    const resetEdgeSwipeAnimation = useCallback(() => {
+        RNAnimated.parallel([
+            RNAnimated.spring(screenSwipeTranslateX, {
+                toValue: 0,
+                damping: 20,
+                stiffness: 190,
+                mass: 0.5,
+                useNativeDriver: true,
+            }),
+            RNAnimated.timing(screenSwipeOpacity, {
+                toValue: 1,
+                duration: 170,
+                useNativeDriver: true,
+            }),
+        ]).start();
+    }, [screenSwipeOpacity, screenSwipeTranslateX]);
+
+    const animateEdgeSwipeBackAndExit = useCallback(() => {
+        RNAnimated.parallel([
+            RNAnimated.timing(screenSwipeTranslateX, {
+                toValue: Math.max(screenWidth * 0.9, 240),
+                duration: 180,
+                useNativeDriver: true,
+            }),
+            RNAnimated.timing(screenSwipeOpacity, {
+                toValue: 0.88,
+                duration: 180,
+                useNativeDriver: true,
+            }),
+        ]).start(({ finished }) => {
+            if (!finished) {
+                resetEdgeSwipeAnimation();
+                return;
+            }
+
+            onBack();
+        });
+    }, [onBack, resetEdgeSwipeAnimation, screenSwipeOpacity, screenSwipeTranslateX, screenWidth]);
+
+    const edgeBackPanResponder = React.useMemo(
+        () =>
+            PanResponder.create({
+                onStartShouldSetPanResponder: (event) => event.nativeEvent.pageX <= 24,
+                onMoveShouldSetPanResponder: (_, gesture) =>
+                    gesture.dx > 14 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
+                onPanResponderGrant: () => {
+                    screenSwipeTranslateX.stopAnimation();
+                    screenSwipeOpacity.stopAnimation();
+                },
+                onPanResponderMove: (_, gesture) => {
+                    const clampedDx = Math.max(0, Math.min(gesture.dx, 180));
+                    screenSwipeTranslateX.setValue(clampedDx);
+                    screenSwipeOpacity.setValue(Math.max(0.88, 1 - clampedDx / 900));
+                },
+                onPanResponderRelease: (_, gesture) => {
+                    const passedDistance = gesture.dx > 86;
+                    const passedVelocity = gesture.vx > 0.18;
+                    if (passedDistance || passedVelocity) {
+                        animateEdgeSwipeBackAndExit();
+                        return;
+                    }
+
+                    resetEdgeSwipeAnimation();
+                },
+                onPanResponderTerminate: () => {
+                    resetEdgeSwipeAnimation();
+                },
+            }),
+        [animateEdgeSwipeBackAndExit, resetEdgeSwipeAnimation, screenSwipeOpacity, screenSwipeTranslateX],
+    );
 
     const fetchData = useCallback(async (refresh = false) => {
         if (!postId) return;
@@ -294,7 +371,16 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
     }
 
     return (
-        <View style={[styles.screen, { backgroundColor: palette.background }]}>
+        <RNAnimated.View
+            style={[
+                styles.screen,
+                { backgroundColor: palette.background },
+                {
+                    transform: [{ translateX: screenSwipeTranslateX }],
+                    opacity: screenSwipeOpacity,
+                },
+            ]}
+        >
             {/* Immersive Header */}
             <View style={styles.header}>
                 <BlurView intensity={80} tint={isDarkMode ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
@@ -411,7 +497,9 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                     </TouchableOpacity>
                 </View>
             </BlurView>
-        </View>
+
+            <View style={styles.edgeSwipeBackZone} {...edgeBackPanResponder.panHandlers} />
+        </RNAnimated.View>
     );
 }
 
@@ -422,6 +510,14 @@ const styles = StyleSheet.create({
     center: {
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    edgeSwipeBackZone: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: 24,
+        zIndex: 20,
     },
     header: {
         height: 50,

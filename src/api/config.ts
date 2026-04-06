@@ -60,6 +60,7 @@ export const API_CONFIG = {
 export const AUTH_ENDPOINTS = {
     REGISTER: '/auth/register',
     LOGIN: '/auth/login',
+    GOOGLE_LOGIN: '/auth/google-login',
     VERIFY_OTP: '/auth/verify-email',
     RESEND_OTP: '/auth/resend-otp',
     FORGET_PASSWORD: '/auth/forget-password',

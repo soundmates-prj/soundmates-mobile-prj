@@ -18,6 +18,7 @@ export type PodcastItem = {
 
 export type ScheduleItem = {
     id: string;
+    sessionId?: string;
     time: string;
     period: string;
     title: string;

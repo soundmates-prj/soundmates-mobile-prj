@@ -2,23 +2,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Image,
-    Keyboard,
-    Modal,
-    PanResponder,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Image,
+  Keyboard,
+  Modal,
+  PanResponder,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import {
-    livestreamService,
-    type LiveSessionResult,
-    type TrackInfo,
+  livestreamService,
+  type LiveSessionResult,
+  type TrackInfo,
 } from '../../api/livestreamService';
 import FormTextField from '../../components/ui/FormTextField';
 import { showToast } from '../../components/ui/Toast';
@@ -212,7 +213,7 @@ function ChatOverlay({ messages }: { messages: ChatMessage[] }) {
   }, []);
 
   return (
-    <View style={styles.chatOverlayContainer} pointerEvents="box-none">
+    <View style={styles.chatOverlayContainer} pointerEvents="none">
       <ScrollView
         ref={scrollRef}
         style={styles.chatOverlay}
@@ -659,6 +660,10 @@ export default function LivestreamScreen({ onBack, sessionId }: { onBack: () => 
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [storyDirection, setStoryDirection] = useState<1 | -1>(1);
+  const [isStoryTouching, setIsStoryTouching] = useState(false);
+  const screenWidth = Dimensions.get('window').width;
+  const screenSwipeTranslateX = useRef(new Animated.Value(0)).current;
+  const screenSwipeOpacity = useRef(new Animated.Value(1)).current;
   const dragX = useRef(new Animated.Value(0)).current;
   const storyTranslateX = useRef(new Animated.Value(0)).current;
   const storyOpacity = useRef(new Animated.Value(1)).current;
@@ -675,6 +680,45 @@ export default function LivestreamScreen({ onBack, sessionId }: { onBack: () => 
   const handleExitLive = useCallback(() => {
     onBack();
   }, [onBack]);
+
+  const resetEdgeSwipeAnimation = useCallback(() => {
+    Animated.parallel([
+      Animated.spring(screenSwipeTranslateX, {
+        toValue: 0,
+        damping: 20,
+        stiffness: 190,
+        mass: 0.5,
+        useNativeDriver: true,
+      }),
+      Animated.timing(screenSwipeOpacity, {
+        toValue: 1,
+        duration: 170,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [screenSwipeOpacity, screenSwipeTranslateX]);
+
+  const animateEdgeSwipeBackAndExit = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(screenSwipeTranslateX, {
+        toValue: Math.max(screenWidth * 0.9, 240),
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(screenSwipeOpacity, {
+        toValue: 0.88,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (!finished) {
+        resetEdgeSwipeAnimation();
+        return;
+      }
+
+      handleExitLive();
+    });
+  }, [handleExitLive, resetEdgeSwipeAnimation, screenSwipeOpacity, screenSwipeTranslateX, screenWidth]);
 
   useEffect(() => {
     if (sessionId) {
@@ -848,10 +892,13 @@ export default function LivestreamScreen({ onBack, sessionId }: { onBack: () => 
   const panResponder = useMemo(
     () =>
       PanResponder.create({
+        onMoveShouldSetPanResponderCapture: (_, gesture) =>
+          Math.abs(gesture.dx) > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
         onMoveShouldSetPanResponder: (_, gesture) =>
           Math.abs(gesture.dx) > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
         onPanResponderGrant: () => {
           setIsPaused(true);
+          setIsStoryTouching(true);
           dragX.setValue(0);
         },
         onPanResponderMove: (_, gesture) => {
@@ -868,13 +915,47 @@ export default function LivestreamScreen({ onBack, sessionId }: { onBack: () => 
 
           Animated.spring(dragX, { toValue: 0, useNativeDriver: true }).start();
           setIsPaused(false);
+          setIsStoryTouching(false);
         },
         onPanResponderTerminate: () => {
           Animated.spring(dragX, { toValue: 0, useNativeDriver: true }).start();
           setIsPaused(false);
+          setIsStoryTouching(false);
         },
       }),
     [dragX, goToNextStory, goToPrevStory]
+  );
+
+  const edgeBackPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: (event) => event.nativeEvent.pageX <= 24,
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          gesture.dx > 14 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
+        onPanResponderGrant: () => {
+          screenSwipeTranslateX.stopAnimation();
+          screenSwipeOpacity.stopAnimation();
+        },
+        onPanResponderMove: (_, gesture) => {
+          const clampedDx = Math.max(0, Math.min(gesture.dx, 180));
+          screenSwipeTranslateX.setValue(clampedDx);
+          screenSwipeOpacity.setValue(Math.max(0.88, 1 - clampedDx / 900));
+        },
+        onPanResponderRelease: (_, gesture) => {
+          const passedDistance = gesture.dx > 86;
+          const passedVelocity = gesture.vx > 0.18;
+          if (passedDistance || passedVelocity) {
+            animateEdgeSwipeBackAndExit();
+            return;
+          }
+
+          resetEdgeSwipeAnimation();
+        },
+        onPanResponderTerminate: () => {
+          resetEdgeSwipeAnimation();
+        },
+      }),
+    [animateEdgeSwipeBackAndExit, resetEdgeSwipeAnimation, screenSwipeOpacity, screenSwipeTranslateX],
   );
 
   const handleSendMessage = () => {
@@ -916,25 +997,40 @@ export default function LivestreamScreen({ onBack, sessionId }: { onBack: () => 
 
   if (isInitialLiveLoading) {
     return (
-      <LinearGradient colors={['#1E293B', '#334155', '#475569']} style={styles.container}>
-        <View style={styles.liveLoadingTopBar}>
-          <TouchableOpacity onPress={handleExitLive} style={styles.headerButton}>
-            <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.liveLoadingContainer}>
-          <View style={styles.liveLoadingCard}>
-            <ActivityIndicator size="large" color="#7DD3FC" />
-            <Text style={styles.liveLoadingTitle}>Đang vào phòng live</Text>
-            <Text style={styles.liveLoadingText}>Vui lòng đợi trong giây lát...</Text>
+      <Animated.View
+        style={{
+          flex: 1,
+          transform: [{ translateX: screenSwipeTranslateX }],
+          opacity: screenSwipeOpacity,
+        }}
+      >
+        <LinearGradient colors={['#1E293B', '#334155', '#475569']} style={styles.container}>
+          <View style={styles.liveLoadingTopBar}>
+            <TouchableOpacity onPress={handleExitLive} style={styles.headerButton}>
+              <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
-        </View>
-      </LinearGradient>
+
+          <View style={styles.liveLoadingContainer}>
+            <View style={styles.liveLoadingCard}>
+              <ActivityIndicator size="large" color="#7DD3FC" />
+              <Text style={styles.liveLoadingTitle}>Đang vào phòng live</Text>
+              <Text style={styles.liveLoadingText}>Vui lòng đợi trong giây lát...</Text>
+            </View>
+          </View>
+        </LinearGradient>
+      </Animated.View>
     );
   }
 
   return (
+    <Animated.View
+      style={{
+        flex: 1,
+        transform: [{ translateX: screenSwipeTranslateX }],
+        opacity: screenSwipeOpacity,
+      }}
+    >
     <LinearGradient colors={['#1E293B', '#334155', '#475569']} style={styles.container}>
       {/* <SafeAreaView style={styles.safeArea} edges={['top']}> */}
         <View style={styles.headerOverlay}>
@@ -985,6 +1081,7 @@ export default function LivestreamScreen({ onBack, sessionId }: { onBack: () => 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        scrollEnabled={!isStoryTouching}
       >
         <View style={styles.titleSection}>
           <Text style={styles.liveTitle}>{liveTitle}</Text>
@@ -1119,9 +1216,18 @@ export default function LivestreamScreen({ onBack, sessionId }: { onBack: () => 
           <>
             <Animated.View
               {...panResponder.panHandlers}
-              onTouchStart={() => setIsPaused(true)}
-              onTouchEnd={() => setIsPaused(false)}
-              onTouchCancel={() => setIsPaused(false)}
+              onTouchStart={() => {
+                setIsPaused(true);
+                setIsStoryTouching(true);
+              }}
+              onTouchEnd={() => {
+                setIsPaused(false);
+                setIsStoryTouching(false);
+              }}
+              onTouchCancel={() => {
+                setIsPaused(false);
+                setIsStoryTouching(false);
+              }}
               style={[
                 styles.storyAnimatedWrapper,
                 {
@@ -1211,7 +1317,10 @@ export default function LivestreamScreen({ onBack, sessionId }: { onBack: () => 
         onRequestSuccess={handleRequestSuccess}
       />
       <SendPodcastModal isOpen={showPodcastModal} onClose={() => setShowPodcastModal(false)} />
+
+      <View style={styles.edgeSwipeBackZone} {...edgeBackPanResponder.panHandlers} />
     </LinearGradient>
+    </Animated.View>
   );
 }
 
@@ -1553,6 +1662,14 @@ const styles = StyleSheet.create({
   },
   storyAnimatedWrapper: {
     alignSelf: 'stretch',
+  },
+  edgeSwipeBackZone: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 24,
+    zIndex: 60,
   },
   storyCard: {
     backgroundColor: 'rgba(17,24,39,0.6)',

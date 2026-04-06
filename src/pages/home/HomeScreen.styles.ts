@@ -6,6 +6,14 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: SoundMateLightColors.background,
     },
+    mainTabViewport: {
+        flex: 1,
+        position: 'relative',
+        overflow: 'hidden',
+    },
+    mainTabPage: {
+        ...StyleSheet.absoluteFillObject,
+    },
     searchScreen: {
         flex: 1,
     },

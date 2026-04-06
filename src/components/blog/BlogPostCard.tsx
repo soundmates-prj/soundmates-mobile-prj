@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
     useAnimatedStyle,
     useSharedValue,
@@ -82,15 +82,18 @@ export interface BlogPostCardProps {
 export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerActions = false, onEdit, onDelete }: BlogPostCardProps) {
     const { isDarkMode } = useTheme();
     const palette = isDarkMode ? SoundMateDarkColors : SoundMateLightColors;
+    const isDraftPost = post.status?.toLowerCase?.() === 'draft';
     const [isLikedLocal, setIsLikedLocal] = useState(post.isLiked);
     const [likeCountLocal, setLikeCountLocal] = useState(post.reactionCount);
+    const [showOwnerMenu, setShowOwnerMenu] = useState(false);
 
     useEffect(() => {
         setIsLikedLocal(post.isLiked);
         setLikeCountLocal(post.reactionCount);
+        setShowOwnerMenu(false);
     }, [post.id, post.isLiked, post.reactionCount]);
 
-    const displayName = post.userFullName || post.userId.substring(0, 10);
+    const displayName = post.userFullName;
     const avatarUri = post.userAvatarUrl
         || `https://api.dicebear.com/7.x/initials/png?seed=${post.userId}&backgroundColor=55C5F1`;
 
@@ -98,6 +101,7 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
     const likeScale = useSharedValue(1);
 
     const handleLikePress = useCallback(() => {
+        setShowOwnerMenu(false);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         likeScale.value = withSpring(1.5, {}, () => {
             likeScale.value = withSpring(1);
@@ -107,6 +111,27 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
         onLike();
     }, [isLikedLocal, likeScale, onLike]);
 
+    const handleNavigateToDetail = useCallback(() => {
+        setShowOwnerMenu(false);
+
+        if (isDraftPost && onEdit) {
+            onEdit(post.id);
+            return;
+        }
+
+        onNavigateToDetail?.(post.id);
+    }, [isDraftPost, onEdit, onNavigateToDetail, post.id]);
+
+    const handleOwnerMenuEdit = useCallback(() => {
+        setShowOwnerMenu(false);
+        onEdit?.(post.id);
+    }, [onEdit, post.id]);
+
+    const handleOwnerMenuDelete = useCallback(() => {
+        setShowOwnerMenu(false);
+        onDelete?.(post.id);
+    }, [onDelete, post.id]);
+
     const likeAnimationStyle = useAnimatedStyle(() => ({
         transform: [{ scale: likeScale.value }],
     }));
@@ -115,9 +140,10 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
         <View
             style={[
                 styles.card,
+                isDraftPost ? styles.draftCard : null,
                 {
                     backgroundColor: palette.surface,
-                    borderColor: palette.border,
+                    borderColor: isDraftPost ? '#F59E0B' : palette.border,
                     ...palette.shadow.small,
                 },
             ]}
@@ -130,18 +156,45 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
                         style={styles.avatar}
                     />
                     <View>
-                        <Text style={[styles.username, { color: palette.textPrimary }]}>
-                            {displayName}
-                        </Text>
-                        <Text style={[styles.timeAgo, { color: palette.textMuted }]}>
-                            {formatTimeAgo(post.publishedAt || post.createdAt)}
+                        <View style={styles.usernameRow}>
+                            <Text style={[styles.username, { color: palette.textPrimary }]}>
+                                {displayName}
+                            </Text>
+                            {isDraftPost && (
+                                <View style={styles.draftBadge}>
+                                    <Ionicons name="document-text-outline" size={12} color="#B45309" />
+                                    <Text style={styles.draftBadgeText}>Nháp</Text>
+                                </View>
+                            )}
+                        </View>
+                        <Text style={[styles.timeAgo, { color: isDraftPost ? '#B45309' : palette.textMuted }]}>
+                            {isDraftPost ? 'Chưa đăng công khai' : formatTimeAgo(post.publishedAt || post.createdAt)}
                         </Text>
                     </View>
                 </View>
                 {showOwnerActions ? (
-                    <TouchableOpacity style={styles.moreButton} onPress={() => onEdit?.(post.id)}>
-                        <Ionicons name="ellipsis-horizontal" size={20} color={palette.textMuted} />
-                    </TouchableOpacity>
+                    <View style={styles.ownerActionsWrap}>
+                        <TouchableOpacity
+                            style={styles.moreButton}
+                            onPress={() => setShowOwnerMenu((prev) => !prev)}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons name="ellipsis-horizontal" size={20} color={palette.textMuted} />
+                        </TouchableOpacity>
+
+                        {showOwnerMenu && (
+                            <View style={[styles.ownerMenu, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+                                <TouchableOpacity style={styles.ownerMenuItem} activeOpacity={0.8} onPress={handleOwnerMenuEdit}>
+                                    <Ionicons name="create-outline" size={16} color={palette.textPrimary} />
+                                    <Text style={[styles.ownerMenuItemText, { color: palette.textPrimary }]}>Chỉnh sửa</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.ownerMenuItem} activeOpacity={0.8} onPress={handleOwnerMenuDelete}>
+                                    <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                                    <Text style={[styles.ownerMenuItemText, { color: '#EF4444' }]}>Xóa</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
                 ) : (
                     <TouchableOpacity style={styles.moreButton}>
                         <Ionicons name="flag-outline" size={18} color={palette.textMuted} />
@@ -149,10 +202,14 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
                 )}
             </View>
 
+            {showOwnerMenu && (
+                <Pressable style={styles.ownerMenuBackdrop} onPress={() => setShowOwnerMenu(false)} />
+            )}
+
             {/* Content: Image or Text */}
             <TouchableOpacity
                 activeOpacity={0.95}
-                onPress={() => onNavigateToDetail?.(post.id)}
+                onPress={handleNavigateToDetail}
                 style={styles.contentContainer}
             >
                 {(post.imageUrl || post.imgUrl) ? (
@@ -191,53 +248,68 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
                 )}
             </TouchableOpacity>
 
-            {/* Actions: Like, Comment, Share */}
-            <View style={styles.actionsBar}>
-                <View style={styles.leftActions}>
-                    <TouchableOpacity onPress={handleLikePress} style={styles.actionButton}>
-                        <Animated.View style={likeAnimationStyle}>
-                            <Ionicons
-                                name={isLikedLocal ? "heart" : "heart-outline"}
-                                size={26}
-                                color={isLikedLocal ? "#FF3B30" : palette.textPrimary}
-                            />
-                        </Animated.View>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.actionButton} onPress={() => onNavigateToDetail?.(post.id)}>
-                        <Ionicons name="chatbubble-outline" size={24} color={palette.textPrimary} />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.actionButton}>
-                        <Ionicons name="paper-plane-outline" size={24} color={palette.textPrimary} />
+            {isDraftPost ? (
+                <View style={styles.draftFooter}>
+                    <View style={styles.draftHintRow}>
+                        <Ionicons name="information-circle-outline" size={14} color="#B45309" />
+                        <Text style={styles.draftHintText}>Bài viết đang ở trạng thái nháp và chưa hiển thị công khai.</Text>
+                    </View>
+                    <TouchableOpacity style={styles.draftContinueButton} onPress={handleOwnerMenuEdit} activeOpacity={0.85}>
+                        <Ionicons name="create-outline" size={15} color="#FFFFFF" />
+                        <Text style={styles.draftContinueButtonText}>Tiếp tục chỉnh sửa</Text>
                     </TouchableOpacity>
                 </View>
-                <TouchableOpacity style={styles.actionButton}>
-                    <Ionicons name="bookmark-outline" size={24} color={palette.textPrimary} />
-                </TouchableOpacity>
-            </View>
-
-            {/* Bottom Info: Likes & Caption */}
-            <View style={styles.cardFooter}>
-                <Text style={[styles.likesCount, { color: palette.textPrimary }]}>
-                    {formatNumber(likeCountLocal)} lượt thích
-                </Text>
-                {/* {(post.imageUrl || post.imgUrl) && (
-                    <View style={styles.captionRow}>
-                        <Text style={[styles.captionUsername, { color: palette.textPrimary }]}>
-                            {displayName}{' '}
-                            <Text style={[styles.captionText, { color: palette.textSecondary }]}>
-                                {post.title}
-                            </Text>
-                        </Text>
+            ) : (
+                <>
+                    {/* Actions: Like, Comment, Share */}
+                    <View style={styles.actionsBar}>
+                        <View style={styles.leftActions}>
+                            <TouchableOpacity onPress={handleLikePress} style={styles.actionButton}>
+                                <Animated.View style={likeAnimationStyle}>
+                                    <Ionicons
+                                        name={isLikedLocal ? "thumbs-up" : "thumbs-up-outline"}
+                                        size={26}
+                                        color={isLikedLocal ? "#2563EB" : palette.textPrimary}
+                                    />
+                                </Animated.View>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionButton} onPress={handleNavigateToDetail}>
+                                <Ionicons name="chatbubble-outline" size={24} color={palette.textPrimary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionButton}>
+                                <Ionicons name="paper-plane-outline" size={24} color={palette.textPrimary} />
+                            </TouchableOpacity>
+                        </View>
+                        <TouchableOpacity style={styles.actionButton}>
+                            <Ionicons name="bookmark-outline" size={24} color={palette.textPrimary} />
+                        </TouchableOpacity>
                     </View>
-                )} */}
-                {post.commentCount > 0 && (
-                    <TouchableOpacity onPress={() => onNavigateToDetail?.(post.id)}>
-                        <Text style={[styles.viewComments, { color: palette.textMuted }]}>
-                            Xem tất cả {post.commentCount} bình luận
+
+                    {/* Bottom Info: Likes & Caption */}
+                    <View style={styles.cardFooter}>
+                        <Text style={[styles.likesCount, { color: palette.textPrimary }]}>
+                            {formatNumber(likeCountLocal)} lượt thích
                         </Text>
-                    </TouchableOpacity>
-                )}
-            </View>
+                        {/* {(post.imageUrl || post.imgUrl) && (
+                            <View style={styles.captionRow}>
+                                <Text style={[styles.captionUsername, { color: palette.textPrimary }]}>
+                                    {displayName}{' '}
+                                    <Text style={[styles.captionText, { color: palette.textSecondary }]}> 
+                                        {post.title}
+                                    </Text>
+                                </Text>
+                            </View>
+                        )} */}
+                        {post.commentCount > 0 && (
+                            <TouchableOpacity onPress={handleNavigateToDetail}>
+                                <Text style={[styles.viewComments, { color: palette.textMuted }]}>
+                                    Xem tất cả {post.commentCount} bình luận
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </>
+            )}
         </View>
     );
 }
@@ -249,6 +321,9 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         borderWidth: 1,
         overflow: 'hidden',
+    },
+    draftCard: {
+        borderStyle: 'dashed',
     },
     cardHeader: {
         flexDirection: 'row',
@@ -273,11 +348,95 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '700',
     },
+    usernameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    draftBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#FEF3C7',
+        borderRadius: 999,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+    },
+    draftBadgeText: {
+        color: '#B45309',
+        fontSize: 11,
+        fontWeight: '700',
+    },
     timeAgo: {
         fontSize: 12,
     },
     moreButton: {
         padding: 4,
+    },
+    ownerActionsWrap: {
+        position: 'relative',
+        zIndex: 12,
+    },
+    ownerMenuBackdrop: {
+        ...StyleSheet.absoluteFillObject,
+        zIndex: 10,
+    },
+    ownerMenu: {
+        position: 'absolute',
+        top: 30,
+        right: 0,
+        minWidth: 138,
+        borderRadius: 12,
+        borderWidth: 1,
+        paddingVertical: 4,
+        zIndex: 14,
+        shadowColor: '#000000',
+        shadowOpacity: 0.14,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 8,
+    },
+    ownerMenuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+    },
+    ownerMenuItemText: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    draftFooter: {
+        paddingHorizontal: 14,
+        paddingBottom: 14,
+        gap: 10,
+    },
+    draftHintRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    draftHintText: {
+        flex: 1,
+        color: '#B45309',
+        fontSize: 12,
+        lineHeight: 17,
+    },
+    draftContinueButton: {
+        alignSelf: 'flex-start',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#F59E0B',
+        borderRadius: 999,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+    },
+    draftContinueButtonText: {
+        color: '#FFFFFF',
+        fontSize: 13,
+        fontWeight: '700',
     },
     contentContainer: {
         width: '100%',

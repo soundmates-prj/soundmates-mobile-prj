@@ -105,6 +105,7 @@ function mapMyPostToDisplayPost(post: BlogPostResponse): DisplayPost {
   return {
     id: post.id,
     userId: post.userId,
+    userFullName: post.userFullName,
     title: post.title,
     contentText: post.contentText,
     imageUrl: post.imageUrl,
@@ -277,9 +278,10 @@ interface ProfileScreenProps {
   onBackToHome?: (tab?: TabName) => void;
   onNavigateToForgotPassword?: () => void;
   onNavigateToSubscription?: () => void;
-  onNavigateToCreatePost?: () => void;
+  onNavigateToCreatePost?: (draft?: EditablePostDraft | null) => void;
   onLogout?: () => void;
   hideBottomNav?: boolean;
+  onMainTabSwipeLockChange?: (locked: boolean) => void;
 }
 
 export default function ProfileScreen({
@@ -289,6 +291,7 @@ export default function ProfileScreen({
   onNavigateToCreatePost,
   onLogout,
   hideBottomNav = false,
+  onMainTabSwipeLockChange,
 }: ProfileScreenProps) {
   const { user, refreshUser, saveUser } = useUser();
   const { themePreference, effectiveTheme, isDarkMode, setThemePreference } = useTheme();
@@ -353,6 +356,26 @@ export default function ProfileScreen({
   const [isSavingPlaylist, setIsSavingPlaylist] = useState(false);
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
   const [selectedPlaylistPreview, setSelectedPlaylistPreview] = useState<UserPlaylistResponse | null>(null);
+
+  const shouldLockMainTabSwipe =
+    showEditProfile
+    || showChangePassword
+    || showAccountInfo
+    || showSubscriptionDetails
+    || showCreatePost
+    || !!selectedPostId;
+
+  useEffect(() => {
+    if (!onMainTabSwipeLockChange) {
+      return;
+    }
+
+    onMainTabSwipeLockChange(shouldLockMainTabSwipe);
+
+    return () => {
+      onMainTabSwipeLockChange(false);
+    };
+  }, [onMainTabSwipeLockChange, shouldLockMainTabSwipe]);
 
   const themeLabel = themePreference === 'system'
     ? `Tự động (${effectiveTheme === 'dark' ? 'Tối' : 'Sáng'})`
@@ -1082,15 +1105,22 @@ export default function ProfileScreen({
   }, [onNavigateToCreatePost]);
 
   const handleEditPost = useCallback((post: DisplayPost) => {
-    setEditingPost({
+    const draft: EditablePostDraft = {
       id: post.id,
       title: post.title,
       contentText: post.contentText,
       moodTag: post.moodTag,
       imageUrl: post.imageUrl,
-    });
+    };
+
+    if (onNavigateToCreatePost) {
+      onNavigateToCreatePost(draft);
+      return;
+    }
+
+    setEditingPost(draft);
     setShowCreatePost(true);
-  }, []);
+  }, [onNavigateToCreatePost]);
 
   const handleDeletePost = useCallback((postId: string) => {
     Alert.alert(

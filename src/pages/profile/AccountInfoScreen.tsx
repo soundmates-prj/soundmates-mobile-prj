@@ -2,16 +2,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import {
-  Clipboard,
-  Dimensions,
-  Image,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    Clipboard,
+    Dimensions,
+    Image,
+    PanResponder,
+    Platform,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
@@ -168,6 +169,21 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription, subscrip
   const isEmailVerified = !!user?.email;
   const isPhoneVerified = !!user?.phone;
 
+  const edgeBackPanResponder = React.useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: (event) => event.nativeEvent.pageX <= 24,
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          gesture.dx > 14 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
+        onPanResponderRelease: (_, gesture) => {
+          if (gesture.dx > 90 && Math.abs(gesture.vx) > 0.15) {
+            onBack();
+          }
+        },
+      }),
+    [onBack],
+  );
+
   return (
     <SafeAreaView style={[styles.container, { paddingTop: topInset, backgroundColor: palette.background }]} edges={['left', 'right', 'bottom']}>
       {/* ── Header ── */}
@@ -315,6 +331,8 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription, subscrip
           </View>
         </View>
       </ScrollView>
+
+      <View style={styles.edgeSwipeBackZone} {...edgeBackPanResponder.panHandlers} />
     </SafeAreaView>
   );
 }
@@ -323,6 +341,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FAFAFA',
+  },
+  edgeSwipeBackZone: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 24,
+    zIndex: 20,
   },
   header: {
     flexDirection: 'row',

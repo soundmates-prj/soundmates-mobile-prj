@@ -27,6 +27,10 @@ export interface LoginRequest {
     password: string;
 }
 
+export interface GoogleLoginRequest {
+    idToken: string;
+}
+
 export interface LoginResponse {
     userId: string;
     username: string;
@@ -38,6 +42,7 @@ export interface LoginResponse {
     isActive: boolean;
     accessToken?: string;
     refreshToken?: string;
+    redirectUrl?: string;
     createdAt?: string;
 }
 
@@ -175,6 +180,29 @@ class AuthService {
                 success: true,
                 data: response.data,
                 message: 'Đăng nhập thành công!',
+            };
+        } catch (error: any) {
+            return {
+                success: false,
+                message: handleApiError(error),
+            };
+        }
+    }
+
+    /**
+     * Login user with Google ID token
+     */
+    async googleLogin(data: GoogleLoginRequest): Promise<ApiResponse<LoginResponse>> {
+        try {
+            const response = await authApiClient.post<LoginResponse>(
+                AUTH_ENDPOINTS.GOOGLE_LOGIN,
+                data
+            );
+
+            return {
+                success: true,
+                data: response.data,
+                message: 'Đăng nhập Google thành công!',
             };
         } catch (error: any) {
             return {

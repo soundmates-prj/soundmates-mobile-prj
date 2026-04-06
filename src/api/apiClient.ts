@@ -5,7 +5,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios, { AxiosError, AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
-import { API_CONFIG } from './config';
+import { API_CONFIG, AUTH_ENDPOINTS } from './config';
 
 export interface UnauthorizedErrorInfo {
     status: number;
@@ -18,9 +18,14 @@ export interface UnauthorizedErrorInfo {
 
 export type UnauthorizedHandler = (error: UnauthorizedErrorInfo) => void | Promise<void>;
 
+interface RetryableRequestConfig extends InternalAxiosRequestConfig {
+    _retry?: boolean;
+}
+
 let unauthorizedHandler: UnauthorizedHandler | null = null;
 let isHandlingUnauthorized = false;
 let lastUnauthorizedHandledAt = 0;
+let refreshTokenRequestPromise: Promise<string | null> | null = null;
 
 export const registerUnauthorizedHandler = (handler: UnauthorizedHandler) => {
     unauthorizedHandler = handler;
@@ -61,6 +66,110 @@ const normalizeUnauthorizedError = (error: AxiosError): UnauthorizedErrorInfo =>
         url: error.config?.url,
         method: error.config?.method,
     };
+};
+
+const extractTokenPayload = (payload: unknown): Record<string, unknown> | null => {
+    if (!payload || typeof payload !== 'object') {
+        return null;
+    }
+
+    let current: any = payload;
+    for (let depth = 0; depth < 4; depth += 1) {
+        if (!current || typeof current !== 'object') {
+            break;
+        }
+
+        if (
+            Object.prototype.hasOwnProperty.call(current, 'accessToken')
+            || Object.prototype.hasOwnProperty.call(current, 'refreshToken')
+        ) {
+            return current as Record<string, unknown>;
+        }
+
+        if (current.data && typeof current.data === 'object') {
+            current = current.data;
+            continue;
+        }
+
+        if (current.result && typeof current.result === 'object') {
+            current = current.result;
+            continue;
+        }
+
+        break;
+    }
+
+    return null;
+};
+
+const shouldSkipAutoRefresh = (url?: string): boolean => {
+    if (!url) {
+        return false;
+    }
+
+    const normalizedUrl = url.toLowerCase();
+    const skippedAuthEndpoints = [
+        AUTH_ENDPOINTS.LOGIN,
+        AUTH_ENDPOINTS.REGISTER,
+        AUTH_ENDPOINTS.GOOGLE_LOGIN,
+        AUTH_ENDPOINTS.VERIFY_OTP,
+        AUTH_ENDPOINTS.RESEND_OTP,
+        AUTH_ENDPOINTS.FORGET_PASSWORD,
+        AUTH_ENDPOINTS.RESET_PASSWORD,
+        AUTH_ENDPOINTS.REFRESH_TOKEN,
+    ].map((endpoint) => endpoint.toLowerCase());
+
+    return skippedAuthEndpoints.some((endpoint) => normalizedUrl.includes(endpoint));
+};
+
+const refreshAccessToken = async (): Promise<string | null> => {
+    if (refreshTokenRequestPromise) {
+        return refreshTokenRequestPromise;
+    }
+
+    refreshTokenRequestPromise = (async () => {
+        const refreshToken = await AsyncStorage.getItem('refreshToken');
+        if (!refreshToken) {
+            return null;
+        }
+
+        try {
+            const response = await axios.post(
+                `${API_CONFIG.AUTH_BASE_URL}${AUTH_ENDPOINTS.REFRESH_TOKEN}`,
+                { refreshToken },
+                {
+                    timeout: API_CONFIG.TIMEOUT,
+                    headers: API_CONFIG.HEADERS,
+                },
+            );
+
+            const tokenPayload = extractTokenPayload(response.data);
+            const accessTokenValue = tokenPayload?.accessToken;
+            const nextAccessToken = typeof accessTokenValue === 'string' ? accessTokenValue : undefined;
+            if (!nextAccessToken) {
+                return null;
+            }
+
+            await AsyncStorage.setItem('accessToken', nextAccessToken);
+
+            const refreshTokenValue = tokenPayload?.refreshToken;
+            const nextRefreshToken = typeof refreshTokenValue === 'string' ? refreshTokenValue : undefined;
+            if (nextRefreshToken) {
+                await AsyncStorage.setItem('refreshToken', nextRefreshToken);
+            }
+
+            console.log('[API Auth] Refresh token successful');
+            return nextAccessToken;
+        } catch (refreshError) {
+            const axiosRefreshError = refreshError as AxiosError;
+            console.log('[API Auth] Refresh token failed', axiosRefreshError.response?.status, axiosRefreshError.response?.data);
+            return null;
+        } finally {
+            refreshTokenRequestPromise = null;
+        }
+    })();
+
+    return refreshTokenRequestPromise;
 };
 
 const isTokenMissingOrInvalid = (errorInfo: UnauthorizedErrorInfo): boolean => {
@@ -138,6 +247,30 @@ authApiClient.interceptors.response.use(
         return response;
     },
     async (error: AxiosError) => {
+        const originalRequest = error.config as RetryableRequestConfig | undefined;
+
+        if (
+            error.response?.status === 401
+            && originalRequest
+            && !originalRequest._retry
+            && !shouldSkipAutoRefresh(originalRequest.url)
+        ) {
+            originalRequest._retry = true;
+
+            const refreshedAccessToken = await refreshAccessToken();
+            if (refreshedAccessToken) {
+                if (originalRequest.headers) {
+                    originalRequest.headers.Authorization = `Bearer ${refreshedAccessToken}`;
+                }
+
+                console.log('[API Auth] Retrying request after refresh', originalRequest.url);
+                return authApiClient(originalRequest);
+            }
+
+            const unauthorizedInfo = normalizeUnauthorizedError(error);
+            await notifyUnauthorized(unauthorizedInfo);
+        }
+
         const statusCode = error.response?.status;
         if (statusCode && statusCode < 500) {
             // Expected client-side API failures (401/403/404/...) should not surface as red runtime errors in app UI.
@@ -152,7 +285,7 @@ authApiClient.interceptors.response.use(
                 case 401:
                     {
                         const unauthorizedInfo = normalizeUnauthorizedError(error);
-                        if (isTokenMissingOrInvalid(unauthorizedInfo)) {
+                        if (isTokenMissingOrInvalid(unauthorizedInfo) && !shouldSkipAutoRefresh(originalRequest?.url)) {
                             await notifyUnauthorized(unauthorizedInfo);
                         }
                     }

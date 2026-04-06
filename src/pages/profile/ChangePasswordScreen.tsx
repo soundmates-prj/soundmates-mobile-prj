@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import {
     Dimensions,
     KeyboardAvoidingView,
+    PanResponder,
     Platform,
     ScrollView,
     StyleSheet,
@@ -76,6 +77,21 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
   const passwordsMatch = newPassword === confirmPassword && confirmPassword.length > 0;
   const allRulesPassed = PASSWORD_RULES.every((rule) => rule.test(newPassword));
   const isFormValid = currentPassword.length > 0 && allRulesPassed && passwordsMatch;
+
+  const edgeBackPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: (event) => event.nativeEvent.pageX <= 24,
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          gesture.dx > 14 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
+        onPanResponderRelease: (_, gesture) => {
+          if (gesture.dx > 90 && Math.abs(gesture.vx) > 0.15) {
+            onBack();
+          }
+        },
+      }),
+    [onBack],
+  );
 
   const handleBlur = (field: string) => {
     setTouched((prev) => ({ ...prev, [field]: true }));
@@ -375,6 +391,8 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
         </TouchableOpacity>
       </View>
       </KeyboardAvoidingView>
+
+      <View style={styles.edgeSwipeBackZone} {...edgeBackPanResponder.panHandlers} />
     </SafeAreaView>
   );
 }
@@ -383,6 +401,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FAFAFA',
+  },
+  edgeSwipeBackZone: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 24,
+    zIndex: 20,
   },
   header: {
     flexDirection: 'row',

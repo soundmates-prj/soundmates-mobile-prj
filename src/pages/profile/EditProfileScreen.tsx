@@ -3,6 +3,7 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import {
+  PanResponder,
   Platform,
   ScrollView,
   StyleSheet,
@@ -96,6 +97,21 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [hasRequestedProfile, setHasRequestedProfile] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  const edgeBackPanResponder = React.useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: (event) => event.nativeEvent.pageX <= 24,
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          gesture.dx > 14 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
+        onPanResponderRelease: (_, gesture) => {
+          if (gesture.dx > 90 && Math.abs(gesture.vx) > 0.15) {
+            onBack();
+          }
+        },
+      }),
+    [onBack],
+  );
 
   const genderOptions = ['Nam', 'Nữ', 'Khác', 'Không muốn tiết lộ'];
 
@@ -685,15 +701,24 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
+        <View style={styles.edgeSwipeBackZone} {...edgeBackPanResponder.panHandlers} />
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 25,
     flex: 1,
     backgroundColor: '#FAFAFA',
+  },
+  edgeSwipeBackZone: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 24,
+    zIndex: 20,
   },
 
   // Toast

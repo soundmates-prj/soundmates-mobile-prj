@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     ActivityIndicator,
     Alert,
+    Animated,
     BackHandler,
     Dimensions,
     Image,
@@ -20,7 +21,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { blogService } from '../../api';
+import { blogService, uploadService } from '../../api';
 import { showToast } from '../../components/ui/Toast';
 import { useUser } from '../../context/UserContext';
 
@@ -80,6 +81,33 @@ type ActiveTextField = 'title' | 'content' | null;
 
 const normalizeMoodTag = (value: string) => value.trim().toLowerCase();
 
+const isRemoteImageUrl = (value: string) => /^https?:\/\//i.test(value);
+
+const isHeicImageUri = (uri: string): boolean => {
+    const cleanUri = uri.split('?')[0].toLowerCase();
+    return cleanUri.endsWith('.heic') || cleanUri.endsWith('.heif');
+};
+
+const inferImageMimeType = (uri: string): string => {
+    const cleanUri = uri.split('?')[0].toLowerCase();
+
+    if (cleanUri.endsWith('.png')) {
+        return 'image/png';
+    }
+    if (cleanUri.endsWith('.webp')) {
+        return 'image/webp';
+    }
+    if (cleanUri.endsWith('.gif')) {
+        return 'image/gif';
+    }
+    if (cleanUri.endsWith('.heic') || cleanUri.endsWith('.heif')) {
+        // HEIC files are converted to JPEG before upload for better browser compatibility.
+        return 'image/jpeg';
+    }
+
+    return 'image/jpeg';
+};
+
 const parseMoodTags = (value?: string | null) => {
     if (!value) {
         return [] as string[];
@@ -121,6 +149,9 @@ export default function CreatePostScreen({ onBack, onPostCreated, editingPost = 
     const [cropFrame, setCropFrame] = useState({ x: 0, y: 0, width: 0, height: 0 });
     const cropFrameRef = useRef(cropFrame);
     const previewWidth = Dimensions.get('window').width - 40;
+    const screenWidth = Dimensions.get('window').width;
+    const screenSwipeTranslateX = useRef(new Animated.Value(0)).current;
+    const screenSwipeOpacity = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
         setTitle(editingPost?.title || '');
@@ -531,17 +562,60 @@ export default function CreatePostScreen({ onBack, onPostCreated, editingPost = 
         setSavedCropRect(null);
     };
 
+    const uploadSelectedImageIfNeeded = async (): Promise<string | undefined> => {
+        if (!selectedImage) {
+            return undefined;
+        }
+
+        if (isRemoteImageUrl(selectedImage)) {
+            return selectedImage;
+        }
+
+        if (isEditMode && selectedImage === initialImageUrl && isRemoteImageUrl(initialImageUrl)) {
+            return selectedImage;
+        }
+
+        const imageToUpload = isHeicImageUri(selectedImage)
+            ? await ImageManipulator.manipulateAsync(
+                selectedImage,
+                [],
+                {
+                    compress: 0.9,
+                    format: ImageManipulator.SaveFormat.JPEG,
+                },
+            )
+            : { uri: selectedImage };
+
+        const uploadFileName = isHeicImageUri(selectedImage)
+            ? `post-image-${Date.now()}.jpg`
+            : undefined;
+
+        const uploadResult = await uploadService.uploadImageToCloudinary({
+            uri: imageToUpload.uri,
+            fileName: uploadFileName,
+            mimeType: inferImageMimeType(imageToUpload.uri),
+        });
+
+        if (!uploadResult.success || !uploadResult.data) {
+            throw new Error(uploadResult.message || 'Không thể tải ảnh lên');
+        }
+
+        return uploadResult.data;
+    };
+
     const handleSubmit = async () => {
         if (!isPostEnabled) return;
 
         setIsSubmitting(true);
         try {
+            const imageUrl = await uploadSelectedImageIfNeeded();
+
             if (isEditMode && editingPost?.id) {
                 const updateResult = await blogService.updatePost(editingPost.id, {
                     title: title.trim(),
                     contentText: content.trim(),
                     moodTag: selectedMoodTags.length > 0 ? selectedMoodTags.join(',') : undefined,
-                    imageUrl: selectedImage || undefined,
+                    imageUrl,
                     privacyScope: 'Public',
                 });
 
@@ -556,7 +630,7 @@ export default function CreatePostScreen({ onBack, onPostCreated, editingPost = 
                     title: title.trim(),
                     contentText: content.trim(),
                     moodTag: selectedMoodTags.length > 0 ? selectedMoodTags.join(',') : undefined,
-                    imageUrl: selectedImage || undefined,
+                    imageUrl,
                     privacyScope: 'Public',
                 });
 
@@ -573,11 +647,87 @@ export default function CreatePostScreen({ onBack, onPostCreated, editingPost = 
             }
         } catch (error) {
             console.log('[CreatePost] Error:', error);
-            showToast.error(isEditMode ? 'Cập nhật thất bại' : 'Đăng bài thất bại', 'Vui lòng thử lại sau');
+            showToast.error(
+                isEditMode ? 'Cập nhật thất bại' : 'Đăng bài thất bại',
+                error instanceof Error ? error.message : 'Vui lòng thử lại sau',
+            );
         } finally {
             setIsSubmitting(false);
         }
     };
+
+    const handleSaveDraft = useCallback(async () => {
+        if (isSubmitting) {
+            return;
+        }
+
+        if (!hasRequiredFields) {
+            showToast.warning('Chưa thể lưu nháp', 'Vui lòng nhập tiêu đề và nội dung trước khi lưu nháp');
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            const imageUrl = await uploadSelectedImageIfNeeded();
+
+            if (isEditMode && editingPost?.id) {
+                const updateResult = await blogService.updatePost(editingPost.id, {
+                    title: title.trim(),
+                    contentText: content.trim(),
+                    moodTag: selectedMoodTags.length > 0 ? selectedMoodTags.join(',') : undefined,
+                    imageUrl,
+                    privacyScope: 'Public',
+                });
+
+                if (updateResult.success) {
+                    const saveDraftResult = await blogService.savePostAsDraft(editingPost.id);
+                    if (saveDraftResult.success) {
+                        showToast.success('Đã lưu nháp', 'Thay đổi của bạn đã được lưu vào nháp');
+                        onPostCreated();
+                    } else {
+                        showToast.error('Lưu nháp thất bại', saveDraftResult.message || 'Vui lòng thử lại');
+                    }
+                } else {
+                    showToast.error('Lưu nháp thất bại', updateResult.message || 'Vui lòng thử lại');
+                }
+            } else {
+                const createResult = await blogService.createPost({
+                    title: title.trim(),
+                    contentText: content.trim(),
+                    moodTag: selectedMoodTags.length > 0 ? selectedMoodTags.join(',') : undefined,
+                    imageUrl,
+                    privacyScope: 'Public',
+                });
+
+                if (createResult.success && createResult.data?.id) {
+                    const saveDraftResult = await blogService.savePostAsDraft(createResult.data.id);
+                    if (saveDraftResult.success) {
+                        showToast.success('Đã lưu nháp', 'Bài viết đã được lưu vào nháp');
+                        onPostCreated();
+                    } else {
+                        showToast.error('Lưu nháp thất bại', saveDraftResult.message || 'Vui lòng thử lại');
+                    }
+                } else {
+                    showToast.error('Lưu nháp thất bại', createResult.message || 'Vui lòng thử lại');
+                }
+            }
+        } catch (error) {
+            console.log('[CreatePost] Save draft error:', error);
+            showToast.error('Lưu nháp thất bại', error instanceof Error ? error.message : 'Vui lòng thử lại sau');
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [
+        editingPost?.id,
+        hasRequiredFields,
+        isEditMode,
+        isSubmitting,
+        onPostCreated,
+        selectedMoodTags,
+        title,
+        content,
+        uploadSelectedImageIfNeeded,
+    ]);
 
     const handleExitRequest = useCallback(() => {
         if (isSubmitting) {
@@ -592,12 +742,18 @@ export default function CreatePostScreen({ onBack, onPostCreated, editingPost = 
         Alert.alert(
             isEditMode ? 'Bỏ thay đổi?' : 'Bỏ bài viết?',
             isEditMode
-                ? 'Các thay đổi chưa được lưu. Bạn muốn bỏ thay đổi hay tiếp tục chỉnh sửa?'
-                : 'Bài viết đang soạn chưa được đăng. Bạn muốn bỏ bài viết hay tiếp tục viết?',
+                ? 'Các thay đổi chưa được lưu. Bạn muốn lưu nháp, bỏ thay đổi hay tiếp tục chỉnh sửa?'
+                : 'Bài viết đang soạn chưa được đăng. Bạn muốn lưu nháp, bỏ bài viết hay tiếp tục viết?',
             [
                 {
                     text: 'Tiếp tục viết',
                     style: 'cancel',
+                },
+                {
+                    text: 'Lưu nháp',
+                    onPress: () => {
+                        void handleSaveDraft();
+                    },
                 },
                 {
                     text: isEditMode ? 'Bỏ thay đổi' : 'Bỏ bài viết',
@@ -606,7 +762,84 @@ export default function CreatePostScreen({ onBack, onPostCreated, editingPost = 
                 },
             ],
         );
-    }, [isEditMode, isSubmitting, onBack, shouldPromptBeforeExit]);
+    }, [handleSaveDraft, isEditMode, isSubmitting, onBack, shouldPromptBeforeExit]);
+
+    const resetEdgeSwipeAnimation = useCallback(() => {
+        Animated.parallel([
+            Animated.spring(screenSwipeTranslateX, {
+                toValue: 0,
+                damping: 20,
+                stiffness: 190,
+                mass: 0.5,
+                useNativeDriver: true,
+            }),
+            Animated.timing(screenSwipeOpacity, {
+                toValue: 1,
+                duration: 170,
+                useNativeDriver: true,
+            }),
+        ]).start();
+    }, [screenSwipeOpacity, screenSwipeTranslateX]);
+
+    const handleSwipeExitRequest = useCallback(() => {
+        if (isSubmitting || shouldPromptBeforeExit) {
+            resetEdgeSwipeAnimation();
+            handleExitRequest();
+            return;
+        }
+
+        Animated.parallel([
+            Animated.timing(screenSwipeTranslateX, {
+                toValue: Math.max(screenWidth * 0.9, 240),
+                duration: 180,
+                useNativeDriver: true,
+            }),
+            Animated.timing(screenSwipeOpacity, {
+                toValue: 0.88,
+                duration: 180,
+                useNativeDriver: true,
+            }),
+        ]).start(({ finished }) => {
+            if (!finished) {
+                resetEdgeSwipeAnimation();
+                return;
+            }
+
+            onBack();
+        });
+    }, [handleExitRequest, isSubmitting, onBack, resetEdgeSwipeAnimation, screenSwipeOpacity, screenSwipeTranslateX, screenWidth, shouldPromptBeforeExit]);
+
+    const edgeBackPanResponder = useMemo(
+        () =>
+            PanResponder.create({
+                onStartShouldSetPanResponder: (event) => event.nativeEvent.pageX <= 24,
+                onMoveShouldSetPanResponder: (_, gesture) =>
+                    gesture.dx > 14 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
+                onPanResponderGrant: () => {
+                    screenSwipeTranslateX.stopAnimation();
+                    screenSwipeOpacity.stopAnimation();
+                },
+                onPanResponderMove: (_, gesture) => {
+                    const clampedDx = Math.max(0, Math.min(gesture.dx, 180));
+                    screenSwipeTranslateX.setValue(clampedDx);
+                    screenSwipeOpacity.setValue(Math.max(0.88, 1 - clampedDx / 900));
+                },
+                onPanResponderRelease: (_, gesture) => {
+                    const passedDistance = gesture.dx > 86;
+                    const passedVelocity = gesture.vx > 0.18;
+                    if (passedDistance || passedVelocity) {
+                        handleSwipeExitRequest();
+                        return;
+                    }
+
+                    resetEdgeSwipeAnimation();
+                },
+                onPanResponderTerminate: () => {
+                    resetEdgeSwipeAnimation();
+                },
+            }),
+        [handleSwipeExitRequest, resetEdgeSwipeAnimation, screenSwipeOpacity, screenSwipeTranslateX],
+    );
 
     useEffect(() => {
         const backSubscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -622,7 +855,15 @@ export default function CreatePostScreen({ onBack, onPostCreated, editingPost = 
     // ───── Render ─────
 
     return (
-        <View style={styles.screen}>
+        <Animated.View
+            style={[
+                styles.screen,
+                {
+                    transform: [{ translateX: screenSwipeTranslateX }],
+                    opacity: screenSwipeOpacity,
+                },
+            ]}
+        >
             {/* ── Header ── */}
             <View style={styles.header}>
                 <TouchableOpacity
@@ -675,11 +916,11 @@ export default function CreatePostScreen({ onBack, onPostCreated, editingPost = 
                         <Image source={{ uri: avatarUrl }} style={styles.authorAvatar} />
                         <View style={styles.authorInfo}>
                             <Text style={styles.authorName}>{displayName}</Text>
-                            <TouchableOpacity style={styles.privacyBadge} activeOpacity={0.7}>
+                            {/* <TouchableOpacity style={styles.privacyBadge} activeOpacity={0.7}>
                                 <Ionicons name="earth" size={12} color="#55C5F1" />
                                 <Text style={styles.privacyText}>Công khai</Text>
                                 <Ionicons name="chevron-down" size={12} color="#9CA3AF" />
-                            </TouchableOpacity>
+                            </TouchableOpacity> */}
                         </View>
                     </View>
 
@@ -870,6 +1111,8 @@ export default function CreatePostScreen({ onBack, onPostCreated, editingPost = 
                 </View>
             </KeyboardAvoidingView>
 
+            <View style={styles.edgeSwipeBackZone} {...edgeBackPanResponder.panHandlers} />
+
             <Modal
                 visible={activeTextField !== null}
                 animationType="slide"
@@ -981,7 +1224,7 @@ export default function CreatePostScreen({ onBack, onPostCreated, editingPost = 
                     </View>
                 </View>
             </Modal>
-        </View>
+        </Animated.View>
     );
 }
 
@@ -993,6 +1236,14 @@ const styles = StyleSheet.create({
     screen: {
         flex: 1,
         backgroundColor: '#FFFFFF',
+    },
+    edgeSwipeBackZone: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: 24,
+        zIndex: 20,
     },
 
     // ── Header ──
