@@ -587,7 +587,7 @@ function AppContent() {
                                 )}
                             </Stack.Screen>
 
-                            <Stack.Screen name="Live">
+                            <Stack.Screen name="Live" options={{ gestureEnabled: false, fullScreenGestureEnabled: false }}>
                                 {(props) => (
                                     <LivestreamScreen
                                         onBack={() => props.navigation.goBack()}

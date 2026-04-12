@@ -35,13 +35,13 @@ const resolveBaseUrl = (
 // Base URLs for different services
 export const API_CONFIG = {
     // Auth Service Base URL - reads from .env file
-    AUTH_BASE_URL: resolveBaseUrl(ENV_AUTH_BASE_URL, undefined, DEFAULT_AUTH_BASE_URL),
+    AUTH_BASE_URL: resolveBaseUrl(ENV_AUTH_BASE_URL, undefined),
 
     // Main API Base URL - fallback to AUTH_BASE_URL when MAIN_BASE_URL is not set
-    MAIN_BASE_URL: resolveBaseUrl(ENV_MAIN_BASE_URL, ENV_AUTH_BASE_URL, DEFAULT_MAIN_BASE_URL),
+    MAIN_BASE_URL: resolveBaseUrl(ENV_MAIN_BASE_URL, ENV_AUTH_BASE_URL),
 
     // AzuraCast Base URL - reads from .env file
-    AZURACAST_BASE: resolveBaseUrl(ENV_AZURACAST_BASE, undefined, DEFAULT_AZURACAST_BASE),
+    AZURACAST_BASE: resolveBaseUrl(ENV_AZURACAST_BASE, undefined),
 
     // Add more service URLs here as needed
     // MAIN_BASE_URL: process.env.MAIN_BASE_URL || 'http://localhost:8080/api/v1',

@@ -18,6 +18,7 @@
       }
     },
     "android": {
+      "package": "com.soundmate.app",
       "adaptiveIcon": {
         "backgroundColor": "#0D0D0D",
         "foregroundImage": "./assets/logo_notext.png"

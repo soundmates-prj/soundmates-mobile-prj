@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -21,6 +22,7 @@ import {
 } from 'react-native';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import {
+  authApiClient,
   authService,
   BlogPostResponse,
   blogService,
@@ -37,7 +39,7 @@ import {
 import { DisplayPost } from '../../components/blog/BlogPostCard';
 import FormTextField from '../../components/ui/FormTextField';
 import { showToast } from '../../components/ui/Toast';
-import { ThemePreference, useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
 import BottomNavigation, { TabName } from '../BottomNavigation';
 import CreatePostScreen, { EditablePostDraft } from '../blog/CreatePostScreen';
@@ -51,6 +53,16 @@ import PlaylistDetailModal from './components/PlaylistDetailModal';
 import ProfileFavoritesTab from './components/ProfileFavoritesTab';
 import ProfilePlaylistsTab from './components/ProfilePlaylistsTab';
 import ProfilePostsTab from './components/ProfilePostsTab';
+
+export interface ApiTheme {
+  id: string;
+  name: string;
+  mode: 'light' | 'dark';
+  primaryColor: string;
+  backgroundColor: string;
+  textColor: string;
+  gradientBackground?: string;
+}
 
 const defaultAvatarUrl = 'https://i.pravatar.cc/150?img=10';
 const profileContentTabs = [
@@ -142,8 +154,8 @@ function sortPlaylistsNewestFirst(playlists: UserPlaylistResponse[]): UserPlayli
 // ─── Settings Drawer ────────────────────────────────────
 
 function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountInfo, onOpenSubscription, onOpenThemeSettings, themeLabel, subscriptionPlanLabel, onLogout, palette, isDarkMode }: {
-  isOpen: boolean; 
-  onClose: () => void; 
+  isOpen: boolean;
+  onClose: () => void;
   onOpenChangePassword?: () => void;
   onOpenAccountInfo?: () => void;
   onOpenSubscription?: () => void;
@@ -177,16 +189,16 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
     <Modal visible={isOpen} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.settingsBackdrop}>
         <TouchableOpacity activeOpacity={1} onPress={onClose} style={styles.settingsBackdropTouchable} />
-        <View style={[styles.settingsDrawer, { backgroundColor: palette.surface }]}> 
+        <View style={[styles.settingsDrawer, { backgroundColor: palette.surface }]}>
           {/* Handle */}
           <View style={styles.settingsHandle}>
             <View style={[styles.settingsHandleBar, { backgroundColor: palette.border }]} />
           </View>
 
           {/* Header */}
-          <View style={[styles.settingsHeader, { borderBottomColor: palette.border }]}> 
+          <View style={[styles.settingsHeader, { borderBottomColor: palette.border }]}>
             <Text style={[styles.settingsTitle, { color: palette.textPrimary }]}>Cài đặt & Tùy chỉnh</Text>
-            <TouchableOpacity onPress={onClose} style={[styles.settingsCloseButton, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}> 
+            <TouchableOpacity onPress={onClose} style={[styles.settingsCloseButton, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}>
               <Ionicons name="close" size={16} color={palette.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -203,27 +215,27 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
                       : ('badge' in item ? item.badge : undefined);
 
                     return (
-                  <TouchableOpacity 
-                    key={item.label} 
-                    style={[styles.settingsMenuItem, { borderBottomColor: palette.border }]}
-                    onPress={() => handleMenuItemPress(item.label)}
-                  >
-                    <View style={[styles.settingsMenuIcon, { backgroundColor: item.color + '15' }]}>
-                      <Ionicons name={item.icon as any} size={18} color={item.color} />
-                    </View>
-                    <Text style={[styles.settingsMenuLabel, { color: palette.textPrimary }]}>{item.label}</Text>
-                    {item.label === 'Giao diện' ? (
-                      <Text style={[styles.settingsMenuSubtitle, { color: palette.textSecondary }]}>{themeLabel || 'Sáng'}</Text>
-                    ) : ('subtitle' in item && item.subtitle ? (
-                      <Text style={[styles.settingsMenuSubtitle, { color: palette.textSecondary }]}>{item.subtitle}</Text>
-                    ) : null)}
-                    {!!itemBadge && (
-                      <View style={styles.settingsMenuBadge}>
-                        <Text style={styles.settingsMenuBadgeText}>{itemBadge}</Text>
-                      </View>
-                    )}
-                    <Ionicons name="chevron-forward" size={16} color={palette.textMuted} />
-                  </TouchableOpacity>
+                      <TouchableOpacity
+                        key={item.label}
+                        style={[styles.settingsMenuItem, { borderBottomColor: palette.border }]}
+                        onPress={() => handleMenuItemPress(item.label)}
+                      >
+                        <View style={[styles.settingsMenuIcon, { backgroundColor: item.color + '15' }]}>
+                          <Ionicons name={item.icon as any} size={18} color={item.color} />
+                        </View>
+                        <Text style={[styles.settingsMenuLabel, { color: palette.textPrimary }]}>{item.label}</Text>
+                        {item.label === 'Giao diện' ? (
+                          <Text style={[styles.settingsMenuSubtitle, { color: palette.textSecondary }]}>{themeLabel || 'Sáng'}</Text>
+                        ) : ('subtitle' in item && item.subtitle ? (
+                          <Text style={[styles.settingsMenuSubtitle, { color: palette.textSecondary }]}>{item.subtitle}</Text>
+                        ) : null)}
+                        {!!itemBadge && (
+                          <View style={styles.settingsMenuBadge}>
+                            <Text style={styles.settingsMenuBadgeText}>{itemBadge}</Text>
+                          </View>
+                        )}
+                        <Ionicons name="chevron-forward" size={16} color={palette.textMuted} />
+                      </TouchableOpacity>
                     );
                   })()
                 ))}
@@ -231,8 +243,8 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
             ))}
 
             {/* Logout */}
-            <View style={[styles.settingsLogoutContainer, { borderTopColor: palette.border }]}> 
-              <TouchableOpacity 
+            <View style={[styles.settingsLogoutContainer, { borderTopColor: palette.border }]}>
+              <TouchableOpacity
                 style={[styles.settingsLogoutButton, { borderColor: isDarkMode ? '#DC2626' : '#EF4444' }]}
                 onPress={() => {
                   Alert.alert(
@@ -333,6 +345,31 @@ export default function ProfileScreen({
   const [previewImageUrl, setPreviewImageUrl] = useState('');
   const [previewImageTarget, setPreviewImageTarget] = useState<'avatar' | 'cover'>('avatar');
   const [showThemePickerPopup, setShowThemePickerPopup] = useState(false);
+  const [availableThemes, setAvailableThemes] = useState<ApiTheme[]>([]);
+  const [isLoadingThemes, setIsLoadingThemes] = useState(false);
+  const [previewThemeId, setPreviewThemeId] = useState<string | null>(null);
+  const [appliedTheme, setAppliedTheme] = useState<ApiTheme | null>(null);
+
+  useEffect(() => {
+    const loadSavedTheme = async () => {
+      try {
+        const savedId = await AsyncStorage.getItem('profilescreen_active_theme_id');
+        if (savedId) {
+          const res = await authApiClient.get('/themes/active');
+          if (res.data?.success && res.data?.data?.items) {
+            const items = res.data.data.items as ApiTheme[];
+            const theme = items.find(t => t.id === savedId);
+            if (theme) {
+              setAvailableThemes(items);
+              setAppliedTheme(theme);
+              setPreviewThemeId(theme.id);
+            }
+          }
+        }
+      } catch (e) { }
+    }
+    loadSavedTheme();
+  }, []);
   const [subscriptionPlanName, setSubscriptionPlanName] = useState('Premium');
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null);
   const [activeProfileTab, setActiveProfileTab] = useState<ProfileContentTab>('posts');
@@ -383,18 +420,49 @@ export default function ProfileScreen({
       ? 'Tối'
       : 'Sáng';
 
-  const handleOpenThemeSettings = useCallback(() => {
+  const handleOpenThemeSettings = useCallback(async () => {
     setShowThemePickerPopup(true);
+    // If not loaded yet, fetch themes
+    if (availableThemes.length === 0) {
+      setIsLoadingThemes(true);
+      try {
+        const res = await authApiClient.get('/themes/active');
+        if (res.data?.success && res.data?.data?.items) {
+          setAvailableThemes(res.data.data.items as ApiTheme[]);
+        }
+      } catch (e) {
+        console.log('Error fetching themes:', e);
+      } finally {
+        setIsLoadingThemes(false);
+      }
+    }
+    setPreviewThemeId(appliedTheme?.id || null);
+  }, [availableThemes.length, appliedTheme]);
+
+  const handlePreviewApiTheme = useCallback((themeId: string) => {
+    setPreviewThemeId(themeId);
   }, []);
 
-  const handleApplyThemePreference = useCallback(async (nextPreference: ThemePreference) => {
+  const handleConfirmApiTheme = useCallback(async () => {
     setShowThemePickerPopup(false);
-    await setThemePreference(nextPreference);
-    showToast.success(
-      'Đã cập nhật giao diện',
-      `Chế độ ${nextPreference === 'system' ? 'Tự động' : nextPreference === 'dark' ? 'Tối' : 'Sáng'}`,
-    );
-  }, [setThemePreference]);
+    if (!previewThemeId) return;
+
+    const selectedTheme = availableThemes.find(t => t.id === previewThemeId);
+    if (selectedTheme) {
+      setAppliedTheme(selectedTheme);
+      await setThemePreference(selectedTheme.mode === 'dark' ? 'dark' : 'light');
+      try {
+        await AsyncStorage.setItem('profilescreen_active_theme_id', selectedTheme.id);
+      } catch (e) { }
+
+      showToast.success('Đã cập nhật giao diện', `Áp dụng chủ đề: ${selectedTheme.name}`);
+    }
+  }, [previewThemeId, availableThemes, setThemePreference]);
+
+  const handleCancelThemePicker = useCallback(() => {
+    setShowThemePickerPopup(false);
+    setPreviewThemeId(appliedTheme?.id || null);
+  }, [appliedTheme]);
 
   // Debug: Log user changes
   useEffect(() => {
@@ -1062,10 +1130,10 @@ export default function ProfileScreen({
       prev.map((post) =>
         post.id === postId
           ? {
-              ...post,
-              isLiked: !post.isLiked,
-              reactionCount: post.isLiked ? post.reactionCount - 1 : post.reactionCount + 1,
-            }
+            ...post,
+            isLiked: !post.isLiked,
+            reactionCount: post.isLiked ? post.reactionCount - 1 : post.reactionCount + 1,
+          }
           : post,
       ),
     );
@@ -1083,10 +1151,10 @@ export default function ProfileScreen({
         prev.map((post) =>
           post.id === postId
             ? {
-                ...post,
-                isLiked: targetPost.isLiked,
-                reactionCount: targetPost.reactionCount,
-              }
+              ...post,
+              isLiked: targetPost.isLiked,
+              reactionCount: targetPost.reactionCount,
+            }
             : post,
         ),
       );
@@ -1198,7 +1266,7 @@ export default function ProfileScreen({
       >
         {/* ── Profile Card ── */}
         <View style={styles.profileCardContainer}>
-          <View style={[styles.profileCard, { backgroundColor: palette.surface }]}> 
+          <View style={[styles.profileCard, { backgroundColor: palette.surface }]}>
             {/* ── Header ── */}
             <View style={styles.header}>
               <Text style={styles.headerTitle}>Trang cá nhân</Text>
@@ -1212,7 +1280,7 @@ export default function ProfileScreen({
               </View>
             </View>
 
-            <View style={[styles.profileCoverContainer, { backgroundColor: isDarkMode ? '#111827' : '#E2E8F0' }]}> 
+            <View style={[styles.profileCoverContainer, { backgroundColor: isDarkMode ? '#111827' : '#E2E8F0' }]}>
               <TouchableOpacity
                 disabled={isUpdatingProfileImage}
                 onPress={() => openImageOptionsPopup('cover')}
@@ -1249,8 +1317,8 @@ export default function ProfileScreen({
               <View style={styles.profileDetails}>
                 <View style={styles.profileNameRow}>
                   <Text style={[styles.profileName, { color: palette.textPrimary }]}>
-                    {user?.firstName && user?.lastName 
-                      ? `${user.firstName} ${user.lastName}` 
+                    {user?.firstName && user?.lastName
+                      ? `${user.firstName} ${user.lastName}`
                       : user?.username || 'User'}
                   </Text>
                   <View style={styles.premiumBadge}>
@@ -1281,7 +1349,7 @@ export default function ProfileScreen({
           </View>
         </View>
 
-        <View style={[styles.tabsContainer, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+        <View style={[styles.tabsContainer, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           {profileContentTabs.map((tab) => {
             const isActive = activeProfileTab === tab.key;
 
@@ -1378,11 +1446,11 @@ export default function ProfileScreen({
 
             {((activeImageTarget === 'avatar' && !!avatarUrl) ||
               (activeImageTarget === 'cover' && !!coverImageUrl)) && (
-              <TouchableOpacity disabled={isUpdatingProfileImage} style={[styles.popupOption, { borderBottomColor: palette.border }]} onPress={handleViewImage}>
-                <Ionicons name="eye-outline" size={18} color="#0EA5E9" />
-                <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>Xem ảnh hiện tại</Text>
-              </TouchableOpacity>
-            )}
+                <TouchableOpacity disabled={isUpdatingProfileImage} style={[styles.popupOption, { borderBottomColor: palette.border }]} onPress={handleViewImage}>
+                  <Ionicons name="eye-outline" size={18} color="#0EA5E9" />
+                  <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>Xem ảnh hiện tại</Text>
+                </TouchableOpacity>
+              )}
 
             <TouchableOpacity disabled={isUpdatingProfileImage} style={[styles.popupOption, { borderBottomColor: palette.border }]} onPress={handlePickImageFromLibrary}>
               <Ionicons name="images-outline" size={18} color="#55C5F1" />
@@ -1406,33 +1474,47 @@ export default function ProfileScreen({
 
       {showThemePickerPopup && (
         <View style={styles.popupOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowThemePickerPopup(false)} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={handleCancelThemePicker} />
 
-          <View style={[styles.popupCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+          <View style={[styles.popupCard, { backgroundColor: palette.surface, borderColor: palette.border, maxHeight: '80%' }]}>
             <View style={[styles.popupHeader, { borderBottomColor: palette.border }]}>
-              <Text style={[styles.popupTitle, { color: palette.textPrimary }]}>Chọn giao diện</Text>
-              <TouchableOpacity onPress={() => setShowThemePickerPopup(false)}>
+              <Text style={[styles.popupTitle, { color: palette.textPrimary }]}>Giao diện thư viện</Text>
+              <TouchableOpacity onPress={handleCancelThemePicker}>
                 <Ionicons name="close" size={18} color={palette.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={[styles.popupOption, { borderBottomColor: palette.border }]} onPress={() => void handleApplyThemePreference('light')}>
-              <Ionicons name="sunny-outline" size={18} color="#F59E0B" />
-              <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>Sáng</Text>
-              {themePreference === 'light' && <Ionicons name="checkmark" size={18} color="#10B981" />}
-            </TouchableOpacity>
+            <ScrollView style={{ maxHeight: 300 }}>
+              {isLoadingThemes ? (
+                <ActivityIndicator style={{ padding: 20 }} color={palette.primary} />
+              ) : availableThemes.length === 0 ? (
+                <Text style={{ textAlign: 'center', padding: 20, color: palette.textSecondary }}>Đang trống.</Text>
+              ) : (
+                availableThemes.map(theme => (
+                  <TouchableOpacity
+                    key={theme.id}
+                    style={[styles.popupOption, { borderBottomColor: palette.border, paddingVertical: 12 }]}
+                    onPress={() => handlePreviewApiTheme(theme.id)}
+                  >
+                    <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: theme.primaryColor, marginRight: 12 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>{theme.name}</Text>
+                      <Text style={{ fontSize: 12, color: palette.textSecondary, marginTop: 2 }}>{theme.mode === 'dark' ? 'Giao diện tối' : 'Giao diện sáng'}</Text>
+                    </View>
+                    {previewThemeId === theme.id && <Ionicons name="checkmark-circle" size={22} color="#10B981" />}
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
 
-            <TouchableOpacity style={[styles.popupOption, { borderBottomColor: palette.border }]} onPress={() => void handleApplyThemePreference('dark')}>
-              <Ionicons name="moon-outline" size={18} color="#6366F1" />
-              <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>Tối</Text>
-              {themePreference === 'dark' && <Ionicons name="checkmark" size={18} color="#10B981" />}
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.popupOption, { borderBottomColor: palette.border }]} onPress={() => void handleApplyThemePreference('system')}>
-              <Ionicons name="phone-portrait-outline" size={18} color="#3B82F6" />
-              <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>Tự động theo hệ thống</Text>
-              {themePreference === 'system' && <Ionicons name="checkmark" size={18} color="#10B981" />}
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingTop: 16, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: palette.border }}>
+              <TouchableOpacity onPress={handleCancelThemePicker} style={{ marginRight: 16, paddingVertical: 8, paddingHorizontal: 16 }}>
+                <Text style={{ color: palette.textSecondary, fontWeight: '600' }}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleConfirmApiTheme} style={{ paddingVertical: 8, paddingHorizontal: 16, backgroundColor: palette.primary, borderRadius: 6 }}>
+                <Text style={{ color: 'white', fontWeight: 'bold' }}>Xác nhận</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       )}
@@ -1498,12 +1580,12 @@ export default function ProfileScreen({
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={0}
           >
-            <View style={[styles.playlistSheetCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+            <View style={[styles.playlistSheetCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
               <View style={styles.playlistSheetHandle}>
                 <View style={[styles.playlistSheetHandleBar, { backgroundColor: palette.border }]} />
               </View>
 
-              <View style={[styles.popupHeader, { borderBottomColor: palette.border }]}> 
+              <View style={[styles.popupHeader, { borderBottomColor: palette.border }]}>
                 <Text style={[styles.popupTitle, { color: palette.textPrimary }]}>
                   {playlistEditorTarget ? 'Chỉnh sửa playlist' : 'Tạo playlist mới'}
                 </Text>
@@ -1589,7 +1671,7 @@ export default function ProfileScreen({
                 </View>
               </ScrollView>
 
-              <View style={[styles.playlistEditorFooter, { borderTopColor: palette.border }]}> 
+              <View style={[styles.playlistEditorFooter, { borderTopColor: palette.border }]}>
                 <TouchableOpacity
                   style={[styles.playlistEditorFooterButton, styles.playlistEditorCancelButton, { borderColor: palette.border }]}
                   onPress={closePlaylistEditor}
@@ -1616,8 +1698,8 @@ export default function ProfileScreen({
             <View style={styles.popupOverlay}>
               <Pressable style={StyleSheet.absoluteFill} onPress={closePlaylistThumbnailOptions} />
 
-              <View style={[styles.popupCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
-                <View style={[styles.popupHeader, { borderBottomColor: palette.border }]}> 
+              <View style={[styles.popupCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+                <View style={[styles.popupHeader, { borderBottomColor: palette.border }]}>
                   <Text style={[styles.popupTitle, { color: palette.textPrimary }]}>Ảnh bìa playlist</Text>
                   <TouchableOpacity onPress={closePlaylistThumbnailOptions}>
                     <Ionicons name="close" size={18} color={palette.textSecondary} />
@@ -1672,9 +1754,9 @@ export default function ProfileScreen({
       </Modal>
 
       {/* ── Settings Drawer ── */}
-      <SettingsDrawer 
-        isOpen={showSettings} 
-        onClose={() => setShowSettings(false)} 
+      <SettingsDrawer
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
         onOpenChangePassword={() => {
           setShowChangePassword(true);
         }}
@@ -1701,8 +1783,8 @@ export default function ProfileScreen({
         presentationStyle="fullScreen"
         onRequestClose={() => setShowChangePassword(false)}
       >
-        <ChangePasswordScreen 
-          onBack={() => setShowChangePassword(false)} 
+        <ChangePasswordScreen
+          onBack={() => setShowChangePassword(false)}
           onNavigateToForgotPassword={() => {
             setShowChangePassword(false);
             if (onNavigateToForgotPassword) {
