@@ -2,10 +2,10 @@
   "expo": {
     "name": "SoundMates",
     "slug": "soundmates",
-    "version": "1.0.0",
+    "version": "4.0.0",
     "orientation": "portrait",
     "icon": "./assets/logo_notext_sq.png",
-    "scheme": "soundmate",
+    "scheme": "soundmates",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -44,9 +44,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Cho phep SoundMate truy cap thu vien anh de cap nhat anh dai dien va anh bia.",
-          "cameraPermission": "Cho phep SoundMate su dung camera de chup anh dai dien va anh bia.",
-          "microphonePermission": "Cho phep SoundMate su dung microphone khi quay video tu camera."
+          "photosPermission": "Cho phep SoundMates truy cap thu vien anh de cap nhat anh dai dien va anh bia.",
+          "cameraPermission": "Cho phep SoundMates su dung camera de chup anh dai dien va anh bia.",
+          "microphonePermission": "Cho phep SoundMates su dung microphone khi quay video tu camera."
         }
       ],
       [
@@ -64,7 +64,7 @@
       [
         "expo-av",
         {
-          "microphonePermission": "Cho phep SoundMate su dung microphone.",
+          "microphonePermission": "Cho phep SoundMates su dung microphone.",
           "ios": {
             "audioSessionCategory": "Playback"
           },
