@@ -4,7 +4,7 @@
     "slug": "soundmates",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/logo_notext.png",
+    "icon": "./assets/logo_notext_sq.png",
     "scheme": "soundmate",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -21,7 +21,7 @@
       "package": "com.soundmate.app",
       "adaptiveIcon": {
         "backgroundColor": "#0D0D0D",
-        "foregroundImage": "./assets/logo_notext.png"
+        "foregroundImage": "./assets/logo_notext_sq.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -37,7 +37,7 @@
     },
     "web": {
       "output": "single",
-      "favicon": "./assets/logo_notext.png",
+      "favicon": "./assets/logo_notext_sq.png",
       "backgroundColor": "#0D0D0D"
     },
     "plugins": [
@@ -52,7 +52,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/logo_notext.png",
+          "image": "./assets/logo_notext_sq.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#0D0D0D",
