@@ -212,7 +212,35 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
                 onPress={handleNavigateToDetail}
                 style={styles.contentContainer}
             >
-                {(post.imageUrl || post.imgUrl) ? (
+                {(post.postType?.toLowerCase() === 'share-music' || post.postType?.toLowerCase() === 'sharemusic' || !!post.shareMusic) && post.shareMusic ? (
+                    <View style={styles.shareMusicContainer}>
+                        {!!post.title && (
+                            <Text style={[styles.imagePostTitle, { color: palette.textPrimary, paddingHorizontal: 14, paddingBottom: 10 }]} numberOfLines={2}>
+                                {post.title}
+                            </Text>
+                        )}
+                        <View style={[styles.shareMusicCard, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}>
+                            {post.shareMusic.albumImage ? (
+                                <Image source={{ uri: post.shareMusic.albumImage }} style={styles.shareMusicImage} />
+                            ) : (
+                                <View style={[styles.shareMusicImage, { backgroundColor: palette.primary + '30', justifyContent: 'center', alignItems: 'center' }]}>
+                                    <Ionicons name="musical-notes" size={24} color={palette.primary} />
+                                </View>
+                            )}
+                            <View style={styles.shareMusicInfo}>
+                                <Text style={[styles.shareMusicSongTitle, { color: palette.textPrimary }]} numberOfLines={1}>
+                                    {post.shareMusic.title}
+                                </Text>
+                                <Text style={[styles.shareMusicArtist, { color: palette.textSecondary }]} numberOfLines={1}>
+                                    {post.shareMusic.artist}
+                                </Text>
+                            </View>
+                            <View style={[styles.shareMusicPlayBtn, { backgroundColor: palette.primary }]}>
+                                <Ionicons name="play" size={18} color="#FFFFFF" />
+                            </View>
+                        </View>
+                    </View>
+                ) : (post.imageUrl || post.imgUrl) ? (
                     <>
                         <View style={styles.imagePostMeta}>
                             <Text style={[styles.imagePostTitle, { color: palette.textPrimary }]} numberOfLines={2}>
@@ -499,6 +527,42 @@ const styles = StyleSheet.create({
     textContent: {
         fontSize: 15,
         lineHeight: 23,
+    },
+    shareMusicContainer: {
+        paddingBottom: 10,
+    },
+    shareMusicCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginHorizontal: 14,
+        padding: 10,
+        borderRadius: 12,
+        gap: 12,
+    },
+    shareMusicImage: {
+        width: 56,
+        height: 56,
+        borderRadius: 8,
+    },
+    shareMusicInfo: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    shareMusicSongTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        marginBottom: 4,
+    },
+    shareMusicArtist: {
+        fontSize: 14,
+    },
+    shareMusicPlayBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingLeft: 3,
     },
     actionsBar: {
         flexDirection: 'row',

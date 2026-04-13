@@ -119,9 +119,9 @@ function AppContent() {
     ) => {
         runOrQueueNavigationAction(() => {
             if (params === undefined) {
-                navigationRef.navigate(name);
+                navigationRef.navigate(name as any);
             } else {
-                navigationRef.navigate(name, params);
+                navigationRef.navigate(name as any, params as any);
             }
         });
     }, [navigationRef, runOrQueueNavigationAction]);

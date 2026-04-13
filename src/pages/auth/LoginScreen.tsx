@@ -195,7 +195,7 @@ export default function LoginScreen({
             if (result.type === 'error') {
                 const providerError = result.params?.error_description
                     || result.params?.error
-                    || result.error?.message
+                    || (result.error as any)?.message
                     || 'Google từ chối yêu cầu đăng nhập.';
                 showToast.error('Google từ chối đăng nhập', providerError);
                 return;

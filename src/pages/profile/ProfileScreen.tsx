@@ -114,6 +114,20 @@ const MENU_ITEMS = [
 ];
 
 function mapMyPostToDisplayPost(post: BlogPostResponse): DisplayPost {
+  const candidateShareMusic = post.shareMusic || (post as any).share_music || (post as any).sharedMusic;
+  let normalizedShareMusic = null;
+  if (candidateShareMusic) {
+    if (typeof candidateShareMusic === 'string') {
+      try {
+        normalizedShareMusic = JSON.parse(candidateShareMusic);
+      } catch (e) {
+        normalizedShareMusic = null;
+      }
+    } else if (typeof candidateShareMusic === 'object') {
+      normalizedShareMusic = candidateShareMusic;
+    }
+  }
+
   return {
     id: post.id,
     userId: post.userId,
@@ -124,7 +138,7 @@ function mapMyPostToDisplayPost(post: BlogPostResponse): DisplayPost {
     audioUrl: post.audioUrl,
     moodTag: post.moodTag,
     postType: post.postType || null,
-    shareMusic: post.shareMusic || null,
+    shareMusic: normalizedShareMusic,
     status: post.status,
     createdAt: post.createdAt,
     publishedAt: post.publishedAt,
@@ -290,6 +304,7 @@ interface ProfileScreenProps {
   onBackToHome?: (tab?: TabName) => void;
   onNavigateToForgotPassword?: () => void;
   onNavigateToSubscription?: () => void;
+  onNavigateToEditProfile?: () => void;
   onNavigateToCreatePost?: (draft?: EditablePostDraft | null) => void;
   onLogout?: () => void;
   hideBottomNav?: boolean;
@@ -300,6 +315,7 @@ export default function ProfileScreen({
   onBackToHome,
   onNavigateToForgotPassword,
   onNavigateToSubscription,
+  onNavigateToEditProfile,
   onNavigateToCreatePost,
   onLogout,
   hideBottomNav = false,
@@ -1271,7 +1287,7 @@ export default function ProfileScreen({
             <View style={styles.header}>
               <Text style={styles.headerTitle}>Trang cá nhân</Text>
               <View style={styles.headerActions}>
-                <TouchableOpacity onPress={() => setShowEditProfile(true)} style={[styles.headerButton, { backgroundColor: isDarkMode ? 'rgba(15, 23, 42, 0.7)' : 'rgba(15, 23, 42, 0.35)' }]}>
+                <TouchableOpacity onPress={() => onNavigateToEditProfile ? onNavigateToEditProfile() : setShowEditProfile(true)} style={[styles.headerButton, { backgroundColor: isDarkMode ? 'rgba(15, 23, 42, 0.7)' : 'rgba(15, 23, 42, 0.35)' }]}>
                   <Ionicons name="create-outline" size={20} color="white" />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setShowSettings(true)} style={[styles.headerButton, { backgroundColor: isDarkMode ? 'rgba(15, 23, 42, 0.7)' : 'rgba(15, 23, 42, 0.35)' }]}>

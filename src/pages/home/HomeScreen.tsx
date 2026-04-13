@@ -1,4 +1,4 @@
-﻿import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Dimensions, Easing, Image, Linking, PanResponder, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
@@ -679,16 +679,42 @@ export default function HomeScreen({
             const result = await blogService.getPopularPosts({ page: 1, pageSize: 10 });
             if (result.success && result.data?.items) {
                 const mappedPosts = result.data.items.map((post: PopularPostResponse) => {
-                    const candidateShareMusic = (
+                    let candidateShareMusic = (
                         (post as PopularPostResponse & { share_music?: unknown; sharedMusic?: unknown }).shareMusic
                         || (post as PopularPostResponse & { share_music?: unknown; sharedMusic?: unknown }).share_music
                         || (post as PopularPostResponse & { share_music?: unknown; sharedMusic?: unknown }).sharedMusic
                     );
 
-                    const normalizedShareMusic = candidateShareMusic
-                        && typeof candidateShareMusic === 'object'
-                        ? (candidateShareMusic as DisplayPost['shareMusic'])
-                        : null;
+                    let inferredPostType = post.postType;
+                    if (!candidateShareMusic && post.moodTag && post.moodTag.includes('share-music')) {
+                        inferredPostType = 'share-music';
+                        if (post.contentText) {
+                            try {
+                                const parsed = JSON.parse(post.contentText);
+                                candidateShareMusic = {
+                                    trackId: parsed.TrackId || parsed.trackId,
+                                    title: parsed.Title || parsed.title,
+                                    artist: parsed.Artist || parsed.artist,
+                                    albumImage: parsed.AlbumImage || parsed.albumImage,
+                                    previewUrl: parsed.PreviewUrl || parsed.previewUrl,
+                                    template: parsed.Template || parsed.template,
+                                };
+                            } catch (e) {}
+                        }
+                    }
+
+                    let normalizedShareMusic = null;
+                    if (candidateShareMusic) {
+                        if (typeof candidateShareMusic === 'string') {
+                            try {
+                                normalizedShareMusic = JSON.parse(candidateShareMusic as string);
+                            } catch (e) {
+                                normalizedShareMusic = null;
+                            }
+                        } else if (typeof candidateShareMusic === 'object') {
+                            normalizedShareMusic = candidateShareMusic;
+                        }
+                    }
 
                     return {
                         id: post.id,
@@ -704,8 +730,8 @@ export default function HomeScreen({
                         imageUrl: post.imgUrl || null,
                         audioUrl: post.audioUrl || null,
                         moodTag: post.moodTag,
-                        postType: post.postType || null,
-                        shareMusic: normalizedShareMusic,
+                        postType: inferredPostType || post.postType || null,
+                        shareMusic: normalizedShareMusic as DisplayPost['shareMusic'],
                         status: post.status,
                         createdAt: post.createdAt,
                         publishedAt: post.publishedAt,

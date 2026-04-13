@@ -79,14 +79,51 @@ export default function BlogScreen({
                 : await blogService.getPublishedPosts({ page: 1, pageSize: 20 });
 
             if (response.success) {
-                const normalizedPosts = (response.data?.items || []).map((post: any) => ({
-                    ...post,
-                    imageUrl: post.imageUrl ?? post.imgUrl ?? null,
-                    reactionCount: Number.isFinite(post.reactionCount) ? post.reactionCount : 0,
-                    commentCount: Number.isFinite(post.commentCount) ? post.commentCount : 0,
-                    viewCount: Number.isFinite(post.viewCount) ? post.viewCount : 0,
-                    isLiked: false,
-                }));
+                const normalizedPosts = (response.data?.items || []).map((post: any) => {
+                    let candidateShareMusic = post.shareMusic || post.share_music || post.sharedMusic;
+                    let inferredPostType = post.postType;
+
+                    if (!candidateShareMusic && post.moodTag && post.moodTag.includes('share-music')) {
+                        inferredPostType = 'share-music';
+                        if (post.contentText) {
+                            try {
+                                const parsed = JSON.parse(post.contentText);
+                                candidateShareMusic = {
+                                    trackId: parsed.TrackId || parsed.trackId,
+                                    title: parsed.Title || parsed.title,
+                                    artist: parsed.Artist || parsed.artist,
+                                    albumImage: parsed.AlbumImage || parsed.albumImage,
+                                    previewUrl: parsed.PreviewUrl || parsed.previewUrl,
+                                    template: parsed.Template || parsed.template,
+                                };
+                            } catch (e) {}
+                        }
+                    }
+
+                    let normalizedShareMusic = null;
+                    if (candidateShareMusic) {
+                        if (typeof candidateShareMusic === 'string') {
+                            try {
+                                normalizedShareMusic = JSON.parse(candidateShareMusic);
+                            } catch (e) {
+                                normalizedShareMusic = null;
+                            }
+                        } else if (typeof candidateShareMusic === 'object') {
+                            normalizedShareMusic = candidateShareMusic;
+                        }
+                    }
+
+                    return {
+                        ...post,
+                        postType: inferredPostType || post.postType || null,
+                        imageUrl: post.imageUrl ?? post.imgUrl ?? null,
+                        shareMusic: normalizedShareMusic,
+                        reactionCount: Number.isFinite(post.reactionCount) ? post.reactionCount : 0,
+                        commentCount: Number.isFinite(post.commentCount) ? post.commentCount : 0,
+                        viewCount: Number.isFinite(post.viewCount) ? post.viewCount : 0,
+                        isLiked: false,
+                    };
+                });
 
                 if (user?.userId) {
                     const enrichedPosts = await Promise.all(
