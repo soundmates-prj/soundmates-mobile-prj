@@ -62,10 +62,11 @@ export default function LoginScreen({
     const [isLoading, setIsLoading] = useState(false);
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-    const legacyGoogleClientId = useMemo(() => (VITE_GOOGLE_CLIENT_ID || '').trim(), []);
-    const googleWebClientId = useMemo(() => (VITE_GOOGLE_WEB_CLIENT_ID || '').trim(), []);
-    const googleAndroidClientId = useMemo(() => (VITE_GOOGLE_ANDROID_CLIENT_ID || '').trim(), []);
-    const googleIosClientId = useMemo(() => (VITE_GOOGLE_IOS_CLIENT_ID || '').trim(), []);
+    const FALLBACK_ID = '93259588882-152q42sdkspqdv5e1t0ljjrq4gtkr3ka.apps.googleusercontent.com';
+    const legacyGoogleClientId = useMemo(() => (VITE_GOOGLE_CLIENT_ID || FALLBACK_ID).trim(), []);
+    const googleWebClientId = useMemo(() => (VITE_GOOGLE_WEB_CLIENT_ID || FALLBACK_ID).trim(), []);
+    const googleAndroidClientId = useMemo(() => (VITE_GOOGLE_ANDROID_CLIENT_ID || FALLBACK_ID).trim(), []);
+    const googleIosClientId = useMemo(() => (VITE_GOOGLE_IOS_CLIENT_ID || FALLBACK_ID).trim(), []);
 
     const resolvedWebClientId = googleWebClientId || legacyGoogleClientId;
     const resolvedAndroidClientId = googleAndroidClientId || legacyGoogleClientId;

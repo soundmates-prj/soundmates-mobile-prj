@@ -2,11 +2,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { registerRootComponent } from 'expo';
+import * as SplashScreen from 'expo-splash-screen';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StatusBar, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
+
+// Keep the splash screen visible while we fetch resources
+SplashScreen.preventAutoHideAsync().catch(() => {});
 import { SoundMateDarkColors, SoundMateLightColors } from './constants/theme';
 import { authService, registerUnauthorizedHandler } from './src/api';
 import { showToast, toastConfig } from './src/components/ui/Toast';
@@ -146,6 +150,8 @@ function AppContent() {
                 setIsAuthenticated(false);
             } finally {
                 setIsAuthChecked(true);
+                // Hide splash screen once auth is determined
+                SplashScreen.hideAsync().catch(() => {});
             }
         };
 

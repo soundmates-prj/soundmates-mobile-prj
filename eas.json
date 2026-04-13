@@ -12,6 +12,13 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "VITE_API_BASE_URL": "https://api.soundmates.app",
+        "VITE_GOOGLE_CLIENT_ID": "93259588882-152q42sdkspqdv5e1t0ljjrq4gtkr3ka.apps.googleusercontent.com",
+        "VITE_GOOGLE_WEB_CLIENT_ID": "93259588882-152q42sdkspqdv5e1t0ljjrq4gtkr3ka.apps.googleusercontent.com",
+        "VITE_GOOGLE_ANDROID_CLIENT_ID": "93259588882-152q42sdkspqdv5e1t0ljjrq4gtkr3ka.apps.googleusercontent.com",
+        "VITE_GOOGLE_IOS_CLIENT_ID": "93259588882-152q42sdkspqdv5e1t0ljjrq4gtkr3ka.apps.googleusercontent.com"
       }
     },
     "production": {

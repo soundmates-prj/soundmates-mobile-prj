@@ -9,6 +9,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "bundleIdentifier": "com.soundmate.app",
       "supportsTablet": true,
       "backgroundColor": "#0D0D0D",
       "infoPlist": {
@@ -70,6 +71,14 @@
           },
           "android": {
             "stayAwake": true
+          }
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
           }
         }
       ]

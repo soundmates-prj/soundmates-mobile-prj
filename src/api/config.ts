@@ -7,12 +7,13 @@ import {
     AUTH_BASE_URL as ENV_AUTH_BASE_URL,
     AZURACAST_BASE as ENV_AZURACAST_BASE,
     MAIN_BASE_URL as ENV_MAIN_BASE_URL,
+    VITE_API_BASE_URL,
 } from '@env';
 
 // Default values (fallback if env not loaded)
-const DEFAULT_AUTH_BASE_URL = 'http://localhost:8080/api/v1';
-const DEFAULT_MAIN_BASE_URL = 'http://localhost:8080/api/v1';
-const DEFAULT_AZURACAST_BASE = 'http://localhost:5000/api';
+const FALLBACK_AUTH = VITE_API_BASE_URL ? `${VITE_API_BASE_URL}/api/v1` : 'http://161.97.85.232:8080/api/v1';
+const FALLBACK_MAIN = VITE_API_BASE_URL ? `${VITE_API_BASE_URL}/api/v1` : 'http://161.97.85.232:8080/api/v1';
+const FALLBACK_AZURA = VITE_API_BASE_URL ? 'https://161.97.85.232:5000/apis' : 'http://161.97.85.232:5000/apis';
 
 const resolveBaseUrl = (
     primary?: string,
@@ -35,13 +36,13 @@ const resolveBaseUrl = (
 // Base URLs for different services
 export const API_CONFIG = {
     // Auth Service Base URL - reads from .env file
-    AUTH_BASE_URL: resolveBaseUrl(ENV_AUTH_BASE_URL, undefined),
+    AUTH_BASE_URL: resolveBaseUrl(ENV_AUTH_BASE_URL, undefined, FALLBACK_AUTH),
 
     // Main API Base URL - fallback to AUTH_BASE_URL when MAIN_BASE_URL is not set
-    MAIN_BASE_URL: resolveBaseUrl(ENV_MAIN_BASE_URL, ENV_AUTH_BASE_URL),
+    MAIN_BASE_URL: resolveBaseUrl(ENV_MAIN_BASE_URL, ENV_AUTH_BASE_URL, FALLBACK_MAIN),
 
     // AzuraCast Base URL - reads from .env file
-    AZURACAST_BASE: resolveBaseUrl(ENV_AZURACAST_BASE, undefined),
+    AZURACAST_BASE: resolveBaseUrl(ENV_AZURACAST_BASE, undefined, FALLBACK_AZURA),
 
     // Add more service URLs here as needed
     // MAIN_BASE_URL: process.env.MAIN_BASE_URL || 'http://localhost:8080/api/v1',
