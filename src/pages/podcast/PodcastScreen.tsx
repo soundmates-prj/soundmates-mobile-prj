@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
+    DeviceEventEmitter,
     Dimensions,
     Image,
     RefreshControl,
@@ -349,7 +350,12 @@ export default function PodcastScreen({
 
         {/* Featured Carousels */}
         {featuredPodcasts.length > 0 && (
-          <View style={styles.featuredSection}>
+          <View 
+            style={styles.featuredSection}
+            onTouchStart={() => DeviceEventEmitter.emit('HorizontalListActive', true)}
+            onTouchEnd={() => DeviceEventEmitter.emit('HorizontalListActive', false)}
+            onTouchCancel={() => DeviceEventEmitter.emit('HorizontalListActive', false)}
+          >
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>Nổi bật</Text>
             </View>
@@ -368,7 +374,12 @@ export default function PodcastScreen({
         )}
 
         {/* Categories */}
-        <View style={styles.categoriesSection}>
+        <View 
+          style={styles.categoriesSection}
+          onTouchStart={() => DeviceEventEmitter.emit('HorizontalListActive', true)}
+          onTouchEnd={() => DeviceEventEmitter.emit('HorizontalListActive', false)}
+          onTouchCancel={() => DeviceEventEmitter.emit('HorizontalListActive', false)}
+        >
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Dimensions, Easing, Image, Linking, PanResponder, RefreshControl, ScrollView, Text, TouchableOpacity, View, DeviceEventEmitter } from 'react-native';
+import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, Dimensions, Easing, Image, Linking, PanResponder, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import {
     blogService,
@@ -171,6 +171,10 @@ export default function HomeScreen({
             setGlobalScrollEnabled(enabled);
         });
 
+        const horizontalListSub = DeviceEventEmitter.addListener('HorizontalListActive', (active: boolean) => {
+            isHorizontalListActiveRef.current = active;
+        });
+
         const reactSub = DeviceEventEmitter.addListener('PostReactionUpdated', ({ postId, newReaction }) => {
             setCommunityPosts((prevPosts) =>
                 prevPosts.map((post) => {
@@ -191,6 +195,7 @@ export default function HomeScreen({
 
         return () => {
             sub.remove();
+            horizontalListSub.remove();
             reactSub.remove();
         };
     }, []);
@@ -206,6 +211,10 @@ export default function HomeScreen({
     const tabSwipeTranslateX = useRef(new Animated.Value(0)).current;
     const isMainTabSwipeSwitchingRef = useRef(false);
     const suggestionRequestIdRef = useRef(0);
+    const isHorizontalListActiveRef = useRef(false);
+
+    const onHorizontalListTouchStart = useCallback(() => { isHorizontalListActiveRef.current = true; }, []);
+    const onHorizontalListTouchEnd = useCallback(() => { isHorizontalListActiveRef.current = false; }, []);
 
     const filteredPlaylists = useMemo(() => {
         if (personalPlaylists) {
@@ -561,12 +570,13 @@ export default function HomeScreen({
             onPanResponderGrant: () => {
                 tabSwipeTranslateX.stopAnimation();
             },
-            onMoveShouldSetPanResponderCapture: (_, gesture) => {
+            onMoveShouldSetPanResponder: (_, gesture) => {
                 const isHorizontalSwipe =
-                    Math.abs(gesture.dx) > 20 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.35;
+                    Math.abs(gesture.dx) > 45 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 2;
 
                 return (
                     isHorizontalSwipe
+                    && !isHorizontalListActiveRef.current
                     && !showSearchScreen
                     && !showCreatePost
                     && !selectedPostId
@@ -726,7 +736,7 @@ export default function HomeScreen({
                                     previewUrl: parsed.PreviewUrl || parsed.previewUrl,
                                     template: parsed.Template || parsed.template,
                                 };
-                            } catch (e) {}
+                            } catch (e) { }
                         }
                     }
 
@@ -1035,7 +1045,12 @@ export default function HomeScreen({
                 </LinearGradient>
             </TouchableOpacity>
 
-            <View style={styles.topHitSection}>
+            <View
+                style={styles.topHitSection}
+                onTouchStart={onHorizontalListTouchStart}
+                onTouchEnd={onHorizontalListTouchEnd}
+                onTouchCancel={onHorizontalListTouchEnd}
+            >
                 <SectionHeader title="Top Hit Playlist Live" titleColor={palette.primary} />
                 <ScrollView
                     horizontal
@@ -1164,7 +1179,12 @@ export default function HomeScreen({
                 </LinearGradient>
             </View>
 
-            <View style={styles.sectionBlock}>
+            <View
+                style={styles.sectionBlock}
+                onTouchStart={onHorizontalListTouchStart}
+                onTouchEnd={onHorizontalListTouchEnd}
+                onTouchCancel={onHorizontalListTouchEnd}
+            >
                 <SectionHeader title="Playlist cá nhân" titleColor={palette.primary} />
 
                 {shouldShowPlaylistTabs && (
@@ -1262,6 +1282,9 @@ export default function HomeScreen({
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.podcastSection}
+                onTouchStart={onHorizontalListTouchStart}
+                onTouchEnd={onHorizontalListTouchEnd}
+                onTouchCancel={onHorizontalListTouchEnd}
             >
                 <SectionHeader title="Podcast Hot" titleColor={palette.primary} />
 
@@ -1474,10 +1497,10 @@ export default function HomeScreen({
                                     <ActivityIndicator size="small" color={palette.primary} />
                                     <Text style={[styles.searchHintText, { color: palette.textSecondary }]}>Đang tìm kiếm...</Text>
                                 </View>
-                            // ) : searchInput.trim().length < SEARCH_MIN_CHARS ? (
-                            //     <Text style={[styles.searchHintText, { color: palette.textSecondary }]}>Nhập ít nhất 2 ký tự để bắt đầu tìm kiếm.</Text>
-                            // ) : searchSuggestions.length === 0 ? (
-                            //     <Text style={[styles.searchHintText, { color: palette.textSecondary }]}>Chưa có gợi ý phù hợp. Bấm Tìm để xem kết quả đầy đủ.</Text>
+                                // ) : searchInput.trim().length < SEARCH_MIN_CHARS ? (
+                                //     <Text style={[styles.searchHintText, { color: palette.textSecondary }]}>Nhập ít nhất 2 ký tự để bắt đầu tìm kiếm.</Text>
+                                // ) : searchSuggestions.length === 0 ? (
+                                //     <Text style={[styles.searchHintText, { color: palette.textSecondary }]}>Chưa có gợi ý phù hợp. Bấm Tìm để xem kết quả đầy đủ.</Text>
                             ) : (
                                 searchSuggestions.map((item) => (
                                     <TouchableOpacity
@@ -1541,25 +1564,25 @@ export default function HomeScreen({
                             isLoading={isSearchingResults}
                             onBackToSuggestions={() => setShowSearchResults(false)}
                             onOpenSpotifyLink={handleOpenSpotifyLink}
-                                onAddFavoriteTrack={handleAddFavoriteTrack}
+                            onAddFavoriteTrack={handleAddFavoriteTrack}
                         />
                     )}
                 </View>
             ) : selectedPostId ? (
-                <PostDetailScreen 
-                    postId={selectedPostId} 
-                    onBack={() => setSelectedPostId(null)} 
+                <PostDetailScreen
+                    postId={selectedPostId}
+                    onBack={() => setSelectedPostId(null)}
                 />
             ) : showCreatePost ? (
-                <CreatePostScreen 
+                <CreatePostScreen
                     onBack={() => {
                         setShowCreatePost(false);
                         setCreatePostDraft(null);
-                    }} 
+                    }}
                     onPostCreated={() => {
                         setShowCreatePost(false);
                         setCreatePostDraft(null);
-                    }} 
+                    }}
                     editingPost={createPostDraft}
                 />
             ) : (

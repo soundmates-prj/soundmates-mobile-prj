@@ -1,29 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    Animated as RNAnimated,
-    Dimensions,
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  Animated as RNAnimated,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import Animated, { 
-    FadeInDown, 
-    FadeInUp,
-    useAnimatedStyle, 
-    useSharedValue, 
-    withSpring 
+import Animated, {
+  FadeInDown,
+  FadeInUp
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
+import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { podcastService } from '../../api';
 import { useTheme } from '../../context/ThemeContext';
-import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
 
@@ -129,8 +125,8 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
       <RNAnimated.View style={[styles.heroContainer, { transform: [{ scale: imageScale }] }]}>
         <Image source={{ uri: podcast.coverImage }} style={styles.heroImage} blurRadius={10} />
         <LinearGradient
-            colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.7)', palette.background]}
-            style={StyleSheet.absoluteFill}
+          colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.7)', palette.background]}
+          style={StyleSheet.absoluteFill}
         />
       </RNAnimated.View>
 
@@ -138,22 +134,22 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
       <RNAnimated.View style={[styles.stickyHeader, { opacity: headerOpacity, backgroundColor: palette.surface + 'E6' }]}>
         <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={isDarkMode ? 'dark' : 'light'} />
         <View style={styles.headerContent}>
-           <Text style={[styles.stickyTitle, { color: palette.textPrimary }]} numberOfLines={1}>{podcast.title}</Text>
+          <Text style={[styles.stickyTitle, { color: palette.textPrimary }]} numberOfLines={1}>{podcast.title}</Text>
         </View>
       </RNAnimated.View>
 
       {/* Back Button */}
-      <TouchableOpacity 
-        onPress={onBack} 
-        activeOpacity={0.7} 
+      <TouchableOpacity
+        onPress={onBack}
+        activeOpacity={0.7}
         style={[styles.backButton, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}
       >
         <BlurView intensity={20} style={StyleSheet.absoluteFill} tint={isDarkMode ? 'dark' : 'light'} />
         <Ionicons name="chevron-back" size={24} color={palette.textPrimary} />
       </TouchableOpacity>
 
-      <RNAnimated.ScrollView 
-        showsVerticalScrollIndicator={false} 
+      <RNAnimated.ScrollView
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         onScroll={RNAnimated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -164,7 +160,7 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
         {/* Main Podcast Info */}
         <View style={styles.infoSection}>
           <Animated.View entering={FadeInDown.delay(200)} style={styles.coverWrapper}>
-             <Image source={{ uri: podcast.coverImage }} style={styles.mainCover} />
+            <Image source={{ uri: podcast.coverImage }} style={styles.mainCover} />
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(300)} style={styles.titleWrapper}>
@@ -173,8 +169,8 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(400)} style={styles.actionRow}>
-            <TouchableOpacity 
-              activeOpacity={0.8} 
+            <TouchableOpacity
+              activeOpacity={0.8}
               onPress={handleFollow}
               style={[styles.followBtn, isFollowed ? { backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.primary } : { backgroundColor: palette.primary }]}
             >
@@ -185,7 +181,7 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
             </TouchableOpacity>
 
             <TouchableOpacity activeOpacity={0.8} style={[styles.shareBtn, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-               <Ionicons name="share-outline" size={20} color={palette.textPrimary} />
+              <Ionicons name="share-outline" size={20} color={palette.textPrimary} />
             </TouchableOpacity>
           </Animated.View>
 
@@ -221,8 +217,8 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
           ) : (
             episodes.map((episode, idx) => (
               <Animated.View key={episode.id} entering={FadeInUp.delay(600 + idx * 50)}>
-                <TouchableOpacity 
-                  activeOpacity={0.7} 
+                <TouchableOpacity
+                  activeOpacity={0.7}
                   style={[styles.episodeCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
                   onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
                 >
@@ -237,7 +233,7 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
                     </View>
                   </View>
                   <TouchableOpacity style={styles.moreBtn}>
-                     <Ionicons name="ellipsis-horizontal" size={18} color={palette.textSecondary} />
+                    <Ionicons name="ellipsis-horizontal" size={18} color={palette.textSecondary} />
                   </TouchableOpacity>
                 </TouchableOpacity>
               </Animated.View>
@@ -248,14 +244,14 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
 
       {/* Floating Play Button */}
       <Animated.View entering={FadeInUp.delay(800)} style={styles.floatingPlayWrapper}>
-         <TouchableOpacity 
-           activeOpacity={0.9} 
-           style={[styles.floatingPlayBtn, { backgroundColor: palette.primary }]}
-           onPress={() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)}
-         >
-           <Ionicons name="play" size={28} color="#FFFFFF" style={{ marginLeft: 4 }} />
-           <Text style={styles.floatingPlayText}>Nghe tập mới nhất</Text>
-         </TouchableOpacity>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={[styles.floatingPlayBtn, { backgroundColor: palette.primary }]}
+          onPress={() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)}
+        >
+          <Ionicons name="play" size={28} color="#FFFFFF" style={{ marginLeft: 4 }} />
+          <Text style={styles.floatingPlayText}>Nghe tập mới nhất</Text>
+        </TouchableOpacity>
       </Animated.View>
     </View>
   );
@@ -281,7 +277,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 100,
+    height: 50,
     zIndex: 10,
     justifyContent: 'flex-end',
     paddingBottom: 12,
@@ -296,7 +292,7 @@ const styles = StyleSheet.create({
   },
   backButton: {
     position: 'absolute',
-    top: 50,
+    top: 5,
     left: 20,
     zIndex: 11,
     width: 40,
@@ -455,7 +451,7 @@ const styles = StyleSheet.create({
   },
   floatingPlayWrapper: {
     position: 'absolute',
-    bottom: 40,
+    bottom: 90,
     left: 20,
     right: 20,
     zIndex: 20,
