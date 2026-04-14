@@ -687,7 +687,7 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                     <Animated.View entering={FadeInUp.duration(600)}>
                         <View style={styles.authorRow}>
                             <Image
-                                source={{ uri: `https://api.dicebear.com/7.x/initials/png?seed=${post.userId}&backgroundColor=55C5F1` }}
+                                source={{ uri: post.userAvatarUrl || `https://api.dicebear.com/7.x/initials/png?seed=${post.userId}&backgroundColor=55C5F1` }}
                                 style={styles.authorAvatar}
                             />
                             <View>

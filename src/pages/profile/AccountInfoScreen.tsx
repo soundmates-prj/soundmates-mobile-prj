@@ -2,17 +2,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import {
-    Clipboard,
-    Dimensions,
-    Image,
-    PanResponder,
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Clipboard,
+  Dimensions,
+  Image,
+  PanResponder,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
@@ -112,7 +112,7 @@ function InfoRow({
         </View>
       )}
       {copyable && (
-        <TouchableOpacity onPress={handleCopy} style={[styles.copyButton, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}> 
+        <TouchableOpacity onPress={handleCopy} style={[styles.copyButton, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}>
           <Ionicons name="copy-outline" size={14} color={palette.textMuted} />
         </TouchableOpacity>
       )}
@@ -299,7 +299,7 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription, subscrip
             palette={palette}
             isDarkMode={isDarkMode}
           />
-          <View style={[styles.divider, { backgroundColor: palette.border }]} />
+          {/* <View style={[styles.divider, { backgroundColor: palette.border }]} />
           <InfoRow
             icon="globe-outline"
             iconColor="#55C5F1"
@@ -308,7 +308,7 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription, subscrip
             copyable={website !== 'Chưa cập nhật'}
             palette={palette}
             isDarkMode={isDarkMode}
-          />
+          /> */}
         </View>
 
         {/* ── Personal Information ── */}
@@ -319,8 +319,8 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription, subscrip
           <InfoRow icon="calendar-outline" iconColor="#F59E0B" label="Ngày sinh" value={birthday} palette={palette} isDarkMode={isDarkMode} />
           <View style={[styles.divider, { backgroundColor: palette.border }]} />
           <InfoRow icon="person-outline" iconColor="#A78BFA" label="Giới tính" value={gender} palette={palette} isDarkMode={isDarkMode} />
-          <View style={[styles.divider, { backgroundColor: palette.border }]} />
-          <InfoRow icon="location-outline" iconColor="#EF4444" label="Vị trí" value={location} palette={palette} isDarkMode={isDarkMode} />
+          {/* <View style={[styles.divider, { backgroundColor: palette.border }]} />
+          <InfoRow icon="location-outline" iconColor="#EF4444" label="Vị trí" value={location} palette={palette} isDarkMode={isDarkMode} /> */}
         </View>
 
         {/* ── Footer Info ── */}

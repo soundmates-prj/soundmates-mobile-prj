@@ -139,6 +139,30 @@ export const userPlaylistService = {
     }
   },
 
+  async getPublicPlaylists(): Promise<{
+    success: boolean;
+    data: UserPlaylistResponse[];
+    message?: string;
+  }> {
+    try {
+      const response = await authApiClient.get<ApiResponse<unknown>>(
+        USER_PLAYLIST_ENDPOINTS.USER_PLAYLIST_PUBLIC,
+      );
+
+      return {
+        success: response.data.success,
+        data: extractPlaylists(response.data.data),
+        message: response.data.message,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        data: [],
+        message: error.response?.data?.message || 'Không thể tải playlist công khai',
+      };
+    }
+  },
+
   async createUserPlaylist(payload: CreateUserPlaylistRequest): Promise<{
     success: boolean;
     data?: UserPlaylistResponse;

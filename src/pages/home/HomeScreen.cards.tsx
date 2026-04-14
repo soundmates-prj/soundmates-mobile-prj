@@ -127,10 +127,12 @@ export function PodcastHotCard({
     item,
     palette,
     isDarkMode,
+    onPress,
 }: {
     item: PodcastItem;
     palette: AppPalette;
     isDarkMode: boolean;
+    onPress?: () => void;
 }) {
     return (
         <TouchableOpacity
@@ -142,6 +144,7 @@ export function PodcastHotCard({
                 },
             ]}
             activeOpacity={0.9}
+            onPress={onPress}
         >
             <View style={styles.podcastHotImageWrap}>
                 <Image source={{ uri: item.image }} style={styles.podcastHotImage} />
@@ -158,6 +161,7 @@ export function PodcastHotCard({
                         { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.22)' : 'rgba(14,116,144,0.95)' },
                     ]}
                     activeOpacity={0.85}
+                    onPress={onPress}
                 >
                     <Ionicons name="play" size={14} color="#FFFFFF" style={styles.playIcon} />
                 </TouchableOpacity>
@@ -170,3 +174,4 @@ export function PodcastHotCard({
         </TouchableOpacity>
     );
 }
+

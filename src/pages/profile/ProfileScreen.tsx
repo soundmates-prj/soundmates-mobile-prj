@@ -29,9 +29,9 @@ import {
   blogService,
   FavoriteItemResponse,
   favoriteService,
-  podcastService,
   paymentService,
   PlaylistVisibility,
+  podcastService,
   ReactionResponse,
   UpdateProfileRequest,
   uploadService,
@@ -134,6 +134,7 @@ function mapMyPostToDisplayPost(post: BlogPostResponse): DisplayPost {
     id: post.id,
     userId: post.userId,
     userFullName: post.userFullName,
+    userAvatarUrl: post.userAvatarUrl,
     title: post.title,
     contentText: post.contentText,
     imageUrl: post.imageUrl,
@@ -326,7 +327,6 @@ export default function ProfileScreen({
   const { user, refreshUser, saveUser } = useUser();
   const { themePreference, effectiveTheme, isDarkMode, setThemePreference } = useTheme();
   const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
-  console.log('[ProfileScreen] Current user:', user);
   const joinedDateLabel = (() => {
     if (!user?.createdAt) return '';
     const parsed = new Date(user.createdAt);
@@ -371,32 +371,32 @@ export default function ProfileScreen({
   const [globalScrollEnabled, setGlobalScrollEnabled] = useState(true);
 
   useEffect(() => {
-      const sub = DeviceEventEmitter.addListener('GlobalScrollEnabled', (enabled: boolean) => {
-          setGlobalScrollEnabled(enabled);
-      });
+    const sub = DeviceEventEmitter.addListener('GlobalScrollEnabled', (enabled: boolean) => {
+      setGlobalScrollEnabled(enabled);
+    });
 
-      const reactSub = DeviceEventEmitter.addListener('PostReactionUpdated', ({ postId, newReaction }) => {
-          setMyPosts((prevPosts) =>
-              prevPosts.map((post) => {
-                  if (post.id !== postId) return post;
-                  const currentReaction = post.myReactionType ?? (post.isLiked ? 'like' : null);
-                  if (currentReaction === newReaction) return post;
+    const reactSub = DeviceEventEmitter.addListener('PostReactionUpdated', ({ postId, newReaction }) => {
+      setMyPosts((prevPosts) =>
+        prevPosts.map((post) => {
+          if (post.id !== postId) return post;
+          const currentReaction = post.myReactionType ?? (post.isLiked ? 'like' : null);
+          if (currentReaction === newReaction) return post;
 
-                  const isRemoving = newReaction === null;
-                  if (isRemoving) {
-                      return { ...post, isLiked: false, myReactionType: null, reactionCount: Math.max(0, post.reactionCount - 1) };
-                  } else {
-                      const countDelta = currentReaction ? 0 : 1;
-                      return { ...post, isLiked: true, myReactionType: newReaction, reactionCount: post.reactionCount + countDelta };
-                  }
-              })
-          );
-      });
+          const isRemoving = newReaction === null;
+          if (isRemoving) {
+            return { ...post, isLiked: false, myReactionType: null, reactionCount: Math.max(0, post.reactionCount - 1) };
+          } else {
+            const countDelta = currentReaction ? 0 : 1;
+            return { ...post, isLiked: true, myReactionType: newReaction, reactionCount: post.reactionCount + countDelta };
+          }
+        })
+      );
+    });
 
-      return () => {
-          sub.remove();
-          reactSub.remove();
-      };
+    return () => {
+      sub.remove();
+      reactSub.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -512,11 +512,6 @@ export default function ProfileScreen({
     setShowThemePickerPopup(false);
     setPreviewThemeId(appliedTheme?.id || null);
   }, [appliedTheme]);
-
-  // Debug: Log user changes
-  useEffect(() => {
-    console.log('[ProfileScreen] User data changed:', user);
-  }, [user]);
 
   useEffect(() => {
     setAvatarUrl(user?.profileImageUrl || defaultAvatarUrl);
@@ -1211,12 +1206,12 @@ export default function ProfileScreen({
 
     try {
       if (isRemoving) {
-          await blogService.removeReaction(postId);
+        await blogService.removeReaction(postId);
       } else {
-          if (currentReaction) {
-              await blogService.removeReaction(postId);
-          }
-          await blogService.addReaction(postId, newReaction);
+        if (currentReaction) {
+          await blogService.removeReaction(postId);
+        }
+        await blogService.addReaction(postId, newReaction);
       }
     } catch (error) {
       setMyPosts((prev) =>
@@ -1392,7 +1387,7 @@ export default function ProfileScreen({
                 <View style={styles.profileNameRow}>
                   <Text style={[styles.profileName, { color: palette.textPrimary }]}>
                     {user?.firstName && user?.lastName
-                      ? `${user.firstName} ${user.lastName}`
+                      ? `${user.lastName} ${user.firstName}`
                       : user?.username || 'User'}
                   </Text>
                   <View style={styles.premiumBadge}>

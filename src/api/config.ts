@@ -147,6 +147,7 @@ export const FAVORITE_ENDPOINTS = {
 
 export const USER_PLAYLIST_ENDPOINTS = {
     USER_PLAYLIST: '/userplaylist',
+    USER_PLAYLIST_PUBLIC: '/userplaylist/public',
     USER_PLAYLIST_DETAIL: (playlistId: string) => `/userplaylist/${playlistId}`,
     USER_PLAYLIST_TRACKS: (playlistId: string) => `/userplaylist/${playlistId}/tracks`,
 };

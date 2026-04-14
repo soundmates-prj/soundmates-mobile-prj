@@ -6,12 +6,13 @@ import {
   PanResponder,
   Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { authService, UpdateProfileRequest } from '../../api';
 import DateField from '../../components/ui/DateField';
@@ -95,6 +96,10 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
   const genderOptions = ['Nam', 'Nữ', 'Khác'];
 
   useEffect(() => { setProfileData(buildProfileData(user)); }, [user]);
+
+  const insets = useSafeAreaInsets();
+  const fallbackTopInset = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
+  const topInset = Math.max(insets.top, fallbackTopInset);
 
   useEffect(() => {
     if (!user && !hasRequestedProfile) {
@@ -201,7 +206,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]} edges={['top']}>
+    <SafeAreaView style={[styles.container, { paddingTop: topInset, backgroundColor: palette.background }]} edges={['left', 'right', 'bottom']}>
       {/* Success Toast */}
       {showSavedToast && (
         <View style={styles.toastContainer}>

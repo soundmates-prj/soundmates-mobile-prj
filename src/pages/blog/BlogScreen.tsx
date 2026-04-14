@@ -207,11 +207,26 @@ export default function BlogScreen({
                     const enrichedPosts = await Promise.all(
                         normalizedPosts.map(async (post) => {
                             try {
-                                const reactions = await blogService.getPostReactions(post.id);
-                                const userReaction = reactions.data?.find((reaction) => reaction.userId === user.userId);
+                                const [statsResult, reactionsResult] = await Promise.all([
+                                    blogService.getPostStats(post.id),
+                                    blogService.getPostReactions(post.id)
+                                ]);
+                                
+                                const stats = statsResult.success && statsResult.data ? statsResult.data : null;
+                                const reactions = reactionsResult.success && reactionsResult.data ? reactionsResult.data : [];
+
+                                const userReaction = reactions.find((reaction) => reaction.userId === user.userId);
                                 const isLiked = !!userReaction;
                                 const myReactionType = userReaction ? (userReaction.reactionType?.toLowerCase() as ReactionType) : null;
-                                return { ...post, isLiked, myReactionType };
+                                
+                                return { 
+                                    ...post, 
+                                    reactionCount: stats?.reactionCount ?? post.reactionCount,
+                                    commentCount: stats?.commentCount ?? post.commentCount,
+                                    viewCount: stats?.viewCount ?? post.viewCount,
+                                    isLiked, 
+                                    myReactionType 
+                                };
                             } catch {
                                 return post;
                             }

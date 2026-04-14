@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DeviceEventEmitter, Image, PanResponder, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { blogService } from '../../api';
 import Animated, {
     useAnimatedStyle,
     useSharedValue,
@@ -10,6 +9,7 @@ import Animated, {
     withSpring,
 } from 'react-native-reanimated';
 import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/theme';
+import { blogService } from '../../api';
 import { useTheme } from '../../context/ThemeContext';
 
 export type ReactionType = 'like' | 'love' | 'haha' | 'wow' | 'sad' | 'angry';
@@ -23,12 +23,12 @@ export interface ReactionMeta {
 }
 
 export const REACTIONS: ReactionMeta[] = [
-    { type: 'like',  label: 'Thích',     icon: 'thumbs-up-outline',  iconFilled: 'thumbs-up',    color: '#1877F2' },
-    { type: 'love',  label: 'Yêu thích', icon: 'heart-outline',      iconFilled: 'heart',        color: '#F33E58' },
-    { type: 'haha',  label: 'Haha',      icon: 'happy-outline',      iconFilled: 'happy',        color: '#F5B301' },
-    { type: 'wow',   label: 'Wow',       icon: 'sparkles-outline',   iconFilled: 'sparkles',     color: '#7C3AED' },
-    { type: 'sad',   label: 'Buồn',      icon: 'sad-outline',        iconFilled: 'sad',          color: '#0EA5E9' },
-    { type: 'angry', label: 'Phẫn nộ',   icon: 'flame-outline',      iconFilled: 'flame',        color: '#F97316' },
+    { type: 'like', label: 'Thích', icon: 'thumbs-up-outline', iconFilled: 'thumbs-up', color: '#1877F2' },
+    { type: 'love', label: 'Yêu thích', icon: 'heart-outline', iconFilled: 'heart', color: '#F33E58' },
+    { type: 'haha', label: 'Haha', icon: 'happy-outline', iconFilled: 'happy', color: '#F5B301' },
+    { type: 'wow', label: 'Wow', icon: 'sparkles-outline', iconFilled: 'sparkles', color: '#7C3AED' },
+    { type: 'sad', label: 'Buồn', icon: 'sad-outline', iconFilled: 'sad', color: '#0EA5E9' },
+    { type: 'angry', label: 'Phẫn nộ', icon: 'flame-outline', iconFilled: 'flame', color: '#F97316' },
 ];
 
 export const getReactionMeta = (type: ReactionType | string | null): ReactionMeta | null =>
@@ -134,15 +134,15 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
                         const t = (r.reactionType || 'like').toLowerCase();
                         reactionCounts[t] = (reactionCounts[t] || 0) + 1;
                     });
-                    
+
                     const sorted = Object.entries(reactionCounts)
                         .sort((a, b) => b[1] - a[1])
                         .slice(0, 2)
                         .map(([type]) => type as ReactionType);
-                        
+
                     setTopReactions(sorted);
                 }
-            }).catch(() => {});
+            }).catch(() => { });
         }
     }, [post.id, isDraftPost]);
 
@@ -165,8 +165,14 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
     }, [reactionCountLocal, displayReactions, myReaction]);
 
     const displayName = post.userFullName;
-    const avatarUri = post.userAvatarUrl
-        || `https://api.dicebear.com/7.x/initials/png?seed=${post.userId}&backgroundColor=55C5F1`;
+    const avatarUri = post.userAvatarUrl !== '' && post.userAvatarUrl !== null && post.userAvatarUrl !== undefined
+        ? post.userAvatarUrl
+        : `https://api.dicebear.com/7.x/initials/png?seed=${post.userId}&backgroundColor=55C5F1`;
+    const displayImageUrl = (post.imageUrl && post.imageUrl.trim() !== '')
+        ? post.imageUrl
+        : (post.imgUrl && post.imgUrl.trim() !== '')
+            ? post.imgUrl
+            : null;
 
     const reactionScale = useSharedValue(1);
     const myReactionRef = useRef(myReaction);
@@ -244,8 +250,8 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
                     const y = touchStartY.current - evt.nativeEvent.pageY;
                     const isAboveButton = y > 20 && y < 140;
                     if (isAboveButton) {
-                        const pickerStartX = 10; 
-                        const iconWidth = 50; 
+                        const pickerStartX = 10;
+                        const iconWidth = 50;
                         const x = evt.nativeEvent.pageX - pickerStartX;
                         const index = Math.floor(x / iconWidth);
                         if (index >= 0 && index < REACTIONS.length) {
@@ -283,7 +289,7 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
                             selectedType = REACTIONS[index].type;
                         }
                     }
-                    
+
                     setPickerVisible(false);
                     setHoveredReaction(null);
 
@@ -437,7 +443,7 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
                                 </View>
                             </View>
                         </View>
-                    ) : (post.imageUrl || post.imgUrl) ? (
+                    ) : displayImageUrl ? (
                         <>
                             <View style={styles.imagePostMeta}>
                                 <Text style={[styles.imagePostTitle, { color: palette.textPrimary }]} numberOfLines={2}>
@@ -455,7 +461,7 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
                                 )}
                             </View>
                             <View style={styles.imageWrapper}>
-                                <Image source={{ uri: post.imageUrl || post.imgUrl! }} style={styles.postImage} resizeMode="cover" />
+                                <Image source={{ uri: displayImageUrl }} style={styles.postImage} resizeMode="cover" />
                                 {post.audioUrl && (
                                     <View style={styles.audioIndicator}>
                                         <Ionicons name="musical-notes" size={14} color="#FFF" />
@@ -495,13 +501,13 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
                                             const meta = getReactionMeta(type);
                                             if (!meta) return null;
                                             return (
-                                                <View 
-                                                    key={type} 
+                                                <View
+                                                    key={type}
                                                     style={[
-                                                        styles.reactionSummaryIconWrap, 
-                                                        { 
+                                                        styles.reactionSummaryIconWrap,
+                                                        {
                                                             backgroundColor: meta.color,
-                                                            marginLeft: index > 0 ? -4 : 0, 
+                                                            marginLeft: index > 0 ? -4 : 0,
                                                             zIndex: 10 - index
                                                         }
                                                     ]}
@@ -529,7 +535,7 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
                         <View style={styles.actionsBar}>
                             <View style={styles.leftActions}>
                                 {/* Reaction button — connected to custom drag-to-react PanResponder */}
-                                <View 
+                                <View
                                     style={[
                                         styles.reactionBtn,
                                         currentReactionMeta ? { backgroundColor: currentReactionMeta.color + '15' } : null,
@@ -573,7 +579,7 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
                         const isHovered = hoveredReaction === reaction.type;
                         const isSelectedAndNoHover = myReaction === reaction.type && !hoveredReaction;
                         const isActive = isHovered || isSelectedAndNoHover;
-                        
+
                         return (
                             <View
                                 key={reaction.type}

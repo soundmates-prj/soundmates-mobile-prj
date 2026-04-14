@@ -8,9 +8,6 @@ import { StatusBar, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
-
-// Keep the splash screen visible while we fetch resources
-SplashScreen.preventAutoHideAsync().catch(() => {});
 import { SoundMateDarkColors, SoundMateLightColors } from './constants/theme';
 import { authService, registerUnauthorizedHandler } from './src/api';
 import { showToast, toastConfig } from './src/components/ui/Toast';
@@ -21,8 +18,6 @@ import {
     EditProfileScreen,
     ForgotPasswordScreen,
     HomeScreen,
-    HostBroadcastScreen,
-    HostLiveManagerScreen,
     LiveSessionsScreen,
     LivestreamScreen,
     LoginScreen,
@@ -32,10 +27,13 @@ import {
     ProfileScreen,
     ProfileSetupScreen,
     RegisterScreen,
-    SubscriptionScreen,
+    SubscriptionScreen
 } from './src/pages';
 import type { TabName } from './src/pages/BottomNavigation';
 import type { SelectedPlan } from './src/pages/subscription/PaymentCheckoutScreen';
+
+// Keep the splash screen visible while we fetch resources
+SplashScreen.preventAutoHideAsync().catch(() => { });
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -151,7 +149,7 @@ function AppContent() {
             } finally {
                 setIsAuthChecked(true);
                 // Hide splash screen once auth is determined
-                SplashScreen.hideAsync().catch(() => {});
+                SplashScreen.hideAsync().catch(() => { });
             }
         };
 
@@ -165,7 +163,6 @@ function AppContent() {
     // Save authentication tokens only
     const saveAuthTokens = useCallback(async (accessToken?: string, refreshToken?: string) => {
         try {
-            console.log('[App.tsx] saveAuthTokens called');
             if (accessToken) {
                 await AsyncStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
             }
@@ -242,7 +239,6 @@ function AppContent() {
 
     // Handle successful login
     const handleLoginSuccess = useCallback(async (response: any) => {
-        console.log('[App.tsx] handleLoginSuccess called with:', response);
 
         const sessionReady = await establishAuthenticatedSession(response);
         if (!sessionReady) {
@@ -320,7 +316,6 @@ function AppContent() {
                 });
 
                 if (loginResponse.success && loginResponse.data) {
-                    console.log('[App.tsx] OTP auto-login success, data:', loginResponse.data);
 
                     const sessionReady = await establishAuthenticatedSession(loginResponse.data);
                     if (!sessionReady) {
@@ -598,26 +593,6 @@ function AppContent() {
                                     <LivestreamScreen
                                         onBack={() => props.navigation.goBack()}
                                         sessionId={(props.route.params as any)?.sessionId}
-                                    />
-                                )}
-                            </Stack.Screen>
-
-                            <Stack.Screen name="HostLiveManager">
-                                {(props) => (
-                                    <HostLiveManagerScreen
-                                        onBack={() => props.navigation.navigate('Home')}
-                                        onNavigateToBroadcast={(sessionId) =>
-                                            props.navigation.navigate('HostBroadcast', { sessionId })
-                                        }
-                                    />
-                                )}
-                            </Stack.Screen>
-
-                            <Stack.Screen name="HostBroadcast">
-                                {(props) => (
-                                    <HostBroadcastScreen
-                                        sessionId={(props.route.params as any)?.sessionId || ''}
-                                        onBack={() => props.navigation.navigate('HostLiveManager')}
                                     />
                                 )}
                             </Stack.Screen>

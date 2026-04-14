@@ -206,22 +206,37 @@ interface PodcastScreenProps {
   paddingBottom?: number;
   hideStickyHeader?: boolean;
   onScroll?: any;
+  initialSelectedPodcastId?: string | null;
+  onClearSelectedPodcast?: () => void;
 }
 
 export default function PodcastScreen({
   paddingTop = 0,
   paddingBottom = 0,
   hideStickyHeader = false,
-  onScroll
+  onScroll,
+  initialSelectedPodcastId,
+  onClearSelectedPodcast
 }: PodcastScreenProps) {
   const { isDarkMode } = useTheme();
   const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
   const [activeCategory, setActiveCategory] = useState('Tất cả');
-  const [selectedPodcast, setSelectedPodcast] = useState<string | null>(null);
+  const [selectedPodcast, setSelectedPodcast] = useState<string | null>(initialSelectedPodcastId || null);
   const [podcasts, setPodcasts] = useState<PodcastVM[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialSelectedPodcastId) {
+      setSelectedPodcast(initialSelectedPodcastId);
+    }
+  }, [initialSelectedPodcastId]);
+
+  const handleBackFromDetail = useCallback(() => {
+    setSelectedPodcast(null);
+    onClearSelectedPodcast?.();
+  }, [onClearSelectedPodcast]);
 
   const scrollY = useSharedValue(0);
   const internalScrollHandler = useAnimatedScrollHandler((e) => {
@@ -296,7 +311,7 @@ export default function PodcastScreen({
   }, [podcasts]);
 
   if (selectedPodcast) {
-    return <PodcastDetailScreen onBack={() => setSelectedPodcast(null)} podcast={selectedPodcastData} />;
+    return <PodcastDetailScreen onBack={handleBackFromDetail} podcast={selectedPodcastData} />;
   }
 
   if (loading) {

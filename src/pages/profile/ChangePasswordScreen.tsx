@@ -1,17 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo, useState } from 'react';
 import {
-    Dimensions,
-    KeyboardAvoidingView,
-    PanResponder,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Dimensions,
+  KeyboardAvoidingView,
+  PanResponder,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import FormTextField from '../../components/ui/FormTextField';
 import { showToast } from '../../components/ui/Toast';
@@ -71,6 +72,10 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
   const [showSuccess, setShowSuccess] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  const insets = useSafeAreaInsets();
+  const fallbackTopInset = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
+  const topInset = Math.max(insets.top, fallbackTopInset);
 
   const strength = useMemo(() => getPasswordStrength(newPassword), [newPassword]);
 
@@ -140,7 +145,7 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
   // Success overlay
   if (showSuccess) {
     return (
-      <SafeAreaView style={[styles.successContainer, { backgroundColor: palette.background }]} edges={['top', 'left', 'right', 'bottom']}>
+      <SafeAreaView style={[styles.successContainer, { paddingTop: topInset, backgroundColor: palette.background }]} edges={['left', 'right', 'bottom']}>
         <View style={styles.successContent}>
           <View style={styles.successIconContainer}>
             <Ionicons name="shield-checkmark" size={48} color="#10B981" />
@@ -155,7 +160,7 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]} edges={['top', 'left', 'right', 'bottom']}>
+    <SafeAreaView style={[styles.container, { paddingTop: topInset, backgroundColor: palette.background }]} edges={['left', 'right', 'bottom']}>
       {/* ── Header ── */}
       <View style={[styles.header, { backgroundColor: palette.surface, borderBottomColor: palette.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -170,226 +175,229 @@ export default function ChangePasswordScreen({ onBack, onNavigateToForgotPasswor
         keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 120}
         enabled
       >
-        <ScrollView 
-          style={styles.scrollView} 
+        <ScrollView
+          style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-        {/* ── Security notice ── */}
+          {/* ── Security notice ── */}
           <View style={styles.noticeContainer}>
-          <View style={[styles.notice, { backgroundColor: isDarkMode ? 'rgba(85, 197, 241, 0.15)' : '#55C5F114', borderColor: isDarkMode ? 'rgba(85, 197, 241, 0.35)' : '#55C5F133' }]}>
-            <View style={styles.noticeIcon}>
-              <Ionicons name="information-circle" size={20} color="#55C5F1" />
-            </View>
-            <View style={styles.noticeTextContainer}>
-              <Text style={[styles.noticeTitle, { color: palette.textPrimary }]}>Bảo mật tài khoản</Text>
-              <Text style={[styles.noticeText, { color: palette.textSecondary }]}>
-                Để bảo vệ tài khoản, hãy chọn mật khẩu mạnh và không chia sẻ với bất kỳ ai. Sau khi
-                đổi mật khẩu, bạn sẽ cần đăng nhập lại trên các thiết bị khác.
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ── Form ── */}
-        <View style={styles.formContainer}>
-          {/* Current Password */}
-          <View style={styles.fieldContainer}>
-            <Text style={[styles.label, { color: palette.textSecondary }]}>MẬT KHẨU HIỆN TẠI</Text>
-            <View
-              style={[
-                styles.inputContainer,
-                { backgroundColor: palette.surface, borderColor: palette.border },
-                errors.currentPassword && touched.currentPassword && styles.inputContainerError,
-              ]}
-            >
-              <FormTextField
-                inputContainerStyle={styles.inputReset}
-                style={[styles.input, { color: palette.textPrimary }]}
-                leftIconName="lock-closed-outline"
-                leftIconSize={18}
-                leftIconColor={palette.textMuted}
-                value={currentPassword}
-                onChangeText={setCurrentPassword}
-                onBlur={() => handleBlur('currentPassword')}
-                placeholder="Nhập mật khẩu hiện tại"
-                placeholderTextColor={palette.textMuted}
-                secureTextEntry
-                showPasswordToggle
-                passwordIconColor={palette.textMuted}
-              />
-            </View>
-            {errors.currentPassword && touched.currentPassword && (
-              <View style={styles.errorContainer}>
-                <Ionicons name="alert-circle" size={12} color="#EF4444" />
-                <Text style={styles.errorText}>{errors.currentPassword}</Text>
+            <View style={[styles.notice, { backgroundColor: isDarkMode ? 'rgba(85, 197, 241, 0.15)' : '#55C5F114', borderColor: isDarkMode ? 'rgba(85, 197, 241, 0.35)' : '#55C5F133' }]}>
+              <View style={styles.noticeIcon}>
+                <Ionicons name="information-circle" size={20} color="#55C5F1" />
               </View>
-            )}
-            <TouchableOpacity 
-              style={styles.forgotButton} 
-              onPress={() => {
-                if (onNavigateToForgotPassword) {
-                  onNavigateToForgotPassword();
-                }
-              }}
-            >
-              <Text style={styles.forgotText}>Quên mật khẩu?</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Divider */}
-          <View style={[styles.divider, { backgroundColor: palette.border }]} />
-
-          {/* New Password */}
-          <View style={styles.fieldContainer}>
-            <Text style={[styles.label, { color: palette.textSecondary }]}>MẬT KHẨU MỚI</Text>
-            <View style={[styles.inputContainer, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-              <FormTextField
-                inputContainerStyle={styles.inputReset}
-                style={[styles.input, { color: palette.textPrimary }]}
-                leftIconName="lock-closed-outline"
-                leftIconSize={18}
-                leftIconColor={palette.textMuted}
-                value={newPassword}
-                onChangeText={setNewPassword}
-                placeholder="Nhập mật khẩu mới"
-                placeholderTextColor={palette.textMuted}
-                secureTextEntry
-                showPasswordToggle
-                passwordIconColor={palette.textMuted}
-              />
-            </View>
-
-            {/* Strength bar */}
-            {newPassword.length > 0 && (
-              <View style={styles.strengthContainer}>
-                {/* Bar */}
-                <View style={styles.strengthBar}>
-                  {[0, 1, 2, 3].map((i) => (
-                    <View
-                      key={i}
-                      style={[
-                        styles.strengthBarSegment,
-                        {
-                          backgroundColor: i < strength.score ? strength.color : '#E5E7EB',
-                        },
-                      ]}
-                    />
-                  ))}
-                </View>
-                <Text style={[styles.strengthLabel, { color: strength.color }]}>
-                  {strength.label}
+              <View style={styles.noticeTextContainer}>
+                <Text style={[styles.noticeTitle, { color: palette.textPrimary }]}>Bảo mật tài khoản</Text>
+                <Text style={[styles.noticeText, { color: palette.textSecondary }]}>
+                  Để bảo vệ tài khoản, hãy chọn mật khẩu mạnh và không chia sẻ với bất kỳ ai. Sau khi
+                  đổi mật khẩu, bạn sẽ cần đăng nhập lại trên các thiết bị khác.
                 </Text>
-
-                {/* Rules checklist */}
-                <View style={styles.rulesContainer}>
-                  {PASSWORD_RULES.map((rule) => {
-                    const passed = rule.test(newPassword);
-                    return (
-                      <View key={rule.id} style={styles.ruleItem}>
-                        <Ionicons
-                          name={passed ? 'checkmark-circle' : 'close-circle'}
-                          size={15}
-                          color={passed ? '#10B981' : '#D1D5DB'}
-                        />
-                        <Text style={[styles.ruleText, { color: passed ? '#10B981' : palette.textMuted }]}>
-                          {rule.label}
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </View>
               </View>
-            )}
+            </View>
           </View>
 
-          {/* Confirm Password */}
-          <View style={styles.fieldContainer}>
-            <Text style={[styles.label, { color: palette.textSecondary }]}>XÁC NHẬN MẬT KHẨU MỚI</Text>
-            <View
-              style={[
-                styles.inputContainer,
-                { backgroundColor: palette.surface, borderColor: palette.border },
-                errors.confirmPassword && touched.confirmPassword && styles.inputContainerError,
-                confirmPassword && passwordsMatch && styles.inputContainerSuccess,
-              ]}
-            >
-              <FormTextField
-                inputContainerStyle={styles.inputReset}
-                style={[styles.input, { color: palette.textPrimary }]}
-                leftIconName="lock-closed-outline"
-                leftIconSize={18}
-                leftIconColor={palette.textMuted}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                onBlur={() => handleBlur('confirmPassword')}
-                placeholder="Nhập lại mật khẩu mới"
-                placeholderTextColor={palette.textMuted}
-                secureTextEntry
-                showPasswordToggle
-                passwordIconColor={palette.textMuted}
-                rightElement={confirmPassword.length > 0 ? (
-                  <View style={styles.matchIndicator}>
-                    <Ionicons
-                      name={passwordsMatch ? 'checkmark-circle' : 'close-circle'}
-                      size={18}
-                      color={passwordsMatch ? '#10B981' : '#EF4444'}
-                    />
-                  </View>
-                ) : null}
-              />
-            </View>
-            {errors.confirmPassword && touched.confirmPassword && (
-              <View style={styles.errorContainer}>
-                <Ionicons name="alert-circle" size={12} color="#EF4444" />
-                <Text style={styles.errorText}>{errors.confirmPassword}</Text>
-              </View>
-            )}
-            {confirmPassword && passwordsMatch && (
-              <View style={styles.successContainer2}>
-                <Ionicons name="checkmark-circle" size={12} color="#10B981" />
-                <Text style={styles.successText}>Mật khẩu khớp</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Bottom spacer */}
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
-
-      {/* ── Submit button ── */}
-      <View style={[styles.submitContainer, { backgroundColor: palette.surface, borderTopColor: palette.border }]}>
-        <TouchableOpacity
-          onPress={handleSubmit}
-          disabled={!isFormValid || isSubmitting}
-          style={[
-            styles.submitButton,
-            isFormValid && !isSubmitting ? styles.submitButtonEnabled : styles.submitButtonDisabled,
-          ]}
-          activeOpacity={0.8}
-        >
-          {isSubmitting ? (
-            <View style={styles.submitButtonContent}>
-              <Ionicons name="sync" size={20} color="white" />
-              <Text style={styles.submitButtonText}>Đang xử lý...</Text>
-            </View>
-          ) : (
-            <View style={styles.submitButtonContent}>
-              <Ionicons name="shield-checkmark" size={20} color={isFormValid ? 'white' : '#D1D5DB'} />
-              <Text
+          {/* ── Form ── */}
+          <View style={styles.formContainer}>
+            {/* Current Password */}
+            <View style={styles.fieldContainer}>
+              <Text style={[styles.label, { color: palette.textSecondary }]}>MẬT KHẨU HIỆN TẠI</Text>
+              <View
                 style={[
-                  styles.submitButtonText,
-                  !isFormValid && styles.submitButtonTextDisabled,
+                  styles.inputContainer,
+                  { backgroundColor: palette.surface, borderColor: palette.border },
+                  errors.currentPassword && touched.currentPassword && styles.inputContainerError,
                 ]}
               >
-                Đổi mật khẩu
-              </Text>
+                <FormTextField
+                  containerStyle={{ flex: 1 }}
+                  inputContainerStyle={styles.inputReset}
+                  style={[styles.input, { color: palette.textPrimary }]}
+                  leftIconName="lock-closed-outline"
+                  leftIconSize={18}
+                  leftIconColor={palette.textMuted}
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  onBlur={() => handleBlur('currentPassword')}
+                  placeholder="Nhập mật khẩu hiện tại"
+                  placeholderTextColor={palette.textMuted}
+                  secureTextEntry
+                  showPasswordToggle
+                  passwordIconColor={palette.textMuted}
+                />
+              </View>
+              {errors.currentPassword && touched.currentPassword && (
+                <View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={12} color="#EF4444" />
+                  <Text style={styles.errorText}>{errors.currentPassword}</Text>
+                </View>
+              )}
+              <TouchableOpacity
+                style={styles.forgotButton}
+                onPress={() => {
+                  if (onNavigateToForgotPassword) {
+                    onNavigateToForgotPassword();
+                  }
+                }}
+              >
+                <Text style={styles.forgotText}>Quên mật khẩu?</Text>
+              </TouchableOpacity>
             </View>
-          )}
-        </TouchableOpacity>
-      </View>
+
+            {/* Divider */}
+            <View style={[styles.divider, { backgroundColor: palette.border }]} />
+
+            {/* New Password */}
+            <View style={styles.fieldContainer}>
+              <Text style={[styles.label, { color: palette.textSecondary }]}>MẬT KHẨU MỚI</Text>
+              <View style={[styles.inputContainer, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+                <FormTextField
+                  containerStyle={{ flex: 1 }}
+                  inputContainerStyle={styles.inputReset}
+                  style={[styles.input, { color: palette.textPrimary }]}
+                  leftIconName="lock-closed-outline"
+                  leftIconSize={18}
+                  leftIconColor={palette.textMuted}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  placeholder="Nhập mật khẩu mới"
+                  placeholderTextColor={palette.textMuted}
+                  secureTextEntry
+                  showPasswordToggle
+                  passwordIconColor={palette.textMuted}
+                />
+              </View>
+
+              {/* Strength bar */}
+              {newPassword.length > 0 && (
+                <View style={styles.strengthContainer}>
+                  {/* Bar */}
+                  <View style={styles.strengthBar}>
+                    {[0, 1, 2, 3].map((i) => (
+                      <View
+                        key={i}
+                        style={[
+                          styles.strengthBarSegment,
+                          {
+                            backgroundColor: i < strength.score ? strength.color : '#E5E7EB',
+                          },
+                        ]}
+                      />
+                    ))}
+                  </View>
+                  <Text style={[styles.strengthLabel, { color: strength.color }]}>
+                    {strength.label}
+                  </Text>
+
+                  {/* Rules checklist */}
+                  <View style={styles.rulesContainer}>
+                    {PASSWORD_RULES.map((rule) => {
+                      const passed = rule.test(newPassword);
+                      return (
+                        <View key={rule.id} style={styles.ruleItem}>
+                          <Ionicons
+                            name={passed ? 'checkmark-circle' : 'close-circle'}
+                            size={15}
+                            color={passed ? '#10B981' : '#D1D5DB'}
+                          />
+                          <Text style={[styles.ruleText, { color: passed ? '#10B981' : palette.textMuted }]}>
+                            {rule.label}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* Confirm Password */}
+            <View style={styles.fieldContainer}>
+              <Text style={[styles.label, { color: palette.textSecondary }]}>XÁC NHẬN MẬT KHẨU MỚI</Text>
+              <View
+                style={[
+                  styles.inputContainer,
+                  { backgroundColor: palette.surface, borderColor: palette.border },
+                  errors.confirmPassword && touched.confirmPassword && styles.inputContainerError,
+                  confirmPassword && passwordsMatch && styles.inputContainerSuccess,
+                ]}
+              >
+                <FormTextField
+                  containerStyle={{ flex: 1 }}
+                  inputContainerStyle={styles.inputReset}
+                  style={[styles.input, { color: palette.textPrimary }]}
+                  leftIconName="lock-closed-outline"
+                  leftIconSize={18}
+                  leftIconColor={palette.textMuted}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  onBlur={() => handleBlur('confirmPassword')}
+                  placeholder="Nhập lại mật khẩu mới"
+                  placeholderTextColor={palette.textMuted}
+                  secureTextEntry
+                  showPasswordToggle
+                  passwordIconColor={palette.textMuted}
+                  rightElement={confirmPassword.length > 0 ? (
+                    <View style={styles.matchIndicator}>
+                      <Ionicons
+                        name={passwordsMatch ? 'checkmark-circle' : 'close-circle'}
+                        size={18}
+                        color={passwordsMatch ? '#10B981' : '#EF4444'}
+                      />
+                    </View>
+                  ) : null}
+                />
+              </View>
+              {errors.confirmPassword && touched.confirmPassword && (
+                <View style={styles.errorContainer}>
+                  <Ionicons name="alert-circle" size={12} color="#EF4444" />
+                  <Text style={styles.errorText}>{errors.confirmPassword}</Text>
+                </View>
+              )}
+              {confirmPassword && passwordsMatch && (
+                <View style={styles.successContainer2}>
+                  <Ionicons name="checkmark-circle" size={12} color="#10B981" />
+                  <Text style={styles.successText}>Mật khẩu khớp</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Bottom spacer */}
+          <View style={styles.bottomSpacer} />
+        </ScrollView>
+
+        {/* ── Submit button ── */}
+        <View style={[styles.submitContainer, { backgroundColor: palette.surface, borderTopColor: palette.border }]}>
+          <TouchableOpacity
+            onPress={handleSubmit}
+            disabled={!isFormValid || isSubmitting}
+            style={[
+              styles.submitButton,
+              isFormValid && !isSubmitting ? styles.submitButtonEnabled : styles.submitButtonDisabled,
+            ]}
+            activeOpacity={0.8}
+          >
+            {isSubmitting ? (
+              <View style={styles.submitButtonContent}>
+                <Ionicons name="sync" size={20} color="white" />
+                <Text style={styles.submitButtonText}>Đang xử lý...</Text>
+              </View>
+            ) : (
+              <View style={styles.submitButtonContent}>
+                <Ionicons name="shield-checkmark" size={20} color={isFormValid ? 'white' : '#D1D5DB'} />
+                <Text
+                  style={[
+                    styles.submitButtonText,
+                    !isFormValid && styles.submitButtonTextDisabled,
+                  ]}
+                >
+                  Đổi mật khẩu
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
 
       <View style={styles.edgeSwipeBackZone} {...edgeBackPanResponder.panHandlers} />

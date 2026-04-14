@@ -9,9 +9,12 @@ import {
     LiveScheduleResult,
     livestreamService,
     NowPlayingData,
+    PodcastResponse,
+    podcastService,
     PopularPostResponse,
     spotifyService,
     SpotifyTrack,
+    UserPlaylistResponse,
     userPlaylistService,
 } from '../../api';
 import { BlogPostCard, DisplayPost, ReactionType } from '../../components/blog/BlogPostCard';
@@ -24,6 +27,7 @@ import PostDetailScreen from '../blog/PostDetailScreen';
 import BottomNavigation, { TabName } from '../BottomNavigation';
 import LiveSessionsScreen from '../live/LiveSessionsScreen';
 import PodcastScreen from '../podcast/PodcastScreen';
+import PlaylistDetailModal from '../profile/components/PlaylistDetailModal';
 import ProfileScreen from '../profile/ProfileScreen';
 import SearchResultsScreen, { SearchResultBundle } from '../search/SearchResultsScreen';
 import {
@@ -37,11 +41,10 @@ import {
     PlaylistItem,
     PLAYLISTS,
     PlaylistTab,
-    PODCASTS,
+    PodcastItem,
     ScheduleItem,
     SEARCH_MIN_CHARS,
     SearchSuggestionItem,
-    TOP_HIT_PLAYLISTS,
 } from './HomeScreen.data';
 import styles from './HomeScreen.styles';
 
@@ -236,8 +239,33 @@ export default function HomeScreen({
         () => (filteredPlaylists.length > 1 ? filteredPlaylists.slice(1) : filteredPlaylists),
         [filteredPlaylists]
     );
-    const featuredPodcast = PODCASTS[0];
-    const podcastCarouselItems = PODCASTS.slice(1);
+    // Hot Podcasts from server
+    const [hotPodcasts, setHotPodcasts] = useState<PodcastItem[]>([]);
+    const [isHotPodcastsLoading, setIsHotPodcastsLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchHotPodcasts = async () => {
+            try {
+                setIsHotPodcastsLoading(true);
+                const data: PodcastResponse[] = await podcastService.getPublished();
+                const mapped: PodcastItem[] = data.map((p) => ({
+                    id: p.id,
+                    title: p.title,
+                    host: p.author || p.createdBy || 'Unknown',
+                    image: p.banner || `https://api.dicebear.com/7.x/initials/png?seed=${encodeURIComponent(p.title)}&backgroundColor=55C5F1`,
+                }));
+                setHotPodcasts(mapped);
+            } catch (err) {
+                console.log('[HomeScreen] fetchHotPodcasts error:', err);
+            } finally {
+                setIsHotPodcastsLoading(false);
+            }
+        };
+        fetchHotPodcasts();
+    }, []);
+
+    const featuredPodcast = hotPodcasts[0] ?? null;
+    const podcastCarouselItems = hotPodcasts.slice(1);
 
     const handleOpenSpotifyLink = useCallback(async (url: string) => {
         try {
@@ -254,12 +282,72 @@ export default function HomeScreen({
         }
     }, []);
 
-    const fetchSearchBundle = useCallback(async (keyword: string, limit: number): Promise<SearchResultBundle> => {
-        const spotifyRes = await spotifyService.search({ q: keyword, type: 'track', limit });
+    // Public Playlists for Top Hit section
+    const [publicPlaylists, setPublicPlaylists] = useState<UserPlaylistResponse[]>([]);
+    const [isPublicPlaylistsLoading, setIsPublicPlaylistsLoading] = useState(true);
+    const [selectedPlaylistForModal, setSelectedPlaylistForModal] = useState<UserPlaylistResponse | null>(null);
+    const [showPlaylistModal, setShowPlaylistModal] = useState(false);
+    const [selectedPodcastFromSearch, setSelectedPodcastFromSearch] = useState<string | null>(null);
 
-        return {
-            tracks: spotifyRes.data?.tracks?.items || [],
+    useEffect(() => {
+        const fetchPublicPlaylists = async () => {
+            try {
+                setIsPublicPlaylistsLoading(true);
+                const result = await userPlaylistService.getPublicPlaylists();
+                if (result.success) {
+                    setPublicPlaylists(result.data);
+                }
+            } catch (err) {
+                console.log('[HomeScreen] fetchPublicPlaylists error:', err);
+            } finally {
+                setIsPublicPlaylistsLoading(false);
+            }
         };
+        fetchPublicPlaylists();
+    }, []);
+
+    const handleOpenPlaylistModal = useCallback((playlist: UserPlaylistResponse) => {
+        setSelectedPlaylistForModal(playlist);
+        setShowPlaylistModal(true);
+    }, []);
+
+    const handleClosePlaylistModal = useCallback(() => {
+        setShowPlaylistModal(false);
+        setSelectedPlaylistForModal(null);
+    }, []);
+
+    const fetchSearchBundle = useCallback(async (keyword: string, limit: number): Promise<SearchResultBundle> => {
+        const [spotifyRes, podcastsRes, playlistsRes] = await Promise.allSettled([
+            spotifyService.search({ q: keyword, type: 'track', limit }),
+            podcastService.getPublished(),
+            userPlaylistService.getPublicPlaylists(),
+        ]);
+
+        const kw = keyword.trim().toLowerCase();
+
+        const tracks: SpotifyTrack[] =
+            spotifyRes.status === 'fulfilled'
+                ? spotifyRes.value.data?.tracks?.items || []
+                : [];
+
+        const podcasts: PodcastResponse[] =
+            podcastsRes.status === 'fulfilled'
+                ? podcastsRes.value.filter((p) =>
+                    p.title.toLowerCase().includes(kw) ||
+                    (p.description || '').toLowerCase().includes(kw) ||
+                    (p.author || '').toLowerCase().includes(kw)
+                ).slice(0, 5)
+                : [];
+
+        const playlists: UserPlaylistResponse[] =
+            playlistsRes.status === 'fulfilled' && playlistsRes.value.success
+                ? playlistsRes.value.data.filter((pl) =>
+                    pl.playlistName.toLowerCase().includes(kw) ||
+                    (pl.description || '').toLowerCase().includes(kw)
+                ).slice(0, 5)
+                : [];
+
+        return { tracks, podcasts, playlists };
     }, []);
 
     const makeSuggestions = useCallback((bundle: SearchResultBundle): SearchSuggestionItem[] => {
@@ -757,12 +845,8 @@ export default function HomeScreen({
                     return {
                         id: post.id,
                         userId: post.userId,
-                        userFullName:
-                            (post as PopularPostResponse & { user_full_name?: string }).userFullName
-                            || (post as PopularPostResponse & { user_full_name?: string }).user_full_name,
-                        userAvatarUrl:
-                            (post as PopularPostResponse & { user_avatar_url?: string }).userAvatarUrl
-                            || (post as PopularPostResponse & { user_avatar_url?: string }).user_avatar_url,
+                        userFullName: post.userFullName,
+                        userAvatarUrl: post.userAvatarUrl,
                         title: post.title,
                         contentText: post.contentText,
                         imageUrl: post.imgUrl || null,
@@ -784,12 +868,23 @@ export default function HomeScreen({
                     const enrichedPosts = await Promise.all(
                         mappedPosts.map(async (post) => {
                             try {
-                                const reactions = await blogService.getPostReactions(post.id);
-                                const userReaction = reactions.data?.find((reaction) => reaction.userId === user.userId);
+                                const [statsResult, reactionsResult] = await Promise.all([
+                                    blogService.getPostStats(post.id),
+                                    blogService.getPostReactions(post.id)
+                                ]);
+                                
+                                const stats = statsResult.success && statsResult.data ? statsResult.data : null;
+                                const reactions = reactionsResult.success && reactionsResult.data ? reactionsResult.data : [];
+
+                                const userReaction = reactions.find((reaction) => reaction.userId === user.userId);
                                 const isLiked = !!userReaction;
                                 const myReactionType = userReaction ? (userReaction.reactionType?.toLowerCase() as ReactionType) : null;
+                                
                                 return {
                                     ...post,
+                                    reactionCount: stats?.reactionCount ?? post.reactionCount,
+                                    commentCount: stats?.commentCount ?? post.commentCount,
+                                    viewCount: stats?.viewCount ?? post.viewCount,
                                     isLiked,
                                     myReactionType,
                                 };
@@ -1053,15 +1148,40 @@ export default function HomeScreen({
                 onTouchCancel={onHorizontalListTouchEnd}
             >
                 <SectionHeader title="Top Hit Playlist Live" titleColor={palette.primary} />
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.topHitScrollContent}
-                >
-                    {TOP_HIT_PLAYLISTS.map((item, index) => (
-                        <TopHitPlaylistCard key={item.id} item={item} rank={index + 1} />
-                    ))}
-                </ScrollView>
+                {isPublicPlaylistsLoading ? (
+                    <View style={{ height: 140, justifyContent: 'center', alignItems: 'center' }}>
+                        <ActivityIndicator size="small" color={palette.primary} />
+                    </View>
+                ) : publicPlaylists.length === 0 ? (
+                    <View style={{ height: 100, justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ color: palette.textMuted, fontSize: 14 }}>Chưa có playlist công khai nào</Text>
+                    </View>
+                ) : (
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.topHitScrollContent}
+                    >
+                        {publicPlaylists.map((playlist, index) => (
+                            <TouchableOpacity
+                                key={playlist.id}
+                                activeOpacity={0.88}
+                                onPress={() => handleOpenPlaylistModal(playlist)}
+                            >
+                                <TopHitPlaylistCard
+                                    item={{
+                                        id: playlist.id,
+                                        title: playlist.playlistName,
+                                        subtitle: `${playlist.totalTracks} bài hát`,
+                                        image: playlist.thumbnailUrl || `https://api.dicebear.com/7.x/initials/png?seed=${encodeURIComponent(playlist.playlistName)}&backgroundColor=55C5F1`,
+                                        category: 'Thịnh Hành',
+                                    }}
+                                    rank={index + 1}
+                                />
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                )}
             </View>
 
             <View style={styles.scheduleSection}>
@@ -1287,50 +1407,76 @@ export default function HomeScreen({
                 onTouchEnd={onHorizontalListTouchEnd}
                 onTouchCancel={onHorizontalListTouchEnd}
             >
-                <SectionHeader title="Podcast Hot" titleColor={palette.primary} />
+                <SectionHeader
+                    title="Podcast Hot"
+                    titleColor={palette.primary}
+                    onPressSeeAll={() => setActiveTab('podcast')}
+                />
 
-                <TouchableOpacity style={styles.podcastFeaturedCard} activeOpacity={0.92}>
-                    <Image source={{ uri: featuredPodcast.image }} style={styles.podcastFeaturedImage} />
-                    <LinearGradient
-                        colors={['rgba(14,116,144,0.92)', 'rgba(15,118,110,0.5)', 'rgba(2,6,23,0.3)']}
-                        start={{ x: 0, y: 1 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.podcastFeaturedOverlay}
-                    />
-
-                    <View style={styles.podcastFeaturedHeader}>
-                        <View style={styles.podcastFeaturedBadge}>
-                            <Ionicons name="mic" size={12} color="#FFFFFF" />
-                            <Text style={styles.podcastFeaturedBadgeText}>Podcast Spotlight</Text>
-                        </View>
+                {isHotPodcastsLoading ? (
+                    <View style={{ height: 160, justifyContent: 'center', alignItems: 'center' }}>
+                        <ActivityIndicator size="small" color={palette.primary} />
                     </View>
+                ) : featuredPodcast ? (
+                    <TouchableOpacity
+                        style={styles.podcastFeaturedCard}
+                        activeOpacity={0.92}
+                        onPress={() => setActiveTab('podcast')}
+                    >
+                        <Image source={{ uri: featuredPodcast.image }} style={styles.podcastFeaturedImage} />
+                        <LinearGradient
+                            colors={['rgba(14,116,144,0.92)', 'rgba(15,118,110,0.5)', 'rgba(2,6,23,0.3)']}
+                            start={{ x: 0, y: 1 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.podcastFeaturedOverlay}
+                        />
 
-                    <View style={styles.podcastFeaturedInfo}>
-                        <Text style={styles.podcastFeaturedTitle} numberOfLines={1}>{featuredPodcast.title}</Text>
-                        <Text style={styles.podcastFeaturedHost} numberOfLines={1}>Host: {featuredPodcast.host}</Text>
-
-                        <View style={styles.podcastFeaturedFooter}>
-                            <View style={styles.podcastFeaturedMetaChip}>
-                                <Text style={styles.podcastFeaturedMetaChipText}>Mới cập nhật</Text>
-                            </View>
-
-                            <View style={styles.podcastFeaturedPlayCta}>
-                                <Ionicons name="play" size={14} color="#0F172A" />
-                                <Text style={styles.podcastFeaturedPlayCtaText}>Nghe ngay</Text>
+                        <View style={styles.podcastFeaturedHeader}>
+                            <View style={styles.podcastFeaturedBadge}>
+                                <Ionicons name="mic" size={12} color="#FFFFFF" />
+                                <Text style={styles.podcastFeaturedBadgeText}>Podcast Spotlight</Text>
                             </View>
                         </View>
-                    </View>
-                </TouchableOpacity>
 
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.horizontalScrollContent}
-                >
-                    {podcastCarouselItems.map((item) => (
-                        <PodcastHotCard key={item.id} item={item} palette={palette} isDarkMode={isDarkMode} />
-                    ))}
-                </ScrollView>
+                        <View style={styles.podcastFeaturedInfo}>
+                            <Text style={styles.podcastFeaturedTitle} numberOfLines={1}>{featuredPodcast.title}</Text>
+                            <Text style={styles.podcastFeaturedHost} numberOfLines={1}>Host: {featuredPodcast.host}</Text>
+
+                            <View style={styles.podcastFeaturedFooter}>
+                                <View style={styles.podcastFeaturedMetaChip}>
+                                    <Text style={styles.podcastFeaturedMetaChipText}>Mới cập nhật</Text>
+                                </View>
+
+                                <View style={styles.podcastFeaturedPlayCta}>
+                                    <Ionicons name="play" size={14} color="#0F172A" />
+                                    <Text style={styles.podcastFeaturedPlayCtaText}>Nghe ngay</Text>
+                                </View>
+                            </View>
+                        </View>
+                    </TouchableOpacity>
+                ) : (
+                    <View style={{ height: 160, justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ color: palette.textMuted, fontSize: 14 }}>Chưa có podcast nào</Text>
+                    </View>
+                )}
+
+                {podcastCarouselItems.length > 0 && (
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.horizontalScrollContent}
+                    >
+                        {podcastCarouselItems.map((item) => (
+                            <PodcastHotCard
+                                key={item.id}
+                                item={item}
+                                palette={palette}
+                                isDarkMode={isDarkMode}
+                                onPress={() => setActiveTab('podcast')}
+                            />
+                        ))}
+                    </ScrollView>
+                )}
             </LinearGradient>
 
             <View style={styles.communitySection}>
@@ -1384,7 +1530,12 @@ export default function HomeScreen({
         }
 
         if (tab === 'podcast') {
-            return <PodcastScreen />;
+            return (
+                <PodcastScreen
+                    initialSelectedPodcastId={selectedPodcastFromSearch}
+                    onClearSelectedPodcast={() => setSelectedPodcastFromSearch(null)}
+                />
+            );
         }
 
         if (tab === 'live') {
@@ -1566,6 +1717,11 @@ export default function HomeScreen({
                             onBackToSuggestions={() => setShowSearchResults(false)}
                             onOpenSpotifyLink={handleOpenSpotifyLink}
                             onAddFavoriteTrack={handleAddFavoriteTrack}
+                            onOpenPlaylistDetail={handleOpenPlaylistModal}
+                            onOpenPodcastTab={(podcastId) => {
+                                setSelectedPodcastFromSearch(podcastId);
+                                setActiveTab('podcast');
+                            }}
                         />
                     )}
                 </View>
@@ -1626,6 +1782,13 @@ export default function HomeScreen({
                     <BottomNavigation activeTab={activeTab} onTabPress={handleTabPress} onLogout={onLogout} />
                 </>
             )}
+
+            <PlaylistDetailModal
+                visible={showPlaylistModal}
+                playlistId={selectedPlaylistForModal?.id ?? null}
+                initialPlaylist={selectedPlaylistForModal}
+                onClose={handleClosePlaylistModal}
+            />
         </View>
     );
 }
