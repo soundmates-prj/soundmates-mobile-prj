@@ -158,7 +158,6 @@ const refreshAccessToken = async (): Promise<string | null> => {
                 await AsyncStorage.setItem('refreshToken', nextRefreshToken);
             }
 
-            console.log('[API Auth] Refresh token successful');
             return nextAccessToken;
         } catch (refreshError) {
             const axiosRefreshError = refreshError as AxiosError;
@@ -231,7 +230,6 @@ authApiClient.interceptors.request.use(
         }
 
         const payload = config.method?.toUpperCase() === 'GET' ? config.params : config.data;
-        console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, payload);
         return config;
     },
     (error: AxiosError) => {
@@ -243,7 +241,6 @@ authApiClient.interceptors.request.use(
 // Response interceptor
 authApiClient.interceptors.response.use(
     (response: AxiosResponse) => {
-        console.log(`[API Response] ${response.status}`, response.data);
         return response;
     },
     async (error: AxiosError) => {
@@ -263,7 +260,6 @@ authApiClient.interceptors.response.use(
                     originalRequest.headers.Authorization = `Bearer ${refreshedAccessToken}`;
                 }
 
-                console.log('[API Auth] Retrying request after refresh', originalRequest.url);
                 return authApiClient(originalRequest);
             }
 

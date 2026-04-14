@@ -136,7 +136,6 @@ export default function AccountInfoScreen({ onBack, onOpenSubscription, subscrip
   const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
   const insets = useSafeAreaInsets();
   const { user } = useUser();
-  console.log('User data in AccountInfoScreen:', user);
 
   const fallbackTopInset = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
   const topInset = Math.max(insets.top, fallbackTopInset);

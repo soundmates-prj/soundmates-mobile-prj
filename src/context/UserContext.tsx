@@ -64,14 +64,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
     const loadUser = async () => {
         try {
-            console.log('[UserContext] Loading user from AsyncStorage...');
             const userData = await AsyncStorage.getItem(USER_STORAGE_KEY);
-            console.log('[UserContext] Raw userData from storage:', userData);
 
             let parsedUser: UserData | null = null;
             if (userData) {
                 parsedUser = JSON.parse(userData);
-                console.log('[UserContext] Parsed user data:', parsedUser);
                 setUserState(parsedUser);
             } else {
                 console.log('[UserContext] No user data found in storage');
@@ -94,10 +91,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
     const saveUser = useCallback(async (userData: UserData) => {
         try {
-            console.log('[UserContext] saveUser called with:', userData);
             await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
             setUserState(userData);
-            console.log('[UserContext] User saved successfully, new state:', userData);
         } catch (error) {
             console.log('Error saving user data:', error);
             throw error;
@@ -115,7 +110,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const refreshUser = useCallback(async (options?: RefreshUserOptions) => {
-        console.log('[UserContext] refreshUser called');
         const accessToken = await AsyncStorage.getItem('accessToken');
         if (!accessToken) return;
 

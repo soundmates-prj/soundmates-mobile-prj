@@ -170,7 +170,6 @@ class AuthService {
      */
     async login(data: LoginRequest): Promise<ApiResponse<LoginResponse>> {
         try {
-            console.log('url:', authApiClient.defaults.baseURL + AUTH_ENDPOINTS.LOGIN);
             const response = await authApiClient.post<LoginResponse>(
                 AUTH_ENDPOINTS.LOGIN,
                 data
