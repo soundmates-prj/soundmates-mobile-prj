@@ -171,10 +171,6 @@ export default function HomeScreen({
             setGlobalScrollEnabled(enabled);
         });
 
-        const horizontalListSub = DeviceEventEmitter.addListener('HorizontalListActive', (active: boolean) => {
-            isHorizontalListActiveRef.current = active;
-        });
-
         const reactSub = DeviceEventEmitter.addListener('PostReactionUpdated', ({ postId, newReaction }) => {
             setCommunityPosts((prevPosts) =>
                 prevPosts.map((post) => {
@@ -193,10 +189,15 @@ export default function HomeScreen({
             );
         });
 
+        // Listen for horizontal list active events from child screens (e.g. PodcastScreen)
+        const horizontalSub = DeviceEventEmitter.addListener('HorizontalListActive', (active: boolean) => {
+            isHorizontalListActiveRef.current = active;
+        });
+
         return () => {
             sub.remove();
-            horizontalListSub.remove();
             reactSub.remove();
+            horizontalSub.remove();
         };
     }, []);
 
@@ -786,7 +787,7 @@ export default function HomeScreen({
                                 const reactions = await blogService.getPostReactions(post.id);
                                 const userReaction = reactions.data?.find((reaction) => reaction.userId === user.userId);
                                 const isLiked = !!userReaction;
-                                const myReactionType = userReaction ? (userReaction.reactionType as ReactionType) : null;
+                                const myReactionType = userReaction ? (userReaction.reactionType?.toLowerCase() as ReactionType) : null;
                                 return {
                                     ...post,
                                     isLiked,

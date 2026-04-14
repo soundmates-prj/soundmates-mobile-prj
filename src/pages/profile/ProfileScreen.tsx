@@ -29,6 +29,7 @@ import {
   blogService,
   FavoriteItemResponse,
   favoriteService,
+  podcastService,
   paymentService,
   PlaylistVisibility,
   ReactionResponse,
@@ -921,15 +922,29 @@ export default function ProfileScreen({
     }
 
     try {
-      const result = await favoriteService.getFavorites({
-        itemType: favoriteItemTypeFilter,
-        source: favoriteSourceFilter,
-      });
-
-      if (result.success) {
-        setFavoriteItems(result.data);
+      if (favoriteItemTypeFilter === 'podcast') {
+        const podcasts = await podcastService.getSavedPodcasts();
+        const mapped: FavoriteItemResponse[] = podcasts.map(p => ({
+          id: p.id,
+          itemId: p.id,
+          itemType: 'podcast',
+          source: 'soundmates',
+          name: p.title,
+          artistName: p.author || 'Podcast',
+          imgUrl: p.banner || undefined,
+        }));
+        setFavoriteItems(mapped);
       } else {
-        setFavoriteItems([]);
+        const result = await favoriteService.getFavorites({
+          itemType: favoriteItemTypeFilter,
+          source: favoriteSourceFilter,
+        });
+
+        if (result.success) {
+          setFavoriteItems(result.data);
+        } else {
+          setFavoriteItems([]);
+        }
       }
     } catch (error) {
       console.log('[ProfileScreen] fetchFavoriteItems error:', error);
@@ -1101,7 +1116,7 @@ export default function ProfileScreen({
               const reactions = reactionsResult.success && reactionsResult.data ? reactionsResult.data : [];
               const userReaction = user ? reactions.find((reaction: ReactionResponse) => reaction.userId === user.userId) : null;
               const isLiked = !!userReaction;
-              const myReactionType = userReaction ? (userReaction.reactionType as ReactionType) : null;
+              const myReactionType = userReaction ? (userReaction.reactionType?.toLowerCase() as ReactionType) : null;
 
               return {
                 ...post,

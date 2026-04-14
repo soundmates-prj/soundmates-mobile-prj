@@ -17,8 +17,10 @@ import Animated, {
   FadeInDown,
   FadeInUp
 } from 'react-native-reanimated';
+import Toast from 'react-native-toast-message';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { podcastService } from '../../api';
+import { useAudioPlayer } from '../../context/AudioPlayerContext';
 import { useTheme } from '../../context/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
@@ -41,6 +43,9 @@ interface EpisodeVM {
   id: string;
   title: string;
   duration: string;
+  durationSeconds: number;
+  audioUrl?: string;
+  thumbnailUrl?: string;
 }
 
 interface PodcastDetailScreenProps {
@@ -64,6 +69,7 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
   const [episodes, setEpisodes] = useState<EpisodeVM[]>([]);
   const [loadingEpisodes, setLoadingEpisodes] = useState(false);
   const [isFollowed, setIsFollowed] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const scrollY = useRef(new RNAnimated.Value(0)).current;
 
@@ -79,30 +85,28 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
     extrapolate: 'clamp',
   });
 
+  const { loadTrack, activeTrack, isPlaying, togglePlayback } = useAudioPlayer();
+
   const fetchEpisodeInfo = useCallback(async () => {
     if (!podcast) return;
 
     try {
       setLoadingEpisodes(true);
       const detail = await podcastService.getById(podcast.id);
-      const count = detail.episodeCount || podcast.episodes || 0;
-      const episodeList: EpisodeVM[] = Array.from({ length: Math.min(20, count) }, (_, i) => ({
-        id: `${podcast.id}-${i + 1}`,
-        title: `Tập ${i + 1}: ${detail.description || podcast.subtitle || detail.title}`,
-        duration: `${Math.floor(Math.random() * 20 + 10)} phút`,
+
+      const realEpisodes = detail.allEpisodes || [];
+      const episodeList: EpisodeVM[] = realEpisodes.map((ep, i) => ({
+        id: ep.id,
+        title: ep.title || `Tập ${i + 1}: ${podcast.subtitle}`,
+        duration: formatDuration(ep.duration || 0),
+        durationSeconds: ep.duration || 0,
+        audioUrl: ep.audioUrl,
+        thumbnailUrl: ep.thumbnailUrl || detail.banner || podcast.coverImage,
       }));
 
       setEpisodes(episodeList);
     } catch (err) {
       console.log('[PodcastDetail] fetch error:', err);
-      const count = podcast.episodes || 6;
-      setEpisodes(
-        Array.from({ length: Math.min(20, count) }, (_, i) => ({
-          id: `${podcast.id}-${i + 1}`,
-          title: `Tập ${i + 1}: ${podcast.subtitle}`,
-          duration: `${18 + i} phút`,
-        })),
-      );
     } finally {
       setLoadingEpisodes(false);
     }
@@ -111,6 +115,56 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
   useEffect(() => {
     fetchEpisodeInfo();
   }, [fetchEpisodeInfo]);
+
+  // Check if this podcast is already saved as favorite
+  useEffect(() => {
+    if (!podcast) return;
+    podcastService.getSavedPodcasts().then((list) => {
+      if (list.some(p => p.id === podcast.id)) {
+        setIsFollowed(true);
+      }
+    });
+  }, [podcast?.id]);
+
+  const handleToggleSave = async () => {
+    if (!podcast || isSaving) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsSaving(true);
+    try {
+      if (isFollowed) {
+        // Already saved — remove
+        const success = await podcastService.unsavePodcast(podcast.id);
+        if (success) {
+          setIsFollowed(false);
+          Toast.show({
+            type: 'success',
+            text1: 'Đã bỏ lưu Podcast',
+            text2: 'Podcast này đã được xóa khỏi mục Yêu thích.',
+          });
+        }
+      } else {
+        // Not saved — add
+        const success = await podcastService.savePodcast(podcast.id);
+        if (success) {
+          setIsFollowed(true);
+          Toast.show({
+            type: 'success',
+            text1: 'Đã lưu Podcast',
+            text2: 'Bạn có thể tìm thấy trong mục Yêu thích ở Hồ sơ.',
+          });
+        }
+      }
+    } catch (err) {
+      console.log('[PodcastDetail] handleToggleSave error:', err);
+      Toast.show({
+        type: 'error',
+        text1: 'Đã xảy ra lỗi',
+        text2: 'Không thể cập nhật danh sách Yêu thích.',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleFollow = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -166,22 +220,51 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
           <Animated.View entering={FadeInDown.delay(300)} style={styles.titleWrapper}>
             <Text style={[styles.mainTitle, { color: palette.textPrimary }]}>{podcast.title}</Text>
             <Text style={[styles.mainSubtitle, { color: palette.textSecondary }]}>{podcast.subtitle}</Text>
+            <Text style={[styles.mainSubtitle, { color: palette.primary, marginTop: 4, fontWeight: '600' }]}>{podcast.host}</Text>
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(400)} style={styles.actionRow}>
             <TouchableOpacity
               activeOpacity={0.8}
-              onPress={handleFollow}
-              style={[styles.followBtn, isFollowed ? { backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.primary } : { backgroundColor: palette.primary }]}
+              onPress={() => {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                if (episodes.length === 0 || !episodes[0].audioUrl) return;
+                const latestEp = episodes[0];
+                if (activeTrack?.id === latestEp.id) {
+                  void togglePlayback();
+                } else {
+                  loadTrack({
+                    id: latestEp.id,
+                    url: latestEp.audioUrl!,
+                    title: latestEp.title,
+                    artist: podcast.host || 'Podcast',
+                    artUrl: latestEp.thumbnailUrl || podcast.coverImage,
+                    duration: latestEp.durationSeconds,
+                  });
+                }
+              }}
+              style={[styles.followBtn, { backgroundColor: palette.primary }]}
             >
-              <Ionicons name={isFollowed ? "checkmark" : "add"} size={20} color={isFollowed ? palette.primary : "#FFFFFF"} />
-              <Text style={[styles.followBtnText, { color: isFollowed ? palette.primary : "#FFFFFF" }]}>
-                {isFollowed ? 'Đang theo dõi' : 'Theo dõi'}
+              <Ionicons name={activeTrack?.id === episodes[0]?.id && isPlaying ? "pause" : "play"} size={20} color="#FFFFFF" />
+              <Text style={[styles.followBtnText, { color: "#FFFFFF" }]}>
+                {activeTrack?.id === episodes[0]?.id && isPlaying ? 'Đang phát' : 'Phát tập mới nhất'}
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity activeOpacity={0.8} style={[styles.shareBtn, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-              <Ionicons name="share-outline" size={20} color={palette.textPrimary} />
+            <TouchableOpacity
+              activeOpacity={0.8}
+              disabled={isSaving}
+              onPress={handleToggleSave}
+              style={[styles.shareBtn, isFollowed
+                ? { backgroundColor: palette.surface, borderColor: palette.primary }
+                : { backgroundColor: palette.surface, borderColor: palette.border }
+              ]}
+            >
+              {isSaving ? (
+                <ActivityIndicator size="small" color={palette.primary} />
+              ) : (
+                <Ionicons name={isFollowed ? "bookmark" : "bookmark-outline"} size={20} color={isFollowed ? palette.primary : palette.textPrimary} />
+              )}
             </TouchableOpacity>
           </Animated.View>
 
@@ -194,11 +277,6 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
             <View style={styles.statItem}>
               <Text style={[styles.statValue, { color: palette.textPrimary }]}>{podcast.category}</Text>
               <Text style={[styles.statLabel, { color: palette.textSecondary }]}>Danh mục</Text>
-            </View>
-            <View style={[styles.statDivider, { backgroundColor: palette.border }]} />
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: palette.textPrimary }]}>4.8</Text>
-              <Text style={[styles.statLabel, { color: palette.textSecondary }]}>Đánh giá</Text>
             </View>
           </Animated.View>
         </View>
@@ -215,44 +293,53 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
           {loadingEpisodes ? (
             <ActivityIndicator size="small" color={palette.primary} style={{ marginTop: 20 }} />
           ) : (
-            episodes.map((episode, idx) => (
-              <Animated.View key={episode.id} entering={FadeInUp.delay(600 + idx * 50)}>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={[styles.episodeCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
-                  onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                >
-                  <View style={[styles.playCircle, { backgroundColor: palette.primary + '15' }]}>
-                    <Ionicons name="play" size={18} color={palette.primary} style={{ marginLeft: 2 }} />
-                  </View>
-                  <View style={styles.episodeInfo}>
-                    <Text style={[styles.episodeTitle, { color: palette.textPrimary }]} numberOfLines={1}>{episode.title}</Text>
-                    <View style={styles.episodeMeta}>
-                      <Ionicons name="time-outline" size={12} color={palette.textSecondary} />
-                      <Text style={[styles.episodeDuration, { color: palette.textSecondary }]}>{episode.duration}</Text>
+            episodes.map((episode, idx) => {
+              const isCurrentTrack = activeTrack?.id === episode.id;
+              const isCurrentlyPlaying = isCurrentTrack && isPlaying;
+
+              return (
+                <Animated.View key={episode.id} entering={FadeInUp.delay(600 + idx * 50)}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={[styles.episodeCard, { backgroundColor: isCurrentTrack ? palette.primary + '10' : palette.surface, borderColor: isCurrentTrack ? palette.primary : palette.border }]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      if (!episode.audioUrl) return;
+                      if (isCurrentTrack) {
+                        void togglePlayback();
+                      } else {
+                        loadTrack({
+                          id: episode.id,
+                          url: episode.audioUrl,
+                          title: episode.title,
+                          artist: podcast.host || 'Podcast',
+                          artUrl: episode.thumbnailUrl || podcast.coverImage,
+                          duration: episode.durationSeconds,
+                        });
+                      }
+                    }}
+                  >
+                    <View style={[styles.playCircle, { backgroundColor: isCurrentTrack ? palette.primary : palette.primary + '15' }]}>
+                      <Ionicons name={isCurrentlyPlaying ? "pause" : "play"} size={18} color={isCurrentTrack ? '#FFF' : palette.primary} style={{ marginLeft: isCurrentlyPlaying ? 0 : 2 }} />
                     </View>
-                  </View>
-                  <TouchableOpacity style={styles.moreBtn}>
-                    <Ionicons name="ellipsis-horizontal" size={18} color={palette.textSecondary} />
+                    <View style={styles.episodeInfo}>
+                      <Text style={[styles.episodeTitle, { color: isCurrentTrack ? palette.primary : palette.textPrimary }]} numberOfLines={1}>{episode.title}</Text>
+                      <View style={styles.episodeMeta}>
+                        <Ionicons name="time-outline" size={12} color={palette.textSecondary} />
+                        <Text style={[styles.episodeDuration, { color: palette.textSecondary }]}>{episode.duration}</Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity style={styles.moreBtn}>
+                      <Ionicons name="ellipsis-horizontal" size={18} color={palette.textSecondary} />
+                    </TouchableOpacity>
                   </TouchableOpacity>
-                </TouchableOpacity>
-              </Animated.View>
-            ))
+                </Animated.View>
+              )
+            })
           )}
         </View>
       </RNAnimated.ScrollView>
 
-      {/* Floating Play Button */}
-      <Animated.View entering={FadeInUp.delay(800)} style={styles.floatingPlayWrapper}>
-        <TouchableOpacity
-          activeOpacity={0.9}
-          style={[styles.floatingPlayBtn, { backgroundColor: palette.primary }]}
-          onPress={() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)}
-        >
-          <Ionicons name="play" size={28} color="#FFFFFF" style={{ marginLeft: 4 }} />
-          <Text style={styles.floatingPlayText}>Nghe tập mới nhất</Text>
-        </TouchableOpacity>
-      </Animated.View>
     </View>
   );
 }
@@ -303,7 +390,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   scrollContent: {
-    paddingTop: height * 0.15,
+    paddingTop: height * 0.08,
     paddingBottom: 150,
   },
   infoSection: {

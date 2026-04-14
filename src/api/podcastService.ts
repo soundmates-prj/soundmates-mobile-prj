@@ -8,6 +8,19 @@ import { PODCAST_ENDPOINTS } from './config';
 
 // ─── Response Types ──────────────────────────────────────────────
 
+export interface PodcastEpisode {
+    id: string;
+    podcastId: string;
+    title: string;
+    description?: string;
+    audioUrl?: string;
+    thumbnailUrl?: string;
+    episodeNumber?: number;
+    duration?: number;
+    publishDate?: string;
+    createdAt?: string;
+}
+
 export interface PodcastResponse {
     id: string;
     title: string;
@@ -20,6 +33,7 @@ export interface PodcastResponse {
     updatedAt: string | null;
     createdBy: string;
     episodeCount: number;
+    allEpisodes?: PodcastEpisode[];
 }
 
 interface ApiResponse<T> {
@@ -64,6 +78,36 @@ export const podcastService = {
         );
 
         return response.data.data;
+    },
+
+    /**
+     * Get saved podcasts for current user
+     */
+    async getSavedPodcasts(): Promise<PodcastResponse[]> {
+        try {
+            const response = await authApiClient.get<ApiResponse<PodcastResponse[]>>(
+                PODCAST_ENDPOINTS.SAVED_PODCASTS
+            );
+            return response.data.data ?? [];
+        } catch {
+            return [];
+        }
+    },
+
+    /**
+     * Save (follow) a podcast
+     */
+    async savePodcast(id: string): Promise<boolean> {
+        await authApiClient.post(PODCAST_ENDPOINTS.TOGGLE_SAVE(id));
+        return true;
+    },
+
+    /**
+     * Unsave (unfollow) a podcast
+     */
+    async unsavePodcast(id: string): Promise<boolean> {
+        await authApiClient.delete(PODCAST_ENDPOINTS.TOGGLE_SAVE(id));
+        return true;
     },
 };
 

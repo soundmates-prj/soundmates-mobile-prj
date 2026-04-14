@@ -61,7 +61,7 @@ export default function ProfileFavoritesTab({
       {isFavoritesLoading ? (
         <View style={styles.postsLoadingContainer}>
           <ActivityIndicator size="large" color={palette.primary} />
-          <Text style={[styles.postsLoadingText, { color: palette.textSecondary }]}>Đang tải nhạc yêu thích...</Text>
+          <Text style={[styles.postsLoadingText, { color: palette.textSecondary }]}>Đang tải danh sách yêu thích...</Text>
         </View>
       ) : favoriteItems.length === 0 ? (
         <View style={styles.emptyState}>
@@ -82,7 +82,11 @@ export default function ProfileFavoritesTab({
                 {item.imgUrl ? (
                   <Image source={{ uri: item.imgUrl }} style={styles.favoriteThumbImage} />
                 ) : (
-                  <Ionicons name="musical-note-outline" size={18} color={palette.primary} />
+                  <Ionicons
+                    name={item.itemType === 'podcast' ? 'mic-outline' : 'musical-note-outline'}
+                    size={18}
+                    color={palette.primary}
+                  />
                 )}
               </View>
 

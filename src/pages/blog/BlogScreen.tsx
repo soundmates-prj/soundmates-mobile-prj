@@ -210,7 +210,7 @@ export default function BlogScreen({
                                 const reactions = await blogService.getPostReactions(post.id);
                                 const userReaction = reactions.data?.find((reaction) => reaction.userId === user.userId);
                                 const isLiked = !!userReaction;
-                                const myReactionType = userReaction ? (userReaction.reactionType as ReactionType) : null;
+                                const myReactionType = userReaction ? (userReaction.reactionType?.toLowerCase() as ReactionType) : null;
                                 return { ...post, isLiked, myReactionType };
                             } catch {
                                 return post;

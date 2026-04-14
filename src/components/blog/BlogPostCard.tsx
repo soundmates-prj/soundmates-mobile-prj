@@ -32,7 +32,7 @@ export const REACTIONS: ReactionMeta[] = [
 ];
 
 export const getReactionMeta = (type: ReactionType | string | null): ReactionMeta | null =>
-    REACTIONS.find((r) => r.type === type) ?? null;
+    REACTIONS.find((r) => r.type === type?.toLowerCase()) ?? null;
 
 export interface SharedMusic {
     trackId: string;
@@ -109,13 +109,18 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
     const { isDarkMode } = useTheme();
     const palette = isDarkMode ? SoundMateDarkColors : SoundMateLightColors;
     const isDraftPost = post.status?.toLowerCase?.() === 'draft';
-    const [myReaction, setMyReaction] = useState<ReactionType | null>(post.myReactionType ?? (post.isLiked ? 'like' : null));
+    const normalizeReaction = (t?: ReactionType | string | null): ReactionType | null => {
+        if (!t) return null;
+        const lower = t.toLowerCase() as ReactionType;
+        return REACTIONS.some(r => r.type === lower) ? lower : null;
+    };
+    const [myReaction, setMyReaction] = useState<ReactionType | null>(normalizeReaction(post.myReactionType) ?? (post.isLiked ? 'like' : null));
     const [reactionCountLocal, setReactionCountLocal] = useState(post.reactionCount);
     const [showOwnerMenu, setShowOwnerMenu] = useState(false);
     const [topReactions, setTopReactions] = useState<ReactionType[]>([]);
 
     useEffect(() => {
-        setMyReaction(post.myReactionType ?? (post.isLiked ? 'like' : null));
+        setMyReaction(normalizeReaction(post.myReactionType) ?? (post.isLiked ? 'like' : null));
         setReactionCountLocal(post.reactionCount);
         setShowOwnerMenu(false);
     }, [post.id, post.isLiked, post.reactionCount, post.myReactionType]);
@@ -126,7 +131,7 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
                 if (res.success && res.data) {
                     const reactionCounts: Record<string, number> = {};
                     res.data.forEach(r => {
-                        const t = r.reactionType || 'like';
+                        const t = (r.reactionType || 'like').toLowerCase();
                         reactionCounts[t] = (reactionCounts[t] || 0) + 1;
                     });
                     

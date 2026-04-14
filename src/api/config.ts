@@ -4,16 +4,16 @@
  */
 
 import {
+    API_HOST,
     AUTH_BASE_URL as ENV_AUTH_BASE_URL,
     AZURACAST_BASE as ENV_AZURACAST_BASE,
     MAIN_BASE_URL as ENV_MAIN_BASE_URL,
-    VITE_API_BASE_URL,
 } from '@env';
 
 // Default values (fallback if env not loaded)
-const FALLBACK_AUTH = VITE_API_BASE_URL ? `${VITE_API_BASE_URL}/api/v1` : 'http://161.97.85.232:8080/api/v1';
-const FALLBACK_MAIN = VITE_API_BASE_URL ? `${VITE_API_BASE_URL}/api/v1` : 'http://161.97.85.232:8080/api/v1';
-const FALLBACK_AZURA = VITE_API_BASE_URL ? 'https://161.97.85.232:5000/apis' : 'http://161.97.85.232:5000/apis';
+const FALLBACK_AUTH = API_HOST ? `${API_HOST}/api/v1` : 'http://161.97.85.232:8080/api/v1';
+const FALLBACK_MAIN = API_HOST ? `${API_HOST}/api/v1` : 'http://161.97.85.232:8080/api/v1';
+const FALLBACK_AZURA = API_HOST ? 'https://161.97.85.232:5000/apis' : 'http://161.97.85.232:5000/apis';
 
 const resolveBaseUrl = (
     primary?: string,
@@ -118,6 +118,8 @@ export const PAYMENT_ENDPOINTS = {
 export const PODCAST_ENDPOINTS = {
     LIST: '/podcast',
     DETAIL: (id: string) => `/podcast/${id}`,
+    SAVED_PODCASTS: '/me/saved-podcasts',
+    TOGGLE_SAVE: (id: string) => `/me/saved-podcasts/${id}`,
 };
 
 // Livestream / Live Session Endpoints

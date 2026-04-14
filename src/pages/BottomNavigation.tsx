@@ -135,7 +135,7 @@ function NavTab({
 export default function BottomNavigation({ activeTab, onTabPress }: BottomNavigationProps) {
   const { isDarkMode } = useTheme();
   const { user } = useUser();
-  const { activeSession } = useAudioPlayer();
+  const { activeSession, activeTrack } = useAudioPlayer();
   const insets = useSafeAreaInsets();
   const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
 
@@ -151,7 +151,7 @@ export default function BottomNavigation({ activeTab, onTabPress }: BottomNaviga
       },
     ]}>
       {/* Spotify-style mini player */}
-      {!!activeSession && <MiniPlayer />}
+      {(!!activeSession || !!activeTrack) && <MiniPlayer />}
 
       {/* Tabs */}
       <View style={styles.tabs}>

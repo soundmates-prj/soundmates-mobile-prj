@@ -3,7 +3,15 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { AppState } from 'react-native';
 import { LiveSessionResult, NowPlayingData, livestreamService } from '../api';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+export interface AudioTrack {
+  id: string;
+  url: string;
+  title: string;
+  artist: string;
+  artUrl: string;
+  duration?: number;
+}
+
 export interface AudioPlayerState {
   isPlaying: boolean;
   isLoading: boolean;
@@ -11,11 +19,14 @@ export interface AudioPlayerState {
   streamUrl: string;
   nowPlaying: NowPlayingData | null;
   activeSession: LiveSessionResult | null;
+  activeTrack: AudioTrack | null;
   displayElapsed: number;
 }
 
 interface AudioPlayerActions {
   loadSession: (session: LiveSessionResult) => void;
+  loadTrack: (track: AudioTrack) => void;
+  seekTo: (positionMillis: number) => Promise<void>;
   togglePlayback: () => Promise<void>;
   toggleMute: () => Promise<void>;
   stopAndUnload: () => Promise<void>;
@@ -40,13 +51,16 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const [streamUrl, setStreamUrl] = useState('');
   const [nowPlaying, setNowPlaying] = useState<NowPlayingData | null>(null);
   const [activeSession, setActiveSession] = useState<LiveSessionResult | null>(null);
+  const [activeTrack, setActiveTrack] = useState<AudioTrack | null>(null);
   const [displayElapsed, setDisplayElapsed] = useState(0);
 
   const soundRef = useRef<Audio.Sound | null>(null);
   const loadingUrlRef = useRef<string | null>(null);
   const nowPlayingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const podcastTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
+  const activeTrackRef = useRef<AudioTrack | null>(null); // always-current ref for callbacks
   const appStateRef = useRef(AppState.currentState);
 
   // ── Audio Mode Setup ──────────────────────────────────────────────────────
@@ -64,8 +78,16 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     void configureAudioMode().catch(() => {});
   }, [configureAudioMode]);
 
-  // ── Elapsed timer ──────────────────────────────────────────────────────────
+  // Keep activeTrackRef in sync so callbacks always have current value
   useEffect(() => {
+    activeTrackRef.current = activeTrack;
+  }, [activeTrack]);
+
+  // ── Elapsed timer – Livestream (driven by nowPlaying) ─────────────────────
+  useEffect(() => {
+    // Only run for livestream sessions; podcasts use podcastTimerRef instead
+    if (activeTrack) return;
+
     if (elapsedIntervalRef.current) {
       clearInterval(elapsedIntervalRef.current);
       elapsedIntervalRef.current = null;
@@ -91,10 +113,36 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       if (elapsedIntervalRef.current) clearInterval(elapsedIntervalRef.current);
     };
   }, [
+    activeTrack,
     nowPlaying?.currentTrack?.shId,
     nowPlaying?.currentTrack?.elapsed,
     nowPlaying?.currentTrack?.duration,
   ]);
+
+  // ── Elapsed timer – Podcast (polls sound position every second) ───────────
+  useEffect(() => {
+    if (podcastTimerRef.current) {
+      clearInterval(podcastTimerRef.current);
+      podcastTimerRef.current = null;
+    }
+
+    if (!activeTrack || !isPlaying) return;
+
+    podcastTimerRef.current = setInterval(async () => {
+      const sound = soundRef.current;
+      if (!sound) return;
+      try {
+        const status = await sound.getStatusAsync();
+        if ('isLoaded' in status && status.isLoaded && status.positionMillis !== undefined) {
+          setDisplayElapsed(Math.floor(status.positionMillis / 1000));
+        }
+      } catch { /* ignore */ }
+    }, 500);
+
+    return () => {
+      if (podcastTimerRef.current) clearInterval(podcastTimerRef.current);
+    };
+  }, [activeTrack, isPlaying]);
 
   // ── NowPlaying polling ─────────────────────────────────────────────────────
   const startNowPlayingPolling = useCallback((sessionId?: string) => {
@@ -170,6 +218,10 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         (status) => {
           if ('isLoaded' in status && status.isLoaded) {
             setIsPlaying(status.isPlaying ?? false);
+            // Update elapsed for podcasts using ref (avoids stale closure)
+            if (status.positionMillis !== undefined && activeTrackRef.current) {
+                setDisplayElapsed(Math.floor(status.positionMillis / 1000));
+            }
           }
         },
       );
@@ -248,6 +300,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const loadSession = useCallback((session: LiveSessionResult) => {
     const url = livestreamService.getListenUrl(session.streamUrl ?? undefined);
     setActiveSession(session);
+    setActiveTrack(null);
     setNowPlaying(null);
     startNowPlayingPolling(session.id);
     
@@ -259,6 +312,29 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     setStreamUrl(url);
     void createAndPlay(url, isMuted);
   }, [createAndPlay, isMuted, isPlaying, startNowPlayingPolling, streamUrl]);
+
+  const loadTrack = useCallback((track: AudioTrack) => {
+    setActiveSession(null);
+    setActiveTrack(track);
+    stopNowPlayingPolling();
+    setNowPlaying(null);
+    
+    if (track.url === streamUrl && isPlaying) {
+        return;
+    }
+
+    setStreamUrl(track.url);
+    void createAndPlay(track.url, isMuted);
+  }, [createAndPlay, isMuted, isPlaying, stopNowPlayingPolling, streamUrl]);
+
+  const seekTo = useCallback(async (positionMillis: number) => {
+      if (soundRef.current) {
+          try {
+              await soundRef.current.setPositionAsync(positionMillis);
+              setDisplayElapsed(Math.floor(positionMillis / 1000));
+          } catch { /* ignore */ }
+      }
+  }, []);
 
   const togglePlayback = useCallback(async () => {
     if (isLoading) return;
@@ -280,13 +356,8 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         } else {
           await configureAudioMode().catch(() => {});
           await sound.playAsync();
-
-          const postPlayStatus = await sound.getStatusAsync();
-          if ('isLoaded' in postPlayStatus && postPlayStatus.isLoaded && postPlayStatus.isPlaying) {
-            setIsPlaying(true);
-          } else if (streamUrl) {
-            await createAndPlay(streamUrl, isMuted);
-          }
+          // Optimistically mark as playing; onPlaybackStatusUpdate will correct if needed
+          setIsPlaying(true);
         }
       } else if (streamUrl) {
         soundRef.current = null;
@@ -313,6 +384,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     await unloadSound();
     stopNowPlayingPolling();
     setActiveSession(null);
+    setActiveTrack(null);
     setNowPlaying(null);
     setStreamUrl('');
     setIsLoading(false);
@@ -324,6 +396,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       void unloadSound();
       stopNowPlayingPolling();
       if (elapsedIntervalRef.current) clearInterval(elapsedIntervalRef.current);
+      if (podcastTimerRef.current) clearInterval(podcastTimerRef.current);
     };
   }, [stopNowPlayingPolling, unloadSound]);
 
@@ -331,8 +404,8 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     <AudioPlayerContext.Provider
       value={{
         isPlaying, isLoading, isMuted, streamUrl,
-        nowPlaying, activeSession, displayElapsed,
-        loadSession, togglePlayback, toggleMute, stopAndUnload,
+        nowPlaying, activeSession, activeTrack, displayElapsed,
+        loadSession, loadTrack, seekTo, togglePlayback, toggleMute, stopAndUnload,
       }}
     >
       {children}

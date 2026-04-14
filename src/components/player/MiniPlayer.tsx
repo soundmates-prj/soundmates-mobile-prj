@@ -43,19 +43,20 @@ export default function MiniPlayer() {
     ? { primary: '#FF6B35', textPrimary: '#FFFFFF', textSecondary: '#9CA3AF' }
     : { primary: '#55C5F1', textPrimary: '#1E293B', textSecondary: '#6B7280' };
   const {
-    isPlaying, isLoading, activeSession, nowPlaying,
-    displayElapsed, togglePlayback, stopAndUnload,
+    isPlaying, isLoading, activeSession, nowPlaying, activeTrack,
+    displayElapsed, togglePlayback, stopAndUnload, seekTo
   } = useAudioPlayer();
 
-  // Don't render if there's no active session
-  if (!activeSession) {
+  // Don't render if there's no active session or track
+  if (!activeSession && !activeTrack) {
     return null;
   }
 
   // Data
-  const track = nowPlaying?.currentTrack;
+  const isPodcast = !!activeTrack;
+  const track = activeTrack || nowPlaying?.currentTrack;
   const artUrl = track?.artUrl || activeSession?.thumbnailUrl || undefined;
-  const sessionName = activeSession?.sessionName || 'Phiên live';
+  const sessionName = isPodcast ? 'Podcast' : (activeSession?.sessionName || 'Phiên live');
   const title = track?.title || 'Đang chờ bài hát';
   const subtitle = track?.artist || nowPlaying?.streamerName || activeSession?.stationName || '';
   const duration = track?.duration || 0;
@@ -65,6 +66,8 @@ export default function MiniPlayer() {
     : formatDuration(displayElapsed);
 
   const handleOpenLive = () => {
+    if (isPodcast) return;
+    
     const sessionId = activeSession?.id;
     if (!sessionId) {
       return;
@@ -85,16 +88,21 @@ export default function MiniPlayer() {
       progress={progress}
       isPlaying={isPlaying}
       isLoading={isLoading}
+      isPodcast={isPodcast}
+      displayElapsed={displayElapsed}
+      duration={duration}
       onOpenLive={handleOpenLive}
       onToggle={togglePlayback}
       onDismiss={stopAndUnload}
+      onSeek={(newTime) => seekTo?.(newTime * 1000)}
     />
   );
 }
 
 function MiniPlayerContent({
   palette, isDarkMode, artUrl, sessionName, title, subtitle, timeText,
-  progress, isPlaying, isLoading, onOpenLive, onToggle, onDismiss,
+  progress, isPlaying, isLoading, isPodcast, displayElapsed, duration, 
+  onOpenLive, onToggle, onDismiss, onSeek
 }: {
   palette: MinimalPalette;
   isDarkMode: boolean;
@@ -103,8 +111,9 @@ function MiniPlayerContent({
   title: string; subtitle: string;
   timeText: string;
   progress: number; isPlaying: boolean; isLoading: boolean;
+  isPodcast: boolean; displayElapsed: number; duration: number;
   onOpenLive: () => void;
-  onToggle: () => void; onDismiss: () => void;
+  onToggle: () => void; onDismiss: () => void; onSeek: (t: number) => void;
 }) {
   // Pulsing animation for playback dots
   const dot1 = useSharedValue(0.4);
@@ -183,6 +192,12 @@ function MiniPlayerContent({
 
         {/* Controls */}
         <View style={styles.controls}>
+          {isPodcast && !isLoading ? (
+            <TouchableOpacity onPress={() => onSeek(Math.max(0, displayElapsed - 15))} style={styles.seekIconBtn} activeOpacity={0.7}>
+                <Ionicons name="play-back" size={20} color={palette.textSecondary} />
+            </TouchableOpacity>
+          ) : null}
+
           <TouchableOpacity
             onPress={onToggle}
             style={[styles.playBtn, { backgroundColor: palette.primary }]}
@@ -194,6 +209,13 @@ function MiniPlayerContent({
               <Ionicons name={isPlaying ? 'pause' : 'play'} size={18} color="#FFF" style={!isPlaying && { marginLeft: 2 }} />
             )}
           </TouchableOpacity>
+
+          {isPodcast && !isLoading && duration > 0 ? (
+            <TouchableOpacity onPress={() => onSeek(Math.min(duration, displayElapsed + 15))} style={styles.seekIconBtn} activeOpacity={0.7}>
+                <Ionicons name="play-forward" size={20} color={palette.textSecondary} />
+            </TouchableOpacity>
+          ) : null}
+
           <TouchableOpacity onPress={onDismiss} style={styles.closeBtn} activeOpacity={0.7}>
             <Ionicons name="close" size={20} color={palette.textSecondary} />
           </TouchableOpacity>
@@ -304,5 +326,10 @@ const styles = StyleSheet.create({
   closeBtn: {
     width: 28, height: 28,
     alignItems: 'center', justifyContent: 'center',
+  },
+  seekIconBtn: {
+    padding: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

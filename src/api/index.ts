@@ -34,7 +34,7 @@ export type {
     SubscriptionHistoryPaginationResponse, SubscriptionPlanResponse, SubscriptionResponse, TransactionHistoryPaginationResponse, TransactionResponse
 } from './paymentService';
 export { podcastService } from './podcastService';
-export type { PodcastResponse } from './podcastService';
+export type { PodcastResponse, PodcastEpisode } from './podcastService';
 export { spotifyService } from './spotifyService';
 export type { SpotifyAlbum, SpotifyArtist, SpotifySearchResult, SpotifyTrack } from './spotifyService';
 export { uploadService } from './uploadService';

@@ -77,6 +77,26 @@ export const favoriteService = {
     };
   },
 
+  async removeFavorite(favoriteId: string): Promise<{ success: boolean }> {
+    try {
+      const response = await authApiClient.delete<ApiResponse<unknown>>(
+        `${FAVORITE_ENDPOINTS.ME_FAVORITES}/${favoriteId}`,
+      );
+      return { success: response.data.success };
+    } catch {
+      return { success: false };
+    }
+  },
+
+  async findFavoriteByItemId(itemId: string, itemType: string): Promise<FavoriteItemResponse | null> {
+    try {
+      const result = await favoriteService.getFavorites({ itemType });
+      return result.data.find((f) => f.itemId === itemId) ?? null;
+    } catch {
+      return null;
+    }
+  },
+
   async getFavorites(query?: FavoriteListQuery): Promise<{
     success: boolean;
     data: FavoriteItemResponse[];
