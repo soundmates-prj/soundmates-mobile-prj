@@ -1,14 +1,38 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import React, { useCallback, useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { DeviceEventEmitter, Image, PanResponder, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { blogService } from '../../api';
 import Animated, {
     useAnimatedStyle,
     useSharedValue,
+    withSequence,
     withSpring,
 } from 'react-native-reanimated';
 import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
+
+export type ReactionType = 'like' | 'love' | 'haha' | 'wow' | 'sad' | 'angry';
+
+export interface ReactionMeta {
+    type: ReactionType;
+    label: string;
+    icon: string;         // Ionicons name
+    iconFilled: string;   // Ionicons filled name
+    color: string;
+}
+
+export const REACTIONS: ReactionMeta[] = [
+    { type: 'like',  label: 'Thích',     icon: 'thumbs-up-outline',  iconFilled: 'thumbs-up',    color: '#1877F2' },
+    { type: 'love',  label: 'Yêu thích', icon: 'heart-outline',      iconFilled: 'heart',        color: '#F33E58' },
+    { type: 'haha',  label: 'Haha',      icon: 'happy-outline',      iconFilled: 'happy',        color: '#F5B301' },
+    { type: 'wow',   label: 'Wow',       icon: 'sparkles-outline',   iconFilled: 'sparkles',     color: '#7C3AED' },
+    { type: 'sad',   label: 'Buồn',      icon: 'sad-outline',        iconFilled: 'sad',          color: '#0EA5E9' },
+    { type: 'angry', label: 'Phẫn nộ',   icon: 'flame-outline',      iconFilled: 'flame',        color: '#F97316' },
+];
+
+export const getReactionMeta = (type: ReactionType | string | null): ReactionMeta | null =>
+    REACTIONS.find((r) => r.type === type) ?? null;
 
 export interface SharedMusic {
     trackId: string;
@@ -26,7 +50,6 @@ export interface DisplayPost {
     userAvatarUrl?: string;
     title: string;
     contentText: string;
-    /** API may return 'imageUrl' or 'imgUrl' */
     imageUrl?: string | null;
     imgUrl?: string | null;
     audioUrl?: string | null;
@@ -40,6 +63,7 @@ export interface DisplayPost {
     commentCount: number;
     viewCount: number;
     isLiked: boolean;
+    myReactionType?: ReactionType | null;
 }
 
 export function formatTimeAgo(dateStr: string): string {
@@ -72,53 +96,216 @@ export function formatNumber(n: number): string {
 
 export interface BlogPostCardProps {
     post: DisplayPost;
-    onLike: () => void;
+    onReaction: (reactionType: ReactionType | null) => void;
+    /** @deprecated Use onReaction instead */
+    onLike?: () => void;
     onNavigateToDetail?: (postId: string) => void;
     showOwnerActions?: boolean;
     onEdit?: (postId: string) => void;
     onDelete?: (postId: string) => void;
 }
 
-export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerActions = false, onEdit, onDelete }: BlogPostCardProps) {
+export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, showOwnerActions = false, onEdit, onDelete }: BlogPostCardProps) {
     const { isDarkMode } = useTheme();
     const palette = isDarkMode ? SoundMateDarkColors : SoundMateLightColors;
     const isDraftPost = post.status?.toLowerCase?.() === 'draft';
-    const [isLikedLocal, setIsLikedLocal] = useState(post.isLiked);
-    const [likeCountLocal, setLikeCountLocal] = useState(post.reactionCount);
+    const [myReaction, setMyReaction] = useState<ReactionType | null>(post.myReactionType ?? (post.isLiked ? 'like' : null));
+    const [reactionCountLocal, setReactionCountLocal] = useState(post.reactionCount);
     const [showOwnerMenu, setShowOwnerMenu] = useState(false);
+    const [topReactions, setTopReactions] = useState<ReactionType[]>([]);
 
     useEffect(() => {
-        setIsLikedLocal(post.isLiked);
-        setLikeCountLocal(post.reactionCount);
+        setMyReaction(post.myReactionType ?? (post.isLiked ? 'like' : null));
+        setReactionCountLocal(post.reactionCount);
         setShowOwnerMenu(false);
-    }, [post.id, post.isLiked, post.reactionCount]);
+    }, [post.id, post.isLiked, post.reactionCount, post.myReactionType]);
+
+    useEffect(() => {
+        if (!isDraftPost) {
+            blogService.getPostReactions(post.id).then(res => {
+                if (res.success && res.data) {
+                    const reactionCounts: Record<string, number> = {};
+                    res.data.forEach(r => {
+                        const t = r.reactionType || 'like';
+                        reactionCounts[t] = (reactionCounts[t] || 0) + 1;
+                    });
+                    
+                    const sorted = Object.entries(reactionCounts)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 2)
+                        .map(([type]) => type as ReactionType);
+                        
+                    setTopReactions(sorted);
+                }
+            }).catch(() => {});
+        }
+    }, [post.id, isDraftPost]);
+
+    const displayReactions = useMemo(() => {
+        let arr = [...topReactions];
+        if (myReaction) {
+            if (!arr.includes(myReaction)) {
+                arr.unshift(myReaction);
+            } else {
+                arr = [myReaction, ...arr.filter(t => t !== myReaction)];
+            }
+        }
+        return arr.slice(0, 2);
+    }, [topReactions, myReaction]);
+
+    const finalReactions = useMemo(() => {
+        if (reactionCountLocal === 0) return [];
+        if (displayReactions.length > 0) return displayReactions;
+        return myReaction ? [myReaction] : ['like'] as ReactionType[];
+    }, [reactionCountLocal, displayReactions, myReaction]);
 
     const displayName = post.userFullName;
     const avatarUri = post.userAvatarUrl
         || `https://api.dicebear.com/7.x/initials/png?seed=${post.userId}&backgroundColor=55C5F1`;
 
-    // Animation for like button
-    const likeScale = useSharedValue(1);
+    const reactionScale = useSharedValue(1);
+    const myReactionRef = useRef(myReaction);
+    myReactionRef.current = myReaction;
 
-    const handleLikePress = useCallback(() => {
-        setShowOwnerMenu(false);
+    const onReactionRef = useRef(onReaction);
+    onReactionRef.current = onReaction;
+
+    const handleReactionSelect = useCallback((type: ReactionType) => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        likeScale.value = withSpring(1.5, {}, () => {
-            likeScale.value = withSpring(1);
-        });
-        setIsLikedLocal(!isLikedLocal);
-        setLikeCountLocal(prev => isLikedLocal ? prev - 1 : prev + 1);
-        onLike();
-    }, [isLikedLocal, likeScale, onLike]);
+        reactionScale.value = withSequence(
+            withSpring(1.4, { damping: 4 }),
+            withSpring(1, { damping: 8 }),
+        );
+
+        let newReaction: ReactionType | null = null;
+        if (myReactionRef.current === type) {
+            setMyReaction(null);
+            setReactionCountLocal(prev => Math.max(0, prev - 1));
+            newReaction = null;
+        } else {
+            const wasNull = myReactionRef.current === null;
+            setMyReaction(type);
+            if (wasNull) {
+                setReactionCountLocal(prev => prev + 1);
+            }
+            newReaction = type;
+        }
+
+        onReactionRef.current(newReaction);
+    }, [reactionScale]);
+
+    const handleQuickReaction = useCallback(() => {
+        setShowOwnerMenu(false);
+        handleReactionSelect(myReactionRef.current ?? 'like');
+    }, [handleReactionSelect]);
+
+    // PanResponder implementation for Drag-to-React
+    const [hoveredReaction, _setHoveredReaction] = useState<ReactionType | null>(null);
+    const hoveredReactionRef = useRef<ReactionType | null>(null);
+    const setHoveredReaction = useCallback((val: ReactionType | null) => {
+        if (hoveredReactionRef.current !== val) {
+            hoveredReactionRef.current = val;
+            _setHoveredReaction(val);
+            if (val) Haptics.selectionAsync();
+        }
+    }, []);
+
+    const showReactionPickerRef = useRef(false);
+    const [showReactionPickerFallback, setShowReactionPickerFallback] = useState(false);
+    const setPickerVisible = useCallback((val: boolean) => {
+        showReactionPickerRef.current = val;
+        setShowReactionPickerFallback(val);
+    }, []);
+
+    const touchStartY = useRef(0);
+    const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const reactionPanResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponderCapture: () => true,
+            onPanResponderTerminationRequest: () => false,
+            onPanResponderGrant: (evt) => {
+                DeviceEventEmitter.emit('GlobalScrollEnabled', false);
+                touchStartY.current = evt.nativeEvent.pageY;
+                longPressTimer.current = setTimeout(() => {
+                    setPickerVisible(true);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                }, 400);
+            },
+            onPanResponderMove: (evt, gestureState) => {
+                if (showReactionPickerRef.current) {
+                    const y = touchStartY.current - evt.nativeEvent.pageY;
+                    const isAboveButton = y > 20 && y < 140;
+                    if (isAboveButton) {
+                        const pickerStartX = 10; 
+                        const iconWidth = 50; 
+                        const x = evt.nativeEvent.pageX - pickerStartX;
+                        const index = Math.floor(x / iconWidth);
+                        if (index >= 0 && index < REACTIONS.length) {
+                            setHoveredReaction(REACTIONS[index].type);
+                        } else {
+                            setHoveredReaction(null);
+                        }
+                    } else {
+                        setHoveredReaction(null);
+                    }
+                } else {
+                    if (Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10) {
+                        if (longPressTimer.current) clearTimeout(longPressTimer.current);
+                    }
+                }
+            },
+            onPanResponderRelease: (evt, gestureState) => {
+                DeviceEventEmitter.emit('GlobalScrollEnabled', true);
+                const isDraggingBeforePicker = !showReactionPickerRef.current && (Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10);
+
+                if (longPressTimer.current) {
+                    clearTimeout(longPressTimer.current);
+                    longPressTimer.current = null;
+                }
+                if (showReactionPickerRef.current) {
+                    const y = touchStartY.current - evt.nativeEvent.pageY;
+                    const isAboveButton = y > 20 && y < 140;
+                    let selectedType: ReactionType | null = null;
+                    if (isAboveButton) {
+                        const pickerStartX = 10;
+                        const iconWidth = 50;
+                        const x = evt.nativeEvent.pageX - pickerStartX;
+                        const index = Math.floor(x / iconWidth);
+                        if (index >= 0 && index < REACTIONS.length) {
+                            selectedType = REACTIONS[index].type;
+                        }
+                    }
+                    
+                    setPickerVisible(false);
+                    setHoveredReaction(null);
+
+                    if (selectedType) {
+                        handleReactionSelect(selectedType);
+                    }
+                } else {
+                    if (!isDraggingBeforePicker) {
+                        handleQuickReaction();
+                    }
+                }
+            },
+            onPanResponderTerminate: () => {
+                DeviceEventEmitter.emit('GlobalScrollEnabled', true);
+                if (longPressTimer.current) clearTimeout(longPressTimer.current);
+                setPickerVisible(false);
+                setHoveredReaction(null);
+            }
+        })
+    ).current;
 
     const handleNavigateToDetail = useCallback(() => {
         setShowOwnerMenu(false);
-
         if (isDraftPost && onEdit) {
             onEdit(post.id);
             return;
         }
-
         onNavigateToDetail?.(post.id);
     }, [isDraftPost, onEdit, onNavigateToDetail, post.id]);
 
@@ -132,220 +319,284 @@ export function BlogPostCard({ post, onLike, onNavigateToDetail, showOwnerAction
         onDelete?.(post.id);
     }, [onDelete, post.id]);
 
-    const likeAnimationStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: likeScale.value }],
+    const reactionAnimationStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: reactionScale.value }],
     }));
+
+    const currentReactionMeta = myReaction ? getReactionMeta(myReaction) : null;
 
     return (
         <View
             style={[
-                styles.card,
+                styles.cardWrapper,
                 isDraftPost ? styles.draftCard : null,
                 {
-                    backgroundColor: palette.surface,
-                    borderColor: isDraftPost ? '#F59E0B' : palette.border,
-                    ...palette.shadow.small,
+                    shadowColor: '#000',
+                    shadowOpacity: isDarkMode ? 0.3 : 0.05,
+                    shadowRadius: 10,
+                    shadowOffset: { width: 0, height: 4 },
+                    elevation: 3,
                 },
             ]}
         >
-            {/* Header: Avatar & User Info */}
-            <View style={styles.cardHeader}>
-                <View style={styles.userInfo}>
-                    <Image
-                        source={{ uri: avatarUri }}
-                        style={styles.avatar}
-                    />
-                    <View>
-                        <View style={styles.usernameRow}>
-                            <Text style={[styles.username, { color: palette.textPrimary }]}>
-                                {displayName}
+            <View style={[styles.cardInner, { backgroundColor: palette.surface, borderColor: isDraftPost ? '#F59E0B' : palette.border }]}>
+                {/* Header: Avatar & User Info */}
+                <View style={styles.cardHeader}>
+                    <View style={styles.userInfo}>
+                        <Image
+                            source={{ uri: avatarUri }}
+                            style={styles.avatar}
+                        />
+                        <View>
+                            <View style={styles.usernameRow}>
+                                <Text style={[styles.username, { color: palette.textPrimary }]}>
+                                    {displayName}
+                                </Text>
+                                {isDraftPost && (
+                                    <View style={styles.draftBadge}>
+                                        <Ionicons name="document-text-outline" size={12} color="#B45309" />
+                                        <Text style={styles.draftBadgeText}>Nháp</Text>
+                                    </View>
+                                )}
+                            </View>
+                            <Text style={[styles.timeAgo, { color: isDraftPost ? '#B45309' : palette.textMuted }]}>
+                                {isDraftPost ? 'Chưa đăng công khai' : formatTimeAgo(post.publishedAt || post.createdAt)}
                             </Text>
-                            {isDraftPost && (
-                                <View style={styles.draftBadge}>
-                                    <Ionicons name="document-text-outline" size={12} color="#B45309" />
-                                    <Text style={styles.draftBadgeText}>Nháp</Text>
+                        </View>
+                    </View>
+                    {showOwnerActions ? (
+                        <View style={styles.ownerActionsWrap}>
+                            <TouchableOpacity
+                                style={styles.moreButton}
+                                onPress={() => setShowOwnerMenu((prev) => !prev)}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons name="ellipsis-horizontal" size={20} color={palette.textMuted} />
+                            </TouchableOpacity>
+
+                            {showOwnerMenu && (
+                                <View style={[styles.ownerMenu, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+                                    <TouchableOpacity style={styles.ownerMenuItem} activeOpacity={0.8} onPress={handleOwnerMenuEdit}>
+                                        <Ionicons name="create-outline" size={16} color={palette.textPrimary} />
+                                        <Text style={[styles.ownerMenuItemText, { color: palette.textPrimary }]}>Chỉnh sửa</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.ownerMenuItem} activeOpacity={0.8} onPress={handleOwnerMenuDelete}>
+                                        <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                                        <Text style={[styles.ownerMenuItemText, { color: '#EF4444' }]}>Xóa</Text>
+                                    </TouchableOpacity>
                                 </View>
                             )}
                         </View>
-                        <Text style={[styles.timeAgo, { color: isDraftPost ? '#B45309' : palette.textMuted }]}>
-                            {isDraftPost ? 'Chưa đăng công khai' : formatTimeAgo(post.publishedAt || post.createdAt)}
-                        </Text>
-                    </View>
-                </View>
-                {showOwnerActions ? (
-                    <View style={styles.ownerActionsWrap}>
-                        <TouchableOpacity
-                            style={styles.moreButton}
-                            onPress={() => setShowOwnerMenu((prev) => !prev)}
-                            activeOpacity={0.7}
-                        >
-                            <Ionicons name="ellipsis-horizontal" size={20} color={palette.textMuted} />
+                    ) : (
+                        <TouchableOpacity style={styles.moreButton} activeOpacity={0.7}>
+                            <Ionicons name="flag-outline" size={18} color={palette.textMuted} />
                         </TouchableOpacity>
+                    )}
+                </View>
 
-                        {showOwnerMenu && (
-                            <View style={[styles.ownerMenu, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-                                <TouchableOpacity style={styles.ownerMenuItem} activeOpacity={0.8} onPress={handleOwnerMenuEdit}>
-                                    <Ionicons name="create-outline" size={16} color={palette.textPrimary} />
-                                    <Text style={[styles.ownerMenuItemText, { color: palette.textPrimary }]}>Chỉnh sửa</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.ownerMenuItem} activeOpacity={0.8} onPress={handleOwnerMenuDelete}>
-                                    <Ionicons name="trash-outline" size={16} color="#EF4444" />
-                                    <Text style={[styles.ownerMenuItemText, { color: '#EF4444' }]}>Xóa</Text>
-                                </TouchableOpacity>
+                {showOwnerMenu && (
+                    <Pressable style={styles.ownerMenuBackdrop} onPress={() => setShowOwnerMenu(false)} />
+                )}
+
+                {/* Content: ShareMusic / Image / Text */}
+                <TouchableOpacity
+                    activeOpacity={0.95}
+                    onPress={handleNavigateToDetail}
+                    style={styles.contentContainer}
+                >
+                    {(post.postType?.toLowerCase() === 'share-music' || post.postType?.toLowerCase() === 'sharemusic' || !!post.shareMusic) && post.shareMusic ? (
+                        <View style={styles.shareMusicContainer}>
+                            {!!post.title && (
+                                <Text style={[styles.imagePostTitle, { color: palette.textPrimary, paddingHorizontal: 14, paddingBottom: 10 }]} numberOfLines={2}>
+                                    {post.title}
+                                </Text>
+                            )}
+                            <View style={[styles.shareMusicCard, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}>
+                                {post.shareMusic.albumImage ? (
+                                    <Image source={{ uri: post.shareMusic.albumImage }} style={styles.shareMusicImage} />
+                                ) : (
+                                    <View style={[styles.shareMusicImage, { backgroundColor: palette.primary + '30', justifyContent: 'center', alignItems: 'center' }]}>
+                                        <Ionicons name="musical-notes" size={24} color={palette.primary} />
+                                    </View>
+                                )}
+                                <View style={styles.shareMusicInfo}>
+                                    <Text style={[styles.shareMusicSongTitle, { color: palette.textPrimary }]} numberOfLines={1}>
+                                        {post.shareMusic.title}
+                                    </Text>
+                                    <Text style={[styles.shareMusicArtist, { color: palette.textSecondary }]} numberOfLines={1}>
+                                        {post.shareMusic.artist}
+                                    </Text>
+                                </View>
+                                <View style={[styles.shareMusicPlayBtn, { backgroundColor: palette.primary }]}>
+                                    <Ionicons name="play" size={18} color="#FFFFFF" />
+                                </View>
                             </View>
-                        )}
+                        </View>
+                    ) : (post.imageUrl || post.imgUrl) ? (
+                        <>
+                            <View style={styles.imagePostMeta}>
+                                <Text style={[styles.imagePostTitle, { color: palette.textPrimary }]} numberOfLines={2}>
+                                    {post.title}
+                                </Text>
+                                {!!post.contentText && (
+                                    <Text style={[styles.imagePostContent, { color: palette.textSecondary }]} numberOfLines={3}>
+                                        {post.contentText}
+                                    </Text>
+                                )}
+                                {!!post.moodTag && (
+                                    <View style={[styles.imagePostTag, { backgroundColor: palette.primary + '18' }]}>
+                                        <Text style={[styles.imagePostTagText, { color: palette.primary }]}>#{post.moodTag}</Text>
+                                    </View>
+                                )}
+                            </View>
+                            <View style={styles.imageWrapper}>
+                                <Image source={{ uri: post.imageUrl || post.imgUrl! }} style={styles.postImage} resizeMode="cover" />
+                                {post.audioUrl && (
+                                    <View style={styles.audioIndicator}>
+                                        <Ionicons name="musical-notes" size={14} color="#FFF" />
+                                    </View>
+                                )}
+                            </View>
+                        </>
+                    ) : (
+                        <View style={[styles.textOnlyContent, { backgroundColor: palette.primary + '03' }]}>
+                            <Text style={[styles.textTitle, { color: palette.textPrimary }]}>{post.title}</Text>
+                            <Text style={[styles.textContent, { color: palette.textSecondary }]} numberOfLines={4}>
+                                {post.contentText}
+                            </Text>
+                        </View>
+                    )}
+                </TouchableOpacity>
+
+                {isDraftPost ? (
+                    <View style={styles.draftFooter}>
+                        <View style={styles.draftHintRow}>
+                            <Ionicons name="information-circle-outline" size={14} color="#B45309" />
+                            <Text style={styles.draftHintText}>Bài viết đang ở trạng thái nháp và chưa hiển thị công khai.</Text>
+                        </View>
+                        <TouchableOpacity style={styles.draftContinueButton} onPress={handleOwnerMenuEdit} activeOpacity={0.85}>
+                            <Ionicons name="create-outline" size={15} color="#FFFFFF" />
+                            <Text style={styles.draftContinueButtonText}>Tiếp tục chỉnh sửa</Text>
+                        </TouchableOpacity>
                     </View>
                 ) : (
-                    <TouchableOpacity style={styles.moreButton}>
-                        <Ionicons name="flag-outline" size={18} color={palette.textMuted} />
-                    </TouchableOpacity>
+                    <>
+                        {/* Stats Summary (Facebook style) */}
+                        {(reactionCountLocal > 0 || post.commentCount > 0) && (
+                            <View style={styles.statsSummary}>
+                                {reactionCountLocal > 0 ? (
+                                    <View style={styles.reactionSummaryGroup}>
+                                        {finalReactions.map((type, index) => {
+                                            const meta = getReactionMeta(type);
+                                            if (!meta) return null;
+                                            return (
+                                                <View 
+                                                    key={type} 
+                                                    style={[
+                                                        styles.reactionSummaryIconWrap, 
+                                                        { 
+                                                            backgroundColor: meta.color,
+                                                            marginLeft: index > 0 ? -4 : 0, 
+                                                            zIndex: 10 - index
+                                                        }
+                                                    ]}
+                                                >
+                                                    <Ionicons name={meta.iconFilled as any} size={10} color="#FFF" />
+                                                </View>
+                                            );
+                                        })}
+                                        <Text style={[styles.statsSummaryText, { color: palette.textSecondary, marginLeft: 6 }]}>
+                                            {formatNumber(reactionCountLocal)}
+                                        </Text>
+                                    </View>
+                                ) : <View />}
+                                {post.commentCount > 0 && (
+                                    <TouchableOpacity onPress={handleNavigateToDetail}>
+                                        <Text style={[styles.statsSummaryText, { color: palette.textSecondary }]}>
+                                            {formatNumber(post.commentCount)} bình luận
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        )}
+
+                        {/* Actions: Reaction, Comment, Share */}
+                        <View style={styles.actionsBar}>
+                            <View style={styles.leftActions}>
+                                {/* Reaction button — connected to custom drag-to-react PanResponder */}
+                                <View 
+                                    style={[
+                                        styles.reactionBtn,
+                                        currentReactionMeta ? { backgroundColor: currentReactionMeta.color + '15' } : null,
+                                    ]}
+                                    {...reactionPanResponder.panHandlers}
+                                >
+                                    <Animated.View style={reactionAnimationStyle} pointerEvents="none">
+                                        <Ionicons
+                                            name={(currentReactionMeta?.iconFilled ?? 'thumbs-up-outline') as any}
+                                            size={20}
+                                            color={currentReactionMeta?.color ?? palette.textSecondary}
+                                        />
+                                    </Animated.View>
+                                    <Text style={[
+                                        styles.reactionBtnLabel,
+                                        { color: currentReactionMeta?.color ?? palette.textSecondary },
+                                    ]} pointerEvents="none">
+                                        {currentReactionMeta?.label ?? 'Thích'}
+                                    </Text>
+                                </View>
+
+                                <TouchableOpacity style={styles.actionButton} onPress={handleNavigateToDetail}>
+                                    <Ionicons name="chatbubble-outline" size={20} color={palette.textSecondary} />
+                                    <Text style={[styles.actionBtnLabel, { color: palette.textSecondary }]}>Bình luận</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity style={styles.actionButton}>
+                                    <Ionicons name="arrow-redo-outline" size={20} color={palette.textSecondary} />
+                                    <Text style={[styles.actionBtnLabel, { color: palette.textSecondary }]}>Chia sẻ</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </>
                 )}
             </View>
 
-            {showOwnerMenu && (
-                <Pressable style={styles.ownerMenuBackdrop} onPress={() => setShowOwnerMenu(false)} />
-            )}
-
-            {/* Content: Image or Text */}
-            <TouchableOpacity
-                activeOpacity={0.95}
-                onPress={handleNavigateToDetail}
-                style={styles.contentContainer}
-            >
-                {(post.postType?.toLowerCase() === 'share-music' || post.postType?.toLowerCase() === 'sharemusic' || !!post.shareMusic) && post.shareMusic ? (
-                    <View style={styles.shareMusicContainer}>
-                        {!!post.title && (
-                            <Text style={[styles.imagePostTitle, { color: palette.textPrimary, paddingHorizontal: 14, paddingBottom: 10 }]} numberOfLines={2}>
-                                {post.title}
-                            </Text>
-                        )}
-                        <View style={[styles.shareMusicCard, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}>
-                            {post.shareMusic.albumImage ? (
-                                <Image source={{ uri: post.shareMusic.albumImage }} style={styles.shareMusicImage} />
-                            ) : (
-                                <View style={[styles.shareMusicImage, { backgroundColor: palette.primary + '30', justifyContent: 'center', alignItems: 'center' }]}>
-                                    <Ionicons name="musical-notes" size={24} color={palette.primary} />
+            {/* Reaction Picker Absolute View */}
+            {showReactionPickerFallback && (
+                <View style={[styles.absolutePickerContainer, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+                    {REACTIONS.map((reaction) => {
+                        const isHovered = hoveredReaction === reaction.type;
+                        const isSelectedAndNoHover = myReaction === reaction.type && !hoveredReaction;
+                        const isActive = isHovered || isSelectedAndNoHover;
+                        
+                        return (
+                            <View
+                                key={reaction.type}
+                                style={[
+                                    styles.pickerItem,
+                                    isActive && { backgroundColor: reaction.color + '20', transform: [{ scale: 1.15 }] },
+                                ]}
+                            >
+                                <View style={[styles.pickerIconWrap, { backgroundColor: reaction.color }]}>
+                                    <Ionicons name={reaction.iconFilled as any} size={18} color="#FFF" />
                                 </View>
-                            )}
-                            <View style={styles.shareMusicInfo}>
-                                <Text style={[styles.shareMusicSongTitle, { color: palette.textPrimary }]} numberOfLines={1}>
-                                    {post.shareMusic.title}
-                                </Text>
-                                <Text style={[styles.shareMusicArtist, { color: palette.textSecondary }]} numberOfLines={1}>
-                                    {post.shareMusic.artist}
-                                </Text>
                             </View>
-                            <View style={[styles.shareMusicPlayBtn, { backgroundColor: palette.primary }]}>
-                                <Ionicons name="play" size={18} color="#FFFFFF" />
-                            </View>
-                        </View>
-                    </View>
-                ) : (post.imageUrl || post.imgUrl) ? (
-                    <>
-                        <View style={styles.imagePostMeta}>
-                            <Text style={[styles.imagePostTitle, { color: palette.textPrimary }]} numberOfLines={2}>
-                                {post.title}
-                            </Text>
-                            {!!post.contentText && (
-                                <Text style={[styles.imagePostContent, { color: palette.textSecondary }]} numberOfLines={3}>
-                                    {post.contentText}
-                                </Text>
-                            )}
-                            {!!post.moodTag && (
-                                <View style={[styles.imagePostTag, { backgroundColor: palette.primary + '18' }]}>
-                                    <Text style={[styles.imagePostTagText, { color: palette.primary }]}>#{post.moodTag}</Text>
-                                </View>
-                            )}
-                        </View>
-                        <View style={styles.imageWrapper}>
-                            <Image source={{ uri: post.imageUrl || post.imgUrl! }} style={styles.postImage} resizeMode="cover" />
-                            {post.audioUrl && (
-                                <View style={styles.audioIndicator}>
-                                    <Ionicons name="musical-notes" size={14} color="#FFF" />
-                                </View>
-                            )}
-                        </View>
-                    </>
-                ) : (
-                    <View style={[styles.textOnlyContent, { backgroundColor: palette.primary + '05' }]}>
-                        <Text style={[styles.textTitle, { color: palette.textPrimary }]}>{post.title}</Text>
-                        <Text style={[styles.textContent, { color: palette.textSecondary }]} numberOfLines={4}>
-                            {post.contentText}
-                        </Text>
-                    </View>
-                )}
-            </TouchableOpacity>
-
-            {isDraftPost ? (
-                <View style={styles.draftFooter}>
-                    <View style={styles.draftHintRow}>
-                        <Ionicons name="information-circle-outline" size={14} color="#B45309" />
-                        <Text style={styles.draftHintText}>Bài viết đang ở trạng thái nháp và chưa hiển thị công khai.</Text>
-                    </View>
-                    <TouchableOpacity style={styles.draftContinueButton} onPress={handleOwnerMenuEdit} activeOpacity={0.85}>
-                        <Ionicons name="create-outline" size={15} color="#FFFFFF" />
-                        <Text style={styles.draftContinueButtonText}>Tiếp tục chỉnh sửa</Text>
-                    </TouchableOpacity>
+                        );
+                    })}
                 </View>
-            ) : (
-                <>
-                    {/* Actions: Like, Comment, Share */}
-                    <View style={styles.actionsBar}>
-                        <View style={styles.leftActions}>
-                            <TouchableOpacity onPress={handleLikePress} style={styles.actionButton}>
-                                <Animated.View style={likeAnimationStyle}>
-                                    <Ionicons
-                                        name={isLikedLocal ? "thumbs-up" : "thumbs-up-outline"}
-                                        size={26}
-                                        color={isLikedLocal ? "#2563EB" : palette.textPrimary}
-                                    />
-                                </Animated.View>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.actionButton} onPress={handleNavigateToDetail}>
-                                <Ionicons name="chatbubble-outline" size={24} color={palette.textPrimary} />
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.actionButton}>
-                                <Ionicons name="paper-plane-outline" size={24} color={palette.textPrimary} />
-                            </TouchableOpacity>
-                        </View>
-                        <TouchableOpacity style={styles.actionButton}>
-                            <Ionicons name="bookmark-outline" size={24} color={palette.textPrimary} />
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Bottom Info: Likes & Caption */}
-                    <View style={styles.cardFooter}>
-                        <Text style={[styles.likesCount, { color: palette.textPrimary }]}>
-                            {formatNumber(likeCountLocal)} lượt thích
-                        </Text>
-                        {/* {(post.imageUrl || post.imgUrl) && (
-                            <View style={styles.captionRow}>
-                                <Text style={[styles.captionUsername, { color: palette.textPrimary }]}>
-                                    {displayName}{' '}
-                                    <Text style={[styles.captionText, { color: palette.textSecondary }]}> 
-                                        {post.title}
-                                    </Text>
-                                </Text>
-                            </View>
-                        )} */}
-                        {post.commentCount > 0 && (
-                            <TouchableOpacity onPress={handleNavigateToDetail}>
-                                <Text style={[styles.viewComments, { color: palette.textMuted }]}>
-                                    Xem tất cả {post.commentCount} bình luận
-                                </Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                </>
             )}
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    card: {
+    cardWrapper: {
         marginHorizontal: 16,
         marginBottom: 14,
+        position: 'relative',
+        zIndex: 1, // needed to establish stacking context
+    },
+    cardInner: {
         borderRadius: 16,
         borderWidth: 1,
         overflow: 'hidden',
@@ -564,42 +815,98 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingLeft: 3,
     },
+    statsSummary: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 14,
+        paddingBottom: 12,
+        paddingTop: 8,
+    },
+    reactionSummaryGroup: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    reactionSummaryIconWrap: {
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    statsSummaryText: {
+        fontSize: 13,
+        fontWeight: '500',
+    },
     actionsBar: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 10,
-        paddingVertical: 8,
+        paddingVertical: 6,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: 'rgba(0,0,0,0.06)',
     },
     leftActions: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 4,
+    },
+    reactionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 10,
+        backgroundColor: 'transparent',
+    },
+    reactionBtnLabel: {
+        fontSize: 13,
+        fontWeight: '700',
     },
     actionButton: {
-        padding: 8,
-    },
-    cardFooter: {
-        paddingHorizontal: 16,
-        paddingBottom: 14,
-    },
-    likesCount: {
-        fontSize: 14,
-        fontWeight: '700',
-        marginBottom: 6,
-    },
-    captionRow: {
         flexDirection: 'row',
-        marginBottom: 6,
+        alignItems: 'center',
+        gap: 5,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        borderRadius: 10,
     },
-    captionUsername: {
-        fontSize: 14,
-        fontWeight: '700',
+    actionBtnLabel: {
+        fontSize: 13,
+        fontWeight: '600',
     },
-    captionText: {
-        fontWeight: '400',
+    absolutePickerContainer: {
+        position: 'absolute',
+        bottom: 54, // Sit perfectly above actions bar inside the card wrapper
+        left: 10,
+        flexDirection: 'row',
+        borderRadius: 24,
+        borderWidth: 1,
+        paddingVertical: 8,
+        paddingHorizontal: 8,
+        gap: 6,
+        shadowColor: '#000000',
+        shadowOpacity: 0.18,
+        shadowRadius: 15,
+        shadowOffset: { width: 0, height: 6 },
+        elevation: 12,
+        zIndex: 999, // Render above the inner card content
     },
-    viewComments: {
-        fontSize: 14,
-        marginTop: 4,
+    pickerItem: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+    },
+    pickerIconWrap: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
 });

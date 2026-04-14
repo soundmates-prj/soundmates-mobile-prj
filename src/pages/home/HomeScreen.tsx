@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Dimensions, Easing, Image, Linking, PanResponder, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Dimensions, Easing, Image, Linking, PanResponder, RefreshControl, ScrollView, Text, TouchableOpacity, View, DeviceEventEmitter } from 'react-native';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import {
     blogService,
@@ -14,7 +14,7 @@ import {
     SpotifyTrack,
     userPlaylistService,
 } from '../../api';
-import { BlogPostCard, DisplayPost } from '../../components/blog/BlogPostCard';
+import { BlogPostCard, DisplayPost, ReactionType } from '../../components/blog/BlogPostCard';
 import FormTextField from '../../components/ui/FormTextField';
 import { useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
@@ -163,6 +163,38 @@ export default function HomeScreen({
     const [searchInput, setSearchInput] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [searchSuggestions, setSearchSuggestions] = useState<SearchSuggestionItem[]>([]);
+
+    const [globalScrollEnabled, setGlobalScrollEnabled] = useState(true);
+
+    useEffect(() => {
+        const sub = DeviceEventEmitter.addListener('GlobalScrollEnabled', (enabled: boolean) => {
+            setGlobalScrollEnabled(enabled);
+        });
+
+        const reactSub = DeviceEventEmitter.addListener('PostReactionUpdated', ({ postId, newReaction }) => {
+            setCommunityPosts((prevPosts) =>
+                prevPosts.map((post) => {
+                    if (post.id !== postId) return post;
+                    const currentReaction = post.myReactionType ?? (post.isLiked ? 'like' : null);
+                    if (currentReaction === newReaction) return post;
+
+                    const isRemoving = newReaction === null;
+                    if (isRemoving) {
+                        return { ...post, isLiked: false, myReactionType: null, reactionCount: Math.max(0, post.reactionCount - 1) };
+                    } else {
+                        const countDelta = currentReaction ? 0 : 1;
+                        return { ...post, isLiked: true, myReactionType: newReaction, reactionCount: post.reactionCount + countDelta };
+                    }
+                })
+            );
+        });
+
+        return () => {
+            sub.remove();
+            reactSub.remove();
+        };
+    }, []);
+
     const [searchResultBundle, setSearchResultBundle] = useState<SearchResultBundle | null>(null);
     const [isProfileMainTabSwipeLocked, setIsProfileMainTabSwipeLocked] = useState(false);
     const [isSearchingSuggestions, setIsSearchingSuggestions] = useState(false);
@@ -628,45 +660,40 @@ export default function HomeScreen({
         setActiveTab('live');
     }, [onNavigateToLiveSession, todaySchedules]);
 
-    const handleToggleCommunityLike = useCallback(async (postId: string) => {
-        const targetPost = communityPosts.find((post) => post.id === postId);
-        if (!targetPost) {
-            return;
-        }
+    const handleCommunityReaction = useCallback(async (postId: string, newReaction: ReactionType | null) => {
+        const targetPost = communityPosts.find((p) => p.id === postId);
+        if (!targetPost) return;
+
+        const currentReaction = targetPost.myReactionType;
+        const isRemoving = newReaction === null;
 
         setCommunityPosts((prevPosts) =>
             prevPosts.map((post) => {
-                if (post.id !== postId) {
-                    return post;
+                if (post.id !== postId) return post;
+                if (isRemoving) {
+                    return { ...post, isLiked: false, myReactionType: null, reactionCount: Math.max(0, post.reactionCount - 1) };
+                } else {
+                    const countDelta = currentReaction ? 0 : 1;
+                    return { ...post, isLiked: true, myReactionType: newReaction, reactionCount: post.reactionCount + countDelta };
                 }
-
-                const nextLiked = !post.isLiked;
-                return {
-                    ...post,
-                    isLiked: nextLiked,
-                    reactionCount: Math.max(0, post.reactionCount + (nextLiked ? 1 : -1)),
-                };
             }),
         );
 
         try {
-            const result = targetPost.isLiked
-                ? await blogService.removeReaction(postId)
-                : await blogService.addReaction(postId, 'like');
-
-            if (!result.success) {
-                throw new Error(result.message || 'Không thể cập nhật phản ứng');
+            if (isRemoving) {
+                await blogService.removeReaction(postId);
+            } else {
+                if (currentReaction) {
+                    await blogService.removeReaction(postId);
+                }
+                await blogService.addReaction(postId, newReaction!);
             }
         } catch (error) {
-            console.log('[HomeScreen] handleToggleCommunityLike error:', error);
+            console.log('[HomeScreen] handleCommunityReaction error:', error);
             setCommunityPosts((prevPosts) =>
                 prevPosts.map((post) =>
                     post.id === postId
-                        ? {
-                            ...post,
-                            isLiked: targetPost.isLiked,
-                            reactionCount: targetPost.reactionCount,
-                        }
+                        ? { ...post, isLiked: targetPost.isLiked, myReactionType: targetPost.myReactionType, reactionCount: targetPost.reactionCount }
                         : post,
                 ),
             );
@@ -747,10 +774,13 @@ export default function HomeScreen({
                         mappedPosts.map(async (post) => {
                             try {
                                 const reactions = await blogService.getPostReactions(post.id);
-                                const isLiked = !!reactions.data?.some((reaction) => reaction.userId === user.userId);
+                                const userReaction = reactions.data?.find((reaction) => reaction.userId === user.userId);
+                                const isLiked = !!userReaction;
+                                const myReactionType = userReaction ? (userReaction.reactionType as ReactionType) : null;
                                 return {
                                     ...post,
                                     isLiked,
+                                    myReactionType,
                                 };
                             } catch {
                                 return post;
@@ -873,21 +903,22 @@ export default function HomeScreen({
         }
     }, []);
 
+    const fetchAllData = useCallback(async (forceRefresh = false) => {
+        await Promise.all([fetchCommunityPosts(), fetchLiveBannerData(), fetchTodaySchedules(), fetchPersonalPlaylists()]);
+    }, [fetchCommunityPosts, fetchLiveBannerData, fetchTodaySchedules, fetchPersonalPlaylists]);
+
     const handleRefresh = useCallback(async () => {
         setIsRefreshing(true);
         try {
-            await Promise.all([fetchCommunityPosts(), fetchLiveBannerData(), fetchTodaySchedules(), fetchPersonalPlaylists()]);
+            await fetchAllData(true);
         } finally {
             setIsRefreshing(false);
         }
-    }, [fetchCommunityPosts, fetchLiveBannerData, fetchTodaySchedules, fetchPersonalPlaylists]);
+    }, [fetchAllData]);
 
     useEffect(() => {
         if (activeTab === 'home') {
-            fetchCommunityPosts();
-            fetchLiveBannerData();
-            fetchTodaySchedules();
-            fetchPersonalPlaylists();
+            fetchAllData();
         }
 
         const intervalId = setInterval(() => {
@@ -897,7 +928,7 @@ export default function HomeScreen({
         }, 10000);
 
         return () => clearInterval(intervalId);
-    }, [activeTab, fetchCommunityPosts, fetchLiveBannerData, fetchTodaySchedules, fetchPersonalPlaylists]);
+    }, [activeTab, fetchAllData, fetchLiveBannerData]);
 
     const liveBannerTitle = liveBannerData?.stationName || 'SoundMate Radio';
     const liveBannerHost = liveBannerData?.streamerName || 'Emily_vui';
@@ -908,16 +939,14 @@ export default function HomeScreen({
 
     const renderHomeTabContent = () => (
         <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
+            style={[styles.container, { backgroundColor: palette.background }]}
             refreshControl={
-                <RefreshControl
-                    refreshing={isRefreshing}
-                    onRefresh={() => void handleRefresh()}
-                    colors={[palette.primary]}
-                    tintColor={palette.primary}
-                />
+                <RefreshControl refreshing={isRefreshing} onRefresh={() => handleRefresh()} tintColor={palette.primary} />
             }
+            scrollEventThrottle={16}
+            showsVerticalScrollIndicator={false}
+            scrollEnabled={globalScrollEnabled}
+            contentContainerStyle={styles.scrollContent}
         >
             <LinearGradient
                 colors={isDarkMode ? ['#1F2937', '#0F172A', '#111827'] : ['#5CCAF2', '#3BB5E8', '#1E90D6']}
@@ -1300,7 +1329,7 @@ export default function HomeScreen({
                         <BlogPostCard
                             key={post.id}
                             post={post}
-                            onLike={() => handleToggleCommunityLike(post.id)}
+                            onReaction={(type) => handleCommunityReaction(post.id, type)}
                             onNavigateToDetail={(postId) => setSelectedPostId(postId)}
                         />
                     ))

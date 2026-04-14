@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { BlogPostCard, DisplayPost } from '../../../components/blog/BlogPostCard';
+import { BlogPostCard, DisplayPost, ReactionType } from '../../../components/blog/BlogPostCard';
 
 type Palette = {
   primary: string;
@@ -21,7 +21,7 @@ interface ProfilePostsTabProps {
   postsPage: number;
   postsTotalPages: number;
   onOpenCreatePost: () => void;
-  onLikePost: (postId: string) => void;
+  onReactPost: (postId: string, reactionType: ReactionType | null) => void;
   onOpenPostDetail: (postId: string) => void;
   onEditPost: (post: DisplayPost) => void;
   onDeletePost: (postId: string) => void;
@@ -38,7 +38,7 @@ export default function ProfilePostsTab({
   postsPage,
   postsTotalPages,
   onOpenCreatePost,
-  onLikePost,
+  onReactPost,
   onOpenPostDetail,
   onEditPost,
   onDeletePost,
@@ -85,7 +85,7 @@ export default function ProfilePostsTab({
             <BlogPostCard
               key={post.id}
               post={post}
-              onLike={() => onLikePost(post.id)}
+              onReaction={(type) => onReactPost(post.id, type)}
               onNavigateToDetail={onOpenPostDetail}
               showOwnerActions
               onEdit={() => onEditPost(post)}

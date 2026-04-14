@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  DeviceEventEmitter,
   Image,
   KeyboardAvoidingView,
   Linking,
@@ -36,7 +37,7 @@ import {
   UserPlaylistResponse,
   userPlaylistService,
 } from '../../api';
-import { DisplayPost } from '../../components/blog/BlogPostCard';
+import { DisplayPost, ReactionType } from '../../components/blog/BlogPostCard';
 import FormTextField from '../../components/ui/FormTextField';
 import { showToast } from '../../components/ui/Toast';
 import { useTheme } from '../../context/ThemeContext';
@@ -365,6 +366,37 @@ export default function ProfileScreen({
   const [isLoadingThemes, setIsLoadingThemes] = useState(false);
   const [previewThemeId, setPreviewThemeId] = useState<string | null>(null);
   const [appliedTheme, setAppliedTheme] = useState<ApiTheme | null>(null);
+
+  const [globalScrollEnabled, setGlobalScrollEnabled] = useState(true);
+
+  useEffect(() => {
+      const sub = DeviceEventEmitter.addListener('GlobalScrollEnabled', (enabled: boolean) => {
+          setGlobalScrollEnabled(enabled);
+      });
+
+      const reactSub = DeviceEventEmitter.addListener('PostReactionUpdated', ({ postId, newReaction }) => {
+          setMyPosts((prevPosts) =>
+              prevPosts.map((post) => {
+                  if (post.id !== postId) return post;
+                  const currentReaction = post.myReactionType ?? (post.isLiked ? 'like' : null);
+                  if (currentReaction === newReaction) return post;
+
+                  const isRemoving = newReaction === null;
+                  if (isRemoving) {
+                      return { ...post, isLiked: false, myReactionType: null, reactionCount: Math.max(0, post.reactionCount - 1) };
+                  } else {
+                      const countDelta = currentReaction ? 0 : 1;
+                      return { ...post, isLiked: true, myReactionType: newReaction, reactionCount: post.reactionCount + countDelta };
+                  }
+              })
+          );
+      });
+
+      return () => {
+          sub.remove();
+          reactSub.remove();
+      };
+  }, []);
 
   useEffect(() => {
     const loadSavedTheme = async () => {
@@ -1067,7 +1099,9 @@ export default function ProfileScreen({
 
               const stats = statsResult.success && statsResult.data ? statsResult.data : null;
               const reactions = reactionsResult.success && reactionsResult.data ? reactionsResult.data : [];
-              const isLiked = !!user && reactions.some((reaction: ReactionResponse) => reaction.userId === user.userId);
+              const userReaction = user ? reactions.find((reaction: ReactionResponse) => reaction.userId === user.userId) : null;
+              const isLiked = !!userReaction;
+              const myReactionType = userReaction ? (userReaction.reactionType as ReactionType) : null;
 
               return {
                 ...post,
@@ -1075,6 +1109,7 @@ export default function ProfileScreen({
                 commentCount: stats?.commentCount ?? post.commentCount,
                 viewCount: stats?.viewCount ?? post.viewCount,
                 isLiked,
+                myReactionType,
               };
             } catch {
               return post;
@@ -1109,6 +1144,8 @@ export default function ProfileScreen({
     }
   }, [user]);
 
+
+
   useEffect(() => {
     if (user?.userId) {
       fetchMyPosts(1);
@@ -1138,29 +1175,33 @@ export default function ProfileScreen({
     handlePostsRefresh();
   }, [activeProfileTab, handleFavoritesRefresh, handlePlaylistsRefresh, handlePostsRefresh]);
 
-  const handleLikePost = useCallback(async (postId: string) => {
+  const handleReactPost = useCallback(async (postId: string, newReaction: ReactionType | null) => {
     const targetPost = myPosts.find((post) => post.id === postId);
     if (!targetPost) return;
 
+    const currentReaction = targetPost.myReactionType ?? (targetPost.isLiked ? 'like' as ReactionType : null);
+    const isRemoving = newReaction === null;
+
     setMyPosts((prev) =>
-      prev.map((post) =>
-        post.id === postId
-          ? {
-            ...post,
-            isLiked: !post.isLiked,
-            reactionCount: post.isLiked ? post.reactionCount - 1 : post.reactionCount + 1,
-          }
-          : post,
-      ),
+      prev.map((post) => {
+        if (post.id !== postId) return post;
+        if (isRemoving) {
+          return { ...post, isLiked: false, myReactionType: null, reactionCount: Math.max(0, post.reactionCount - 1) };
+        } else {
+          const countDelta = currentReaction ? 0 : 1;
+          return { ...post, isLiked: true, myReactionType: newReaction, reactionCount: post.reactionCount + countDelta };
+        }
+      }),
     );
 
     try {
-      const result = targetPost.isLiked
-        ? await blogService.removeReaction(postId)
-        : await blogService.addReaction(postId, 'like');
-
-      if (!result.success) {
-        throw new Error(result.message || 'Like request failed');
+      if (isRemoving) {
+          await blogService.removeReaction(postId);
+      } else {
+          if (currentReaction) {
+              await blogService.removeReaction(postId);
+          }
+          await blogService.addReaction(postId, newReaction);
       }
     } catch (error) {
       setMyPosts((prev) =>
@@ -1169,12 +1210,13 @@ export default function ProfileScreen({
             ? {
               ...post,
               isLiked: targetPost.isLiked,
+              myReactionType: targetPost.myReactionType,
               reactionCount: targetPost.reactionCount,
             }
             : post,
         ),
       );
-      console.log('[ProfileScreen] handleLikePost error:', error);
+      console.log('[ProfileScreen] handleReactPost error:', error);
     }
   }, [myPosts]);
 
@@ -1271,6 +1313,7 @@ export default function ProfileScreen({
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
+        scrollEnabled={globalScrollEnabled}
         refreshControl={
           <RefreshControl
             refreshing={activeProfileTab === 'posts' ? isPostsRefreshing : activeProfileTab === 'playlists' ? isPlaylistsRefreshing : isFavoritesRefreshing}
@@ -1410,7 +1453,7 @@ export default function ProfileScreen({
             postsPage={postsPage}
             postsTotalPages={postsTotalPages}
             onOpenCreatePost={handleOpenCreatePost}
-            onLikePost={handleLikePost}
+            onReactPost={handleReactPost}
             onOpenPostDetail={setSelectedPostId}
             onEditPost={handleEditPost}
             onDeletePost={handleDeletePost}

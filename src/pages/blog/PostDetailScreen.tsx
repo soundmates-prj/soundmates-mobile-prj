@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    DeviceEventEmitter,
     Dimensions,
     Image,
     Keyboard,
@@ -17,9 +18,9 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInUp, useAnimatedStyle, useSharedValue, withSequence, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import {
@@ -27,7 +28,7 @@ import {
     CommentResponse,
     PostStatsResponse,
 } from '../../api';
-import { formatTimeAgo } from '../../components/blog/BlogPostCard';
+import { formatNumber, formatTimeAgo, getReactionMeta, REACTIONS, ReactionType } from '../../components/blog/BlogPostCard';
 import { useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
 
@@ -38,6 +39,44 @@ interface PostDetailScreenProps {
 
 const showToast = (message: string) => {
     console.log('[Toast]', message);
+}
+
+/** Normalize shareMusic from API response */
+function normalizeShareMusic(post: any) {
+    let candidateShareMusic = post.shareMusic || post.share_music || post.sharedMusic;
+    let inferredPostType = post.postType;
+
+    if (!candidateShareMusic && post.moodTag && post.moodTag.includes('share-music')) {
+        inferredPostType = 'share-music';
+        if (post.contentText) {
+            try {
+                const parsed = JSON.parse(post.contentText);
+                candidateShareMusic = {
+                    trackId: parsed.TrackId || parsed.trackId,
+                    title: parsed.Title || parsed.title,
+                    artist: parsed.Artist || parsed.artist,
+                    albumImage: parsed.AlbumImage || parsed.albumImage,
+                    previewUrl: parsed.PreviewUrl || parsed.previewUrl,
+                    template: parsed.Template || parsed.template,
+                };
+            } catch (e) { }
+        }
+    }
+
+    let normalizedShareMusic = null;
+    if (candidateShareMusic) {
+        if (typeof candidateShareMusic === 'string') {
+            try {
+                normalizedShareMusic = JSON.parse(candidateShareMusic);
+            } catch (e) {
+                normalizedShareMusic = null;
+            }
+        } else if (typeof candidateShareMusic === 'object') {
+            normalizedShareMusic = candidateShareMusic;
+        }
+    }
+
+    return { normalizedShareMusic, inferredPostType };
 }
 
 export default function PostDetailScreen({ postId, onBack }: PostDetailScreenProps) {
@@ -55,7 +94,23 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [replyingTo, setReplyingTo] = useState<{ commentId: string; username: string } | null>(null);
     const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
-    const [isLiked, setIsLiked] = useState(false);
+
+    // Multi-reaction state
+    const [myReaction, setMyReaction] = useState<ReactionType | null>(null);
+    const [likeCountLocal, setLikeCountLocal] = useState(0);
+    const [topReactions, setTopReactions] = useState<ReactionType[]>([]);
+
+    const [globalScrollEnabled, setGlobalScrollEnabled] = useState(true);
+
+    useEffect(() => {
+        const sub = DeviceEventEmitter.addListener('GlobalScrollEnabled', (enabled: boolean) => {
+            setGlobalScrollEnabled(enabled);
+        });
+        return () => sub.remove();
+    }, []);
+
+    const reactionScale = useSharedValue(1);
+
     const [keyboardOffset, setKeyboardOffset] = useState(0);
     const inputRef = React.useRef<RNTextInput>(null);
     const screenWidth = Dimensions.get('window').width;
@@ -96,7 +151,6 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                 resetEdgeSwipeAnimation();
                 return;
             }
-
             onBack();
         });
     }, [onBack, resetEdgeSwipeAnimation, screenSwipeOpacity, screenSwipeTranslateX, screenWidth]);
@@ -123,7 +177,6 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                         animateEdgeSwipeBackAndExit();
                         return;
                     }
-
                     resetEdgeSwipeAnimation();
                 },
                 onPanResponderTerminate: () => {
@@ -146,21 +199,55 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
             ]);
 
             if (postRes.success && postRes.data) {
-                setPost(postRes.data);
+                const rawPost = postRes.data;
+                const { normalizedShareMusic, inferredPostType } = normalizeShareMusic(rawPost);
+                setPost({
+                    ...rawPost,
+                    postType: inferredPostType || rawPost.postType || null,
+                    shareMusic: normalizedShareMusic,
+                });
             }
-            if (statsRes.success && statsRes.data) setStats(statsRes.data);
+            if (statsRes.success && statsRes.data) {
+                setStats(statsRes.data);
+                setLikeCountLocal(statsRes.data.reactionCount || 0);
+            }
             if (commentsRes.success && commentsRes.data) setComments(commentsRes.data.items || []);
 
-            if (user?.userId) {
-                try {
-                    const reactionsRes = await blogService.getPostReactions(postId);
-                    const liked = !!reactionsRes.data?.some((reaction) => reaction.userId === user.userId);
-                    setIsLiked(liked);
-                } catch {
-                    setIsLiked(false);
+            try {
+                const reactionsRes = await blogService.getPostReactions(postId);
+                if (reactionsRes.success && reactionsRes.data) {
+                    // Compute top 2 reactions
+                    const reactionCounts: Record<string, number> = {};
+                    reactionsRes.data.forEach(r => {
+                        const t = r.reactionType || 'like';
+                        reactionCounts[t] = (reactionCounts[t] || 0) + 1;
+                    });
+
+                    const sorted = Object.entries(reactionCounts)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 2)
+                        .map(([type]) => type as ReactionType);
+
+                    setTopReactions(sorted);
+
+                    // User reaction
+                    if (user?.userId) {
+                        const userReactionList = reactionsRes.data.filter((r) => r.userId === user.userId);
+                        if (userReactionList && userReactionList.length > 0) {
+                            setMyReaction(userReactionList[0].reactionType as ReactionType);
+                        } else {
+                            setMyReaction(null);
+                        }
+                    } else {
+                        setMyReaction(null);
+                    }
+                } else {
+                    setTopReactions([]);
+                    setMyReaction(null);
                 }
-            } else {
-                setIsLiked(false);
+            } catch {
+                setTopReactions([]);
+                setMyReaction(null);
             }
         } catch (error) {
             console.error('Fetch post detail error:', error);
@@ -193,26 +280,168 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
         };
     }, [insets.bottom]);
 
-    const handleLike = async () => {
+    const myReactionRef = useRef(myReaction);
+    myReactionRef.current = myReaction;
+
+    const handleReactionSelect = useCallback(async (type: ReactionType) => {
         if (!post) return;
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        const newLikedState = !isLiked;
-        setIsLiked(newLikedState);
-        setStats(prev => prev ? { ...prev, reactionCount: newLikedState ? prev.reactionCount + 1 : prev.reactionCount - 1 } : null);
+
+        reactionScale.value = withSequence(
+            withSpring(1.4, { damping: 4 }),
+            withSpring(1, { damping: 8 }),
+        );
+
+        const currentReaction = myReactionRef.current;
+        const isRemoving = currentReaction === type;
+
+        // Optimistic
+        if (isRemoving) {
+            setMyReaction(null);
+            setLikeCountLocal(prev => Math.max(0, prev - 1));
+            DeviceEventEmitter.emit('PostReactionUpdated', { postId, newReaction: null });
+        } else {
+            const wasNull = currentReaction === null;
+            setMyReaction(type);
+            if (wasNull) {
+                setLikeCountLocal(prev => prev + 1);
+            }
+            DeviceEventEmitter.emit('PostReactionUpdated', { postId, newReaction: type });
+        }
 
         try {
-            const result = isLiked
-                ? await blogService.removeReaction(postId)
-                : await blogService.addReaction(postId, 'like');
-
-            if (!result.success) {
-                throw new Error(result.message || 'Không thể cập nhật phản ứng');
+            if (isRemoving) {
+                await blogService.removeReaction(postId);
+            } else {
+                if (currentReaction) {
+                    await blogService.removeReaction(postId);
+                }
+                const result = await blogService.addReaction(postId, type);
+                if (!result.success) throw new Error(result.message);
             }
         } catch (error) {
-            setIsLiked(!newLikedState);
-            setStats(prev => prev ? { ...prev, reactionCount: !newLikedState ? prev.reactionCount + 1 : prev.reactionCount - 1 } : null);
+            // Revert
+            setMyReaction(currentReaction);
+            if (isRemoving) {
+                setLikeCountLocal(prev => prev + 1);
+            } else if (currentReaction === null) {
+                setLikeCountLocal(prev => Math.max(0, prev - 1));
+            }
+            DeviceEventEmitter.emit('PostReactionUpdated', { postId, newReaction: currentReaction });
         }
-    };
+    }, [post, postId, reactionScale]);
+
+    const handleReactionSelectRef = useRef(handleReactionSelect);
+    handleReactionSelectRef.current = handleReactionSelect;
+
+    const handleQuickReaction = useCallback(() => {
+        handleReactionSelectRef.current(myReactionRef.current ?? 'like');
+    }, []);
+
+    // PanResponder implementation for Drag-to-React
+    const [hoveredReaction, _setHoveredReaction] = useState<ReactionType | null>(null);
+    const hoveredReactionRef = useRef<ReactionType | null>(null);
+    const setHoveredReaction = useCallback((val: ReactionType | null) => {
+        if (hoveredReactionRef.current !== val) {
+            hoveredReactionRef.current = val;
+            _setHoveredReaction(val);
+            if (val) Haptics.selectionAsync();
+        }
+    }, []);
+
+    const showReactionPickerRef = useRef(false);
+    const [showReactionPickerFallback, setShowReactionPickerFallback] = useState(false);
+    const setPickerVisible = useCallback((val: boolean) => {
+        showReactionPickerRef.current = val;
+        setShowReactionPickerFallback(val);
+    }, []);
+
+    const touchStartY = useRef(0);
+    const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const reactionPanResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponderCapture: () => true,
+            onPanResponderTerminationRequest: () => false,
+            onPanResponderGrant: (evt) => {
+                DeviceEventEmitter.emit('GlobalScrollEnabled', false);
+                touchStartY.current = evt.nativeEvent.pageY;
+                longPressTimer.current = setTimeout(() => {
+                    setPickerVisible(true);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                }, 400);
+            },
+            onPanResponderMove: (evt, gestureState) => {
+                if (showReactionPickerRef.current) {
+                    const y = touchStartY.current - evt.nativeEvent.pageY;
+                    const isAboveButton = y > 20 && y < 140;
+                    if (isAboveButton) {
+                        const pickerStartX = 10;
+                        const iconWidth = 50;
+                        const x = evt.nativeEvent.pageX - pickerStartX;
+                        const index = Math.floor(x / iconWidth);
+                        if (index >= 0 && index < REACTIONS.length) {
+                            setHoveredReaction(REACTIONS[index].type);
+                        } else {
+                            setHoveredReaction(null);
+                        }
+                    } else {
+                        setHoveredReaction(null);
+                    }
+                } else {
+                    if (Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10) {
+                        if (longPressTimer.current) clearTimeout(longPressTimer.current);
+                    }
+                }
+            },
+            onPanResponderRelease: (evt, gestureState) => {
+                DeviceEventEmitter.emit('GlobalScrollEnabled', true);
+                const isDraggingBeforePicker = !showReactionPickerRef.current && (Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10);
+
+                if (longPressTimer.current) {
+                    clearTimeout(longPressTimer.current);
+                    longPressTimer.current = null;
+                }
+                if (showReactionPickerRef.current) {
+                    const y = touchStartY.current - evt.nativeEvent.pageY;
+                    const isAboveButton = y > 20 && y < 140;
+                    let selectedType: ReactionType | null = null;
+                    if (isAboveButton) {
+                        const pickerStartX = 10;
+                        const iconWidth = 50;
+                        const x = evt.nativeEvent.pageX - pickerStartX;
+                        const index = Math.floor(x / iconWidth);
+                        if (index >= 0 && index < REACTIONS.length) {
+                            selectedType = REACTIONS[index].type;
+                        }
+                    }
+
+                    setPickerVisible(false);
+                    setHoveredReaction(null);
+
+                    if (selectedType) {
+                        handleReactionSelectRef.current(selectedType);
+                    }
+                } else {
+                    if (!isDraggingBeforePicker) {
+                        handleQuickReaction();
+                    }
+                }
+            },
+            onPanResponderTerminate: () => {
+                DeviceEventEmitter.emit('GlobalScrollEnabled', true);
+                if (longPressTimer.current) clearTimeout(longPressTimer.current);
+                setPickerVisible(false);
+                setHoveredReaction(null);
+            }
+        })
+    ).current;
+
+    const reactionAnimationStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: reactionScale.value }],
+    }));
 
     const handleReport = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -312,17 +541,34 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
         ]);
     };
 
-    const renderComment = (comment: CommentResponse, isReply = false) => {
+    type FlatReply = CommentResponse & { replyingToUsername?: string };
+
+    const flattenReplies = (replies: CommentResponse[], parentUsername: string, isLevel1: boolean = true): FlatReply[] => {
+        return replies.reduce((acc: FlatReply[], reply) => {
+            acc.push({
+                ...reply,
+                replyingToUsername: isLevel1 ? undefined : parentUsername
+            });
+            if (reply.replies && reply.replies.length > 0) {
+                acc = acc.concat(flattenReplies(reply.replies, reply.userFullName, false));
+            }
+            return acc;
+        }, []);
+    };
+
+    const renderCommentNode = (comment: CommentResponse | FlatReply, isReply = false) => {
+        const replyingToUsername = (comment as FlatReply).replyingToUsername;
+
         return (
             <Animated.View
                 key={comment.id}
                 entering={FadeInDown.duration(400)}
-                style={[styles.commentContainer, isReply && styles.replyContainer]}
+                style={[styles.commentContainer, isReply && { marginTop: -4 }]}
             >
-                <View style={styles.commentMainRow}>
+                <View style={[styles.commentMainRow, isReply && { paddingLeft: 44 }]}>
                     <Image
                         source={{ uri: comment.userAvatarUrl || `https://api.dicebear.com/7.x/initials/png?seed=${comment.userId}&backgroundColor=55C5F1` }}
-                        style={styles.commentAvatar}
+                        style={[styles.commentAvatar, isReply && { width: 28, height: 28, borderRadius: 14 }]}
                     />
                     <View style={styles.commentBubbleWrapper}>
                         <View style={[styles.commentBubble, { backgroundColor: isDarkMode ? '#262626' : '#F3F4F6' }]}>
@@ -330,6 +576,11 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                                 {comment.userFullName}
                             </Text>
                             <Text style={[styles.commentText, { color: palette.textSecondary }]}>
+                                {replyingToUsername && (
+                                    <Text style={{ fontWeight: '700', color: palette.textPrimary }}>
+                                        @{replyingToUsername}{' '}
+                                    </Text>
+                                )}
                                 {comment.content}
                             </Text>
                         </View>
@@ -353,14 +604,42 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                         </View>
                     </View>
                 </View>
-                {comment.replies && comment.replies.length > 0 && (
-                    <View style={styles.repliesList}>
-                        {comment.replies.map((reply) => renderComment(reply, true))}
-                    </View>
-                )}
             </Animated.View>
         );
     };
+
+    const renderRootComment = (comment: CommentResponse) => {
+        const flatReplies = flattenReplies(comment.replies || [], comment.userFullName, true);
+
+        return (
+            <View key={comment.id}>
+                {renderCommentNode(comment, false)}
+                {flatReplies.length > 0 && (
+                    <View style={{ marginTop: 6 }}>
+                        {flatReplies.map((reply) => renderCommentNode(reply, true))}
+                    </View>
+                )}
+            </View>
+        );
+    };
+
+    const displayReactions = React.useMemo(() => {
+        let arr = [...topReactions];
+        if (myReaction) {
+            if (!arr.includes(myReaction)) {
+                arr.unshift(myReaction);
+            } else {
+                arr = [myReaction, ...arr.filter(t => t !== myReaction)];
+            }
+        }
+        return arr.slice(0, 2);
+    }, [topReactions, myReaction]);
+
+    const finalReactions = React.useMemo(() => {
+        if (likeCountLocal === 0) return [];
+        if (displayReactions.length > 0) return displayReactions;
+        return myReaction ? [myReaction] : ['like'] as ReactionType[];
+    }, [likeCountLocal, displayReactions, myReaction]);
 
     if (isLoading && !isRefreshing) {
         return (
@@ -369,6 +648,9 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
             </View>
         );
     }
+
+    const isShareMusicPost = (post?.postType?.toLowerCase() === 'share-music' || post?.postType?.toLowerCase() === 'sharemusic' || !!post?.shareMusic) && post?.shareMusic;
+    const currentReactionMeta = myReaction ? getReactionMeta(myReaction) : null;
 
     return (
         <RNAnimated.View
@@ -381,7 +663,6 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                 },
             ]}
         >
-            {/* Immersive Header */}
             <View style={styles.header}>
                 <BlurView intensity={80} tint={isDarkMode ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
                 <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -396,7 +677,7 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
             <ScrollView
                 style={styles.scrollArea}
                 contentContainerStyle={{ paddingBottom: 100 }}
-                showsVerticalScrollIndicator={false}
+                scrollEnabled={globalScrollEnabled}
                 keyboardShouldPersistTaps="handled"
                 refreshControl={
                     <RefreshControl refreshing={isRefreshing} onRefresh={() => fetchData(true)} tintColor={palette.primary} />
@@ -415,26 +696,143 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                             </View>
                         </View>
 
-                        <Text style={[styles.postTitle, { color: palette.textPrimary }]}>{post.title}</Text>
-                        <Text style={[styles.postContent, { color: palette.textSecondary }]}>{post.contentText}</Text>
-
-                        {post.imageUrl && (
-                            <Image source={{ uri: post.imageUrl }} style={styles.postImage} resizeMode="cover" />
+                        {!!post.title && (
+                            <Text style={[styles.postTitle, { color: palette.textPrimary }]}>{post.title}</Text>
                         )}
 
-                        <View style={styles.statsBar}>
-                            <TouchableOpacity style={styles.statItem} onPress={handleLike} activeOpacity={0.7}>
-                                <Ionicons name={isLiked ? "heart" : "heart-outline"} size={24} color={isLiked ? "#FF4B2B" : palette.textPrimary} />
-                                <Text style={[styles.statText, { color: isLiked ? "#FF4B2B" : palette.textPrimary }]}>{stats?.reactionCount || 0}</Text>
-                            </TouchableOpacity>
-                            <View style={styles.statItem}>
-                                <Ionicons name="chatbubble-outline" size={22} color={palette.textPrimary} />
-                                <Text style={[styles.statText, { color: palette.textPrimary }]}>{stats?.commentCount || 0}</Text>
+                        {isShareMusicPost ? (
+                            <View style={styles.shareMusicContainer}>
+                                <View style={[styles.shareMusicCard, { backgroundColor: isDarkMode ? '#1F2937' : '#F3F4F6' }]}>
+                                    {post.shareMusic.albumImage ? (
+                                        <Image source={{ uri: post.shareMusic.albumImage }} style={styles.shareMusicImage} />
+                                    ) : (
+                                        <View style={[styles.shareMusicImage, { backgroundColor: palette.primary + '30', justifyContent: 'center', alignItems: 'center' }]}>
+                                            <Ionicons name="musical-notes" size={24} color={palette.primary} />
+                                        </View>
+                                    )}
+                                    <View style={styles.shareMusicInfo}>
+                                        <Text style={[styles.shareMusicSongTitle, { color: palette.textPrimary }]} numberOfLines={2}>
+                                            {post.shareMusic.title}
+                                        </Text>
+                                        <Text style={[styles.shareMusicArtist, { color: palette.textSecondary }]} numberOfLines={1}>
+                                            {post.shareMusic.artist}
+                                        </Text>
+                                    </View>
+                                    <View style={[styles.shareMusicPlayBtn, { backgroundColor: palette.primary }]}>
+                                        <Ionicons name="play" size={18} color="#FFFFFF" />
+                                    </View>
+                                </View>
                             </View>
-                            <View style={styles.statItem}>
-                                <Ionicons name="eye-outline" size={24} color={palette.textPrimary} />
-                                <Text style={[styles.statText, { color: palette.textPrimary }]}>{stats?.viewCount || 0}</Text>
+                        ) : (
+                            <>
+                                {!!post.contentText && (
+                                    <Text style={[styles.postContent, { color: palette.textSecondary }]}>{post.contentText}</Text>
+                                )}
+                                {(post.imageUrl || post.imgUrl) && (
+                                    <Image source={{ uri: post.imageUrl || post.imgUrl }} style={styles.postImage} resizeMode="cover" />
+                                )}
+                            </>
+                        )}
+
+                        {/* Stats Summary Area */}
+                        {(likeCountLocal > 0 || (stats?.commentCount && stats.commentCount > 0)) && (
+                            <View style={styles.statsSummary}>
+                                {likeCountLocal > 0 ? (
+                                    <View style={styles.reactionSummaryGroup}>
+                                        {finalReactions.map((type, index) => {
+                                            const meta = getReactionMeta(type);
+                                            if (!meta) return null;
+                                            return (
+                                                <View
+                                                    key={type}
+                                                    style={[
+                                                        styles.reactionSummaryIconWrap,
+                                                        {
+                                                            backgroundColor: meta.color,
+                                                            marginLeft: index > 0 ? -4 : 0,
+                                                            zIndex: 10 - index
+                                                        }
+                                                    ]}
+                                                >
+                                                    <Ionicons name={meta.iconFilled as any} size={10} color="#FFF" />
+                                                </View>
+                                            );
+                                        })}
+                                        <Text style={[styles.statsSummaryText, { color: palette.textSecondary, marginLeft: 6 }]}>
+                                            {formatNumber(likeCountLocal)}
+                                        </Text>
+                                    </View>
+                                ) : <View />}
+                                {stats?.commentCount ? (
+                                    <Text style={[styles.statsSummaryText, { color: palette.textSecondary }]}>
+                                        {formatNumber(stats.commentCount)} bình luận
+                                    </Text>
+                                ) : null}
                             </View>
+                        )}
+
+                        {/* Actions Line inside PostDetailScreen */}
+                        <View style={styles.actionsBarWrapper}>
+                            <View style={styles.actionsBar}>
+                                <View style={styles.leftActions}>
+                                    <View
+                                        style={[
+                                            styles.reactionBtn,
+                                            currentReactionMeta ? { backgroundColor: currentReactionMeta.color + '15' } : null,
+                                        ]}
+                                        {...reactionPanResponder.panHandlers}
+                                    >
+                                        <Animated.View style={reactionAnimationStyle} pointerEvents="none">
+                                            <Ionicons
+                                                name={(currentReactionMeta?.iconFilled ?? 'thumbs-up-outline') as any}
+                                                size={20}
+                                                color={currentReactionMeta?.color ?? palette.textSecondary}
+                                            />
+                                        </Animated.View>
+                                        <Text style={[
+                                            styles.reactionBtnLabel,
+                                            { color: currentReactionMeta?.color ?? palette.textSecondary },
+                                        ]} pointerEvents="none">
+                                            {currentReactionMeta?.label ?? 'Thích'}
+                                        </Text>
+                                    </View>
+
+                                    <TouchableOpacity style={styles.actionButton} onPress={() => inputRef.current?.focus()}>
+                                        <Ionicons name="chatbubble-outline" size={20} color={palette.textSecondary} />
+                                        <Text style={[styles.actionBtnLabel, { color: palette.textSecondary }]}>Bình luận</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity style={styles.actionButton}>
+                                        <Ionicons name="arrow-redo-outline" size={20} color={palette.textSecondary} />
+                                        <Text style={[styles.actionBtnLabel, { color: palette.textSecondary }]}>Chia sẻ</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            {/* Relative Container for Absolute Picker Array */}
+                            {showReactionPickerFallback && (
+                                <View style={[styles.absolutePickerContainer, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+                                    {REACTIONS.map((reaction) => {
+                                        const isHovered = hoveredReaction === reaction.type;
+                                        const isSelectedAndNoHover = myReaction === reaction.type && !hoveredReaction;
+                                        const isActive = isHovered || isSelectedAndNoHover;
+
+                                        return (
+                                            <View
+                                                key={reaction.type}
+                                                style={[
+                                                    styles.pickerItem,
+                                                    isActive && { backgroundColor: reaction.color + '20', transform: [{ scale: 1.15 }] },
+                                                ]}
+                                            >
+                                                <View style={[styles.pickerIconWrap, { backgroundColor: reaction.color }]}>
+                                                    <Ionicons name={reaction.iconFilled as any} size={18} color="#FFF" />
+                                                </View>
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            )}
                         </View>
                     </Animated.View>
                 )}
@@ -447,12 +845,11 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                             <Text style={[styles.emptyText, { color: palette.textMuted }]}>Chưa có bình luận nào</Text>
                         </View>
                     ) : (
-                        comments.map((comment) => renderComment(comment))
+                        comments.map((comment) => renderRootComment(comment))
                     )}
                 </View>
             </ScrollView>
 
-            {/* Modern Comment Input */}
             <BlurView
                 intensity={90}
                 tint={isDarkMode ? 'dark' : 'light'}
@@ -576,22 +973,142 @@ const styles = StyleSheet.create({
         aspectRatio: 1,
         marginBottom: 20,
     },
-    statsBar: {
-        flexDirection: 'row',
+    // ─── Share Music styles ───
+    shareMusicContainer: {
         paddingHorizontal: 16,
         paddingBottom: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(0,0,0,0.05)',
-        gap: 24,
     },
-    statItem: {
+    shareMusicCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        borderRadius: 16,
+        gap: 14,
+    },
+    shareMusicImage: {
+        width: 64,
+        height: 64,
+        borderRadius: 10,
+    },
+    shareMusicInfo: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    shareMusicSongTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        marginBottom: 4,
+    },
+    shareMusicArtist: {
+        fontSize: 14,
+    },
+    shareMusicPlayBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingLeft: 3,
+    },
+    statsSummary: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingBottom: 12,
+        paddingTop: 8,
+    },
+    reactionSummaryGroup: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
     },
-    statText: {
-        fontSize: 15,
+    reactionSummaryIconWrap: {
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    statsSummaryText: {
+        fontSize: 13,
+        fontWeight: '500',
+    },
+    actionsBarWrapper: {
+        position: 'relative',
+        zIndex: 100, // must be > 10 to beat reaction stats icons
+    },
+    actionsBar: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: 'rgba(0,0,0,0.06)',
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: 'rgba(0,0,0,0.06)',
+    },
+    leftActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    reactionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 10,
+        backgroundColor: 'transparent',
+    },
+    reactionBtnLabel: {
+        fontSize: 13,
+        fontWeight: '700',
+    },
+    actionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        borderRadius: 10,
+    },
+    actionBtnLabel: {
+        fontSize: 13,
         fontWeight: '600',
+    },
+    absolutePickerContainer: {
+        position: 'absolute',
+        bottom: 54, // Sit above the action bar
+        left: 10,
+        flexDirection: 'row',
+        borderRadius: 24,
+        borderWidth: 1,
+        paddingVertical: 8,
+        paddingHorizontal: 8,
+        gap: 6,
+        shadowColor: '#000000',
+        shadowOpacity: 0.18,
+        shadowRadius: 15,
+        shadowOffset: { width: 0, height: 6 },
+        elevation: 12,
+        zIndex: 999,
+    },
+    pickerItem: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+    },
+    pickerIconWrap: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     commentsSection: {
         paddingTop: 20,
