@@ -41,6 +41,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 interface ChatMessage {
   id: string;
+  userId?: string;
   author: string;
   avatar?: string;
   message: string;
@@ -573,9 +574,135 @@ function LyricScreen({
   );
 }
 
+// ── ChatActionModal ────────────────────────────────────────────────────────
+
+function ChatActionModal({
+  visible,
+  message,
+  onClose,
+  onRevoke,
+}: {
+  visible: boolean;
+  message: ChatMessage | null;
+  onClose: () => void;
+  onRevoke: () => void;
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable style={styles.chatActionBackdrop} onPress={onClose}>
+        <View style={styles.chatActionSheet}>
+          {/* Handle bar */}
+          <View style={styles.chatActionHandle} />
+
+          {/* Author info */}
+          {message && (
+            <View style={styles.chatActionHeader}>
+              <View style={[styles.chatAvatarCircle, { backgroundColor: message.avatarColor || '#374151', width: 32, height: 32, borderRadius: 16 }]}>
+                {message.avatar ? (
+                  <Image source={{ uri: message.avatar }} style={{ width: 32, height: 32, borderRadius: 16 }} />
+                ) : (
+                  <Text style={[styles.chatAvatarText, { fontSize: 13 }]}>
+                    {(message.author || '?').charAt(0).toUpperCase()}
+                  </Text>
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.chatActionAuthor} numberOfLines={1}>{message.author}</Text>
+                <Text style={styles.chatActionPreview} numberOfLines={1}>
+                  {message.isDeleted ? 'Tin nhắn đã bị thu hồi' : message.message}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Revoke button */}
+          <TouchableOpacity
+            style={styles.chatActionRevokeBtn}
+            onPress={() => {
+              onClose();
+              // Small delay so modal closes first
+              setTimeout(() => onRevoke(), 200);
+            }}
+          >
+            <Ionicons name="trash-outline" size={18} color="#EF4444" />
+            <Text style={styles.chatActionRevokeBtnText}>Thu hồi tin nhắn</Text>
+          </TouchableOpacity>
+
+          {/* Cancel */}
+          <TouchableOpacity style={styles.chatActionCancelBtn} onPress={onClose}>
+            <Text style={styles.chatActionCancelText}>Hủy</Text>
+          </TouchableOpacity>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ── DotMenuPopover ────────────────────────────────────────────────────────
+// Small popover anchored to the 3-dot button
+
+const DOT_POPOVER_H = 44; // approximate popover height
+
+function DotMenuPopover({
+  visible,
+  pageX,
+  pageY,
+  onClose,
+  onRevoke,
+}: {
+  visible: boolean;
+  pageX: number;
+  pageY: number;
+  onClose: () => void;
+  onRevoke: () => void;
+}) {
+  // Anchor the RIGHT edge of popover to the X position of the 3-dot button (+4 pad)
+  const rightOffset = SCREEN_W - pageX - 130;
+  // Show ABOVE the button when near bottom, otherwise BELOW
+  const showAbove = SCREEN_H - pageY < DOT_POPOVER_H + 60;
+  const top = showAbove ? pageY - DOT_POPOVER_H - 4 : pageY;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose}>
+        <View
+          pointerEvents="box-none"
+          style={[styles.dotPopover, { top, right: rightOffset }]}
+        >
+          <TouchableOpacity
+            style={styles.dotPopoverItem}
+            onPress={() => {
+              onClose();
+              setTimeout(() => onRevoke(), 150);
+            }}
+          >
+            <Ionicons name="trash-outline" size={14} color="#EF4444" />
+            <Text style={styles.dotPopoverItemText}>Thu hồi</Text>
+          </TouchableOpacity>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
 // ── ChatSection ────────────────────────────────────────────────────────────
 
-function ChatSection({ messages, onDelete }: { messages: ChatMessage[]; onDelete?: (msg: ChatMessage) => void }) {
+function ChatSection({
+  messages,
+  onShowActions,
+  onShowDotMenu,
+  currentUserId,
+}: {
+  messages: ChatMessage[];
+  onShowActions?: (msg: ChatMessage) => void;
+  onShowDotMenu?: (msg: ChatMessage, pageX: number, pageY: number) => void;
+  currentUserId?: string;
+}) {
   const scrollRef = useRef<ScrollView>(null);
 
   const scrollToBottom = useCallback((animated = false) => {
@@ -606,7 +733,12 @@ function ChatSection({ messages, onDelete }: { messages: ChatMessage[]; onDelete
             ? styles.chatBubbleRequest
             : styles.chatBubble;
         return (
-          <TouchableOpacity key={msg.id} style={styles.chatRow} onLongPress={() => onDelete && onDelete(msg)}>
+          <TouchableOpacity
+            key={msg.id}
+            style={styles.chatRow}
+            onLongPress={() => onShowActions && onShowActions(msg)}
+            activeOpacity={0.85}
+          >
             {msg.avatar ? (
               <Image source={{ uri: msg.avatar }} style={[styles.chatAvatarCircle, { backgroundColor: '#374151' }]} />
             ) : (
@@ -633,6 +765,16 @@ function ChatSection({ messages, onDelete }: { messages: ChatMessage[]; onDelete
               )}
               <Text style={styles.chatTimestamp}>{msg.timestamp}</Text>
             </View>
+            {/* 3-dot menu button – only for own non-deleted messages */}
+            {onShowDotMenu && !msg.isDeleted && currentUserId && (msg.userId === currentUserId || msg.avatarColor === '#55C5F1') && (
+              <TouchableOpacity
+                style={styles.chatMenuDotBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                onPress={(e) => onShowDotMenu(msg, e.nativeEvent.pageX, e.nativeEvent.pageY)}
+              >
+                <Ionicons name="ellipsis-vertical" size={14} color="rgba(255,255,255,0.45)" />
+              </TouchableOpacity>
+            )}
           </TouchableOpacity>
         );
       })}
@@ -677,6 +819,12 @@ export default function LivestreamScreen({
   const [bgColors, setBgColors] = useState<[string, string, string]>(DEFAULT_BG_COLORS);
   const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(0); // 0 = main, 1 = lyrics
+  const [chatActionTarget, setChatActionTarget] = useState<ChatMessage | null>(null);
+  // Separate open/data to avoid jump-to-top when closing (data persists through fade animation)
+  const [dotMenuOpen, setDotMenuOpen] = useState(false);
+  const [dotMenuData, setDotMenuData] = useState<{ msg: ChatMessage; pageX: number; pageY: number }>(
+    { msg: {} as ChatMessage, pageX: 0, pageY: 0 }
+  );
   const pageScrollRef = useRef<ScrollView>(null);
 
   // ── Theme loading ────────────────────────────────────────────────
@@ -810,18 +958,15 @@ export default function LivestreamScreen({
 
     const connectHub = async () => {
       try {
-        await liveHubService.start();
-        await liveHubService.joinSession(activeSession.id, userId);
-        console.log('[LivestreamScreen] SignalR joined session', activeSession.id);
-
         let latestHistoryRef: ChatMessage[] = [];
 
         unsubChatHistory = liveHubService.onChatHistory((chats) => {
           const history = chats.map((chat) => ({
             id: chat.id || `hub-${Date.now()}-${Math.random()}`,
+            userId: chat.userId,
             author: chat.userName || `User ${chat.userId?.slice(0, 6) || '??'}`,
             message: chat.message,
-            avatar: chat.avatarUrl,
+            avatar: chat.avatarUrl || (chat as any).AvatarUrl,
             timestamp: chat.createdAt
               ? new Date(chat.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
               : new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
@@ -840,9 +985,10 @@ export default function LivestreamScreen({
         unsubChat = liveHubService.onReceiveChat((chat: HubChatMessage) => {
           const incoming: ChatMessage = {
             id: chat.id || `hub-${Date.now()}-${Math.random()}`,
+            userId: chat.userId,
             author: chat.userName || `User ${chat.userId?.slice(0, 6) || '??'}`,
             message: chat.message,
-            avatar: chat.avatarUrl,
+            avatar: chat.avatarUrl || (chat as any).AvatarUrl,
             timestamp: chat.createdAt
               ? new Date(chat.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
               : new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
@@ -851,6 +997,11 @@ export default function LivestreamScreen({
           };
           setMessages((prev) => [...prev, incoming]);
         });
+
+        await liveHubService.start();
+        await liveHubService.joinSession(activeSession.id, userId);
+        console.log('[LivestreamScreen] SignalR joined session', activeSession.id);
+
       } catch (err) {
         console.warn('[LivestreamScreen] SignalR connection error:', err);
       }
@@ -1004,24 +1155,30 @@ export default function LivestreamScreen({
     setMessages((prev) => [...prev, msg]);
   }, [user]);
 
+  // Opens the action modal (3-dot or long-press)
+  const handleShowChatActions = useCallback((msg: ChatMessage) => {
+    if (!activeSession || !user) return;
+    const userId = user.userId;
+    const role = user.roleName || 'User';
+    const isStaffOrHost = role === 'Host' || role === 'Staff' || role === 'Admin' || activeSession.userId === userId;
+    const isOwner = msg.userId === userId || msg.id.includes(userId) || msg.author.includes('Bạn') || msg.avatarColor === '#55C5F1';
+    // Only show action menu if user has permission
+    if (!isStaffOrHost && !isOwner) return;
+    setChatActionTarget(msg);
+  }, [activeSession, user]);
+
+  // Called after user confirms revoke from modal
   const handleDeleteChat = useCallback((msg: ChatMessage) => {
     if (!activeSession || !user) return;
     const userId = user.userId;
     const role = user.roleName || 'User';
-
-    const isStaffOrHost = role === 'Host' || role === 'Staff' || role === 'Admin' || activeSession.userId === userId;
-    const isOwner = msg.id.includes(userId) || msg.author.includes('Bạn') || msg.avatarColor === '#55C5F1';
-
-    if (!isStaffOrHost && !isOwner) {
-      return;
-    }
     Alert.alert(
-      'Xóa tin nhắn',
+      'Thu hồi tin nhắn',
       'Bạn có chắc chắn muốn thu hồi tin nhắn này không?',
       [
         { text: 'Hủy', style: 'cancel' },
         {
-          text: 'Xóa',
+          text: 'Thu hồi',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -1269,7 +1426,15 @@ export default function LivestreamScreen({
               <Ionicons name="chatbubbles" size={14} color="#A78BFA" />
               <Text style={styles.chatHeaderText}>Chat trực tiếp</Text>
             </View>
-            <ChatSection messages={messages} onDelete={handleDeleteChat} />
+            <ChatSection
+              messages={messages}
+              onShowActions={handleShowChatActions}
+              onShowDotMenu={(msg, pageX, pageY) => {
+                setDotMenuData({ msg, pageX, pageY });
+                setDotMenuOpen(true);
+              }}
+              currentUserId={user?.userId}
+            />
           </View>
 
           {/* Bottom bar: input + actions */}
@@ -1370,6 +1535,29 @@ export default function LivestreamScreen({
         stationId={activeSession?.stationId}
         songHistory={nowPlaying?.songHistory || []}
         onRequestSuccess={handleRequestSuccess}
+      />
+
+      {/* ── Chat action bottom sheet (long-press) ── */}
+      <ChatActionModal
+        visible={chatActionTarget !== null}
+        message={chatActionTarget}
+        onClose={() => setChatActionTarget(null)}
+        onRevoke={() => {
+          if (chatActionTarget) handleDeleteChat(chatActionTarget);
+          setChatActionTarget(null);
+        }}
+      />
+
+      {/* ── 3-dot inline popover ── */}
+      <DotMenuPopover
+        visible={dotMenuOpen}
+        pageX={dotMenuData.pageX}
+        pageY={dotMenuData.pageY}
+        onClose={() => setDotMenuOpen(false)}
+        onRevoke={() => {
+          handleDeleteChat(dotMenuData.msg);
+          setDotMenuOpen(false);
+        }}
       />
     </View>
   );
@@ -1623,7 +1811,7 @@ const styles = StyleSheet.create({
   chatHeaderText: { color: '#A78BFA', fontSize: 12, fontWeight: '700' },
   chatScrollView: { flex: 1 },
   chatScrollContent: { paddingHorizontal: 10, paddingVertical: 8, gap: 8, flexGrow: 1, justifyContent: 'flex-end' },
-  chatRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  chatRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   chatAvatarCircle: {
     width: 26,
     height: 26,
@@ -1637,7 +1825,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 7,
     borderRadius: 16,
-    maxWidth: '78%',
+    maxWidth: '74%',
+    flexShrink: 1,
   },
   chatBubble: { backgroundColor: 'rgba(255,255,255,0.06)' },
   chatBubbleHost: {
@@ -1656,6 +1845,102 @@ const styles = StyleSheet.create({
   chatRequestText: { fontSize: 10, color: '#FFFFFF', fontWeight: '600' },
   chatMessageText: { fontSize: 13, color: '#FFFFFF', lineHeight: 18 },
   chatTimestamp: { fontSize: 9, color: 'rgba(255,255,255,0.35)', marginTop: 3, alignSelf: 'flex-end' },
+  // 3-dot menu button beside chat bubble
+  chatMenuDotBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginLeft: 2,
+  },
+  // Chat action bottom-sheet modal
+  chatActionBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  chatActionSheet: {
+    backgroundColor: '#1E1B2E',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingTop: 10,
+    paddingBottom: 30,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.25)',
+    borderBottomWidth: 0,
+  },
+  chatActionHandle: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  chatActionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  chatActionAuthor: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  chatActionPreview: { color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 2 },
+  chatActionRevokeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(239,68,68,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.3)',
+    borderRadius: 14,
+    marginBottom: 10,
+  },
+  chatActionRevokeBtnText: { color: '#EF4444', fontSize: 15, fontWeight: '700' },
+  chatActionCancelBtn: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 14,
+  },
+  chatActionCancelText: { color: 'rgba(255,255,255,0.7)', fontSize: 15, fontWeight: '600' },
+  // Small inline dot-menu popover (3-dot button)
+  dotPopover: {
+    position: 'absolute',
+    backgroundColor: '#252235',
+    borderRadius: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    minWidth: 130,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.25)',
+  },
+  dotPopoverItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 7,
+  },
+  dotPopoverItemText: {
+    color: '#EF4444',
+    fontSize: 13,
+    fontWeight: '600',
+  },
 
   // Bottom bar
   bottomStack: {
