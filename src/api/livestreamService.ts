@@ -327,6 +327,26 @@ export const livestreamService = {
     return response.data.data || [];
   },
 
+  async searchSchedules(params: { q: string; page?: number; pageSize?: number }): Promise<LiveScheduleResult[]> {
+    try {
+      const response = await api.get<ApiGatewayResponse<any>>(
+        LIVESTREAM_ENDPOINTS.SCHEDULE_SEARCH,
+        {
+          params: {
+            q: params.q,
+            page: params.page || 1,
+            pageSize: params.pageSize || 10
+          }
+        }
+      );
+      // Spring Data page response
+      return response.data.data?.content || [];
+    } catch (error) {
+      console.log('[LivestreamService] searchSchedules error:', error);
+      return [];
+    }
+  },
+
   async getLiveSession(sessionId: string): Promise<LiveSessionResult> {
     const response = await api.get<ApiGatewayResponse<LiveSessionResult>>(
       LIVESTREAM_ENDPOINTS.LIVE_SESSION_DETAIL(sessionId),

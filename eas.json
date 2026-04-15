@@ -20,7 +20,9 @@
         "VITE_GOOGLE_CLIENT_ID": "93259588882-152q42sdkspqdv5e1t0ljjrq4gtkr3ka.apps.googleusercontent.com",
         "VITE_GOOGLE_WEB_CLIENT_ID": "93259588882-152q42sdkspqdv5e1t0ljjrq4gtkr3ka.apps.googleusercontent.com",
         "VITE_GOOGLE_ANDROID_CLIENT_ID": "912072546687-bnrgjbrs6t77laigrqiucrm21r0i2j0n.apps.googleusercontent.com",
-        "VITE_GOOGLE_IOS_CLIENT_ID": "837668598442-grvmp96tdm7o041tdct6mn8cljr8fnur.apps.googleusercontent.com"
+        "VITE_GOOGLE_IOS_CLIENT_ID": "837668598442-grvmp96tdm7o041tdct6mn8cljr8fnur.apps.googleusercontent.com",
+        "VITE_CLOUDINARY_CLOUD_NAME": "dyvxwa59e",
+        "VITE_CLOUDINARY_UPLOAD_PRESET": "soundmates_upload"
       }
     },
     "production": {

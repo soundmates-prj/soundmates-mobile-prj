@@ -74,6 +74,7 @@ export const AUTH_ENDPOINTS = {
 
 export const USER_ENDPOINTS = {
     PROFILE_FULL: '/users/me/profile/full',
+    SEARCH: '/users',
 };
 
 // Blog / Content Endpoints
@@ -127,6 +128,7 @@ export const LIVESTREAM_ENDPOINTS = {
     LIVE_SESSIONS: '/livesession',
     ACTIVE_SESSIONS: '/livesession/active',
     SCHEDULES: '/schedule',
+    SCHEDULE_SEARCH: '/schedule/search',
     LIVE_SESSION_DETAIL: (sessionId: string) => `/livesession/${sessionId}`,
     NOW_PLAYING_BY_SESSION: (sessionId: string) => `/livesession/${sessionId}/now-playing`,
     SONG_REQUESTS_BY_SESSION: (sessionId: string) => `/livesession/${sessionId}/song-requests`,

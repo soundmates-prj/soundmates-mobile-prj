@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, Dimensions, Easing, Image, Linking, PanResponder, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import {
+    authService,
     blogService,
     favoriteService,
     LiveScheduleResult,
@@ -317,10 +318,13 @@ export default function HomeScreen({
     }, []);
 
     const fetchSearchBundle = useCallback(async (keyword: string, limit: number): Promise<SearchResultBundle> => {
-        const [spotifyRes, podcastsRes, playlistsRes] = await Promise.allSettled([
-            spotifyService.search({ q: keyword, type: 'track', limit }),
+        const [spotifyRes, podcastsRes, playlistsRes, usersRes, blogsRes, schedulesRes] = await Promise.allSettled([
+            spotifyService.search({ q: keyword, type: 'track,artist,album', limit }),
             podcastService.getPublished(),
             userPlaylistService.getPublicPlaylists(),
+            authService.searchUsers({ q: keyword, page: 1, pageSize: limit }),
+            blogService.getPublishedPosts({ search: keyword, page: 1, pageSize: limit }),
+            livestreamService.searchSchedules({ q: keyword, page: 1, pageSize: limit }),
         ]);
 
         const kw = keyword.trim().toLowerCase();
@@ -347,7 +351,13 @@ export default function HomeScreen({
                 ).slice(0, 5)
                 : [];
 
-        return { tracks, podcasts, playlists };
+        const artists = spotifyRes.status === 'fulfilled' ? spotifyRes.value.data?.artists?.items || [] : [];
+        const albums = spotifyRes.status === 'fulfilled' ? spotifyRes.value.data?.albums?.items || [] : [];
+        const users = usersRes.status === 'fulfilled' && usersRes.value.success ? usersRes.value.data?.items || [] : [];
+        const blogs = blogsRes.status === 'fulfilled' && blogsRes.value.success ? blogsRes.value.data?.items || [] : [];
+        const schedules = schedulesRes.status === 'fulfilled' ? schedulesRes.value || [] : [];
+
+        return { tracks, artists, albums, users, blogs, schedules, podcasts, playlists };
     }, []);
 
     const makeSuggestions = useCallback((bundle: SearchResultBundle): SearchSuggestionItem[] => {
@@ -872,14 +882,14 @@ export default function HomeScreen({
                                     blogService.getPostStats(post.id),
                                     blogService.getPostReactions(post.id)
                                 ]);
-                                
+
                                 const stats = statsResult.success && statsResult.data ? statsResult.data : null;
                                 const reactions = reactionsResult.success && reactionsResult.data ? reactionsResult.data : [];
 
                                 const userReaction = reactions.find((reaction) => reaction.userId === user.userId);
                                 const isLiked = !!userReaction;
                                 const myReactionType = userReaction ? (userReaction.reactionType?.toLowerCase() as ReactionType) : null;
-                                
+
                                 return {
                                     ...post,
                                     reactionCount: stats?.reactionCount ?? post.reactionCount,
@@ -1718,6 +1728,8 @@ export default function HomeScreen({
                             onOpenSpotifyLink={handleOpenSpotifyLink}
                             onAddFavoriteTrack={handleAddFavoriteTrack}
                             onOpenPlaylistDetail={handleOpenPlaylistModal}
+                            onNavigateToPost={(postId) => setSelectedPostId(postId)}
+                            onNavigateToLiveSession={onNavigateToLiveSession}
                             onOpenPodcastTab={(podcastId) => {
                                 setSelectedPodcastFromSearch(podcastId);
                                 setActiveTab('podcast');

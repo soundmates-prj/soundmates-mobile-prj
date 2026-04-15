@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
-import { favoriteService, PodcastResponse, SpotifyTrack, UserPlaylistResponse } from '../../api';
+import { favoriteService, PodcastResponse, SpotifyArtist, SpotifyAlbum, SpotifyTrack, UserPlaylistResponse, UserProfileFullResponse, BlogPostResponse, LiveScheduleResult } from '../../api';
 import { showToast } from '../../components/ui/Toast';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -12,6 +12,11 @@ const { width } = Dimensions.get('window');
 
 export interface SearchResultBundle {
   tracks: SpotifyTrack[];
+  artists?: SpotifyArtist[];
+  albums?: SpotifyAlbum[];
+  users?: UserProfileFullResponse[];
+  blogs?: BlogPostResponse[];
+  schedules?: LiveScheduleResult[];
   podcasts?: PodcastResponse[];
   playlists?: UserPlaylistResponse[];
 }
@@ -24,13 +29,15 @@ interface SearchResultsScreenProps {
   onOpenSpotifyLink: (url: string) => void;
   onOpenPlaylistDetail?: (playlist: UserPlaylistResponse) => void;
   onOpenPodcastTab?: (podcastId: string) => void;
+  onNavigateToPost?: (postId: string) => void;
+  onNavigateToLiveSession?: (sessionId: string) => void;
   onAddFavoriteTrack: (track: SpotifyTrack) => Promise<{
     success: boolean;
     message?: string;
   }>;
 }
 
-type SearchTab = 'track' | 'podcast' | 'playlist';
+type SearchTab = 'track' | 'artist' | 'album' | 'user' | 'blog' | 'schedule' | 'podcast' | 'playlist';
 
 export default function SearchResultsScreen({
   query,
@@ -39,14 +46,21 @@ export default function SearchResultsScreen({
   onOpenSpotifyLink,
   onOpenPlaylistDetail,
   onOpenPodcastTab,
+  onNavigateToPost,
+  onNavigateToLiveSession,
   onAddFavoriteTrack,
 }: SearchResultsScreenProps) {
   const { isDarkMode } = useTheme();
   const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
   const tracks = data?.tracks || [];
+  const artists = data?.artists || [];
+  const albums = data?.albums || [];
+  const users = data?.users || [];
+  const blogs = data?.blogs || [];
+  const schedules = data?.schedules || [];
   const podcasts = data?.podcasts || [];
   const playlists = data?.playlists || [];
-  const totalResults = tracks.length + podcasts.length + playlists.length;
+  const totalResults = tracks.length + artists.length + albums.length + users.length + blogs.length + schedules.length + podcasts.length + playlists.length;
   const [activeTab, setActiveTab] = useState<SearchTab>('track');
   const [isAddingFavorite, setIsAddingFavorite] = useState(false);
   const [favoritedTrackIds, setFavoritedTrackIds] = useState<Set<string>>(new Set());
@@ -122,30 +136,72 @@ export default function SearchResultsScreen({
 
       {/* Tab Bar */}
       <View style={[styles.tabBar, { borderBottomColor: palette.border, backgroundColor: palette.surface }]}>
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'track' && { borderBottomColor: palette.primary }]}
-          onPress={() => setActiveTab('track')}
-        >
-          <Text style={[styles.tabText, activeTab === 'track' ? { color: palette.primary, fontWeight: '700' } : { color: palette.textSecondary }]}>
-            Bài hát ({tracks.length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'podcast' && { borderBottomColor: palette.primary }]}
-          onPress={() => setActiveTab('podcast')}
-        >
-          <Text style={[styles.tabText, activeTab === 'podcast' ? { color: palette.primary, fontWeight: '700' } : { color: palette.textSecondary }]}>
-            Podcast ({podcasts.length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'playlist' && { borderBottomColor: palette.primary }]}
-          onPress={() => setActiveTab('playlist')}
-        >
-          <Text style={[styles.tabText, activeTab === 'playlist' ? { color: palette.primary, fontWeight: '700' } : { color: palette.textSecondary }]}>
-            Playlist ({playlists.length})
-          </Text>
-        </TouchableOpacity>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12 }}>
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'track' && { borderBottomColor: palette.primary }]}
+            onPress={() => setActiveTab('track')}
+          >
+            <Text style={[styles.tabText, activeTab === 'track' ? { color: palette.primary, fontWeight: '700' } : { color: palette.textSecondary }]}>
+              Bài hát ({tracks.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'artist' && { borderBottomColor: palette.primary }]}
+            onPress={() => setActiveTab('artist')}
+          >
+            <Text style={[styles.tabText, activeTab === 'artist' ? { color: palette.primary, fontWeight: '700' } : { color: palette.textSecondary }]}>
+              Nghệ sĩ ({artists.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'album' && { borderBottomColor: palette.primary }]}
+            onPress={() => setActiveTab('album')}
+          >
+            <Text style={[styles.tabText, activeTab === 'album' ? { color: palette.primary, fontWeight: '700' } : { color: palette.textSecondary }]}>
+              Album ({albums.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'user' && { borderBottomColor: palette.primary }]}
+            onPress={() => setActiveTab('user')}
+          >
+            <Text style={[styles.tabText, activeTab === 'user' ? { color: palette.primary, fontWeight: '700' } : { color: palette.textSecondary }]}>
+              Người dùng ({users.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'blog' && { borderBottomColor: palette.primary }]}
+            onPress={() => setActiveTab('blog')}
+          >
+            <Text style={[styles.tabText, activeTab === 'blog' ? { color: palette.primary, fontWeight: '700' } : { color: palette.textSecondary }]}>
+              Blog ({blogs.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'schedule' && { borderBottomColor: palette.primary }]}
+            onPress={() => setActiveTab('schedule')}
+          >
+            <Text style={[styles.tabText, activeTab === 'schedule' ? { color: palette.primary, fontWeight: '700' } : { color: palette.textSecondary }]}>
+              Lịch phát ({schedules.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'podcast' && { borderBottomColor: palette.primary }]}
+            onPress={() => setActiveTab('podcast')}
+          >
+            <Text style={[styles.tabText, activeTab === 'podcast' ? { color: palette.primary, fontWeight: '700' } : { color: palette.textSecondary }]}>
+              Podcast ({podcasts.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'playlist' && { borderBottomColor: palette.primary }]}
+            onPress={() => setActiveTab('playlist')}
+          >
+            <Text style={[styles.tabText, activeTab === 'playlist' ? { color: palette.primary, fontWeight: '700' } : { color: palette.textSecondary }]}>
+              Playlist ({playlists.length})
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
       {isLoading ? (
@@ -200,7 +256,192 @@ export default function SearchResultsScreen({
             )
           )}
 
-          {/* ── Podcasts ── */}
+          {/* ── Artists ── */}
+          {activeTab === 'artist' && (
+            artists.length > 0 ? (
+              <View style={styles.sectionBlock}>
+                {artists.map((artist, idx) => (
+                  <Animated.View key={artist.id} entering={FadeInDown.delay(idx * 40)}>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        if (artist.external_urls?.spotify) onOpenSpotifyLink(artist.external_urls.spotify);
+                      }}
+                      style={[styles.trackCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
+                    >
+                      <Image
+                        source={{ uri: artist.images?.[0]?.url || 'https://i.pravatar.cc/100?img=12' }}
+                        style={[styles.trackImage, { borderRadius: 25 }]}
+                      />
+                      <View style={styles.trackInfo}>
+                        <Text numberOfLines={1} style={[styles.trackName, { color: palette.textPrimary }]}>{artist.name}</Text>
+                        <Text numberOfLines={1} style={[styles.artistName, { color: palette.textSecondary }]}>
+                          Nghệ sĩ
+                        </Text>
+                      </View>
+                      <View style={[styles.favBtn, { backgroundColor: palette.primary + '15' }]}>
+                        <Text style={{ fontSize: 18 }}>↗</Text>
+                      </View>
+                    </TouchableOpacity>
+                  </Animated.View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyState}>
+                <Ionicons name="person-outline" size={48} color={palette.border} />
+                <Text style={[styles.emptyText, { color: palette.textSecondary }]}>Không tìm thấy nghệ sĩ nào</Text>
+              </View>
+            )
+          )}
+
+          {/* ── Albums ── */}
+          {activeTab === 'album' && (
+            albums.length > 0 ? (
+              <View style={styles.sectionBlock}>
+                {albums.map((album, idx) => (
+                  <Animated.View key={album.id} entering={FadeInDown.delay(idx * 40)}>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        if (album.external_urls?.spotify) onOpenSpotifyLink(album.external_urls.spotify);
+                      }}
+                      style={[styles.trackCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
+                    >
+                      <Image
+                        source={{ uri: album.images?.[0]?.url || 'https://i.pravatar.cc/100?img=12' }}
+                        style={styles.trackImage}
+                      />
+                      <View style={styles.trackInfo}>
+                        <Text numberOfLines={1} style={[styles.trackName, { color: palette.textPrimary }]}>{album.name}</Text>
+                        <Text numberOfLines={1} style={[styles.artistName, { color: palette.textSecondary }]}>
+                          {album.artists?.map((a) => a.name).join(', ')} • Album
+                        </Text>
+                      </View>
+                      <View style={[styles.favBtn, { backgroundColor: palette.primary + '15' }]}>
+                        <Text style={{ fontSize: 18 }}>↗</Text>
+                      </View>
+                    </TouchableOpacity>
+                  </Animated.View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyState}>
+                <Ionicons name="albums-outline" size={48} color={palette.border} />
+                <Text style={[styles.emptyText, { color: palette.textSecondary }]}>Không tìm thấy album nào</Text>
+              </View>
+            )
+          )}
+
+          {/* ── Users ── */}
+          {activeTab === 'user' && (
+            users.length > 0 ? (
+              <View style={styles.sectionBlock}>
+                {users.map((user, idx) => {
+                  const name = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username || user.email;
+                  return (
+                    <Animated.View key={user.id} entering={FadeInDown.delay(idx * 40)}>
+                      <TouchableOpacity
+                        activeOpacity={1}
+                        style={[styles.trackCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
+                      >
+                        <Image
+                          source={{ uri: user.profileImageUrl || 'https://i.pravatar.cc/100?img=12' }}
+                          style={[styles.trackImage, { borderRadius: 25 }]}
+                        />
+                        <View style={styles.trackInfo}>
+                          <Text numberOfLines={1} style={[styles.trackName, { color: palette.textPrimary }]}>{name}</Text>
+                          <Text numberOfLines={1} style={[styles.artistName, { color: palette.textSecondary }]}>
+                            @{user.username} {user.roleName ? `• ${user.roleName}` : ''}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    </Animated.View>
+                  );
+                })}
+              </View>
+            ) : (
+              <View style={styles.emptyState}>
+                <Ionicons name="people-outline" size={48} color={palette.border} />
+                <Text style={[styles.emptyText, { color: palette.textSecondary }]}>Không tìm thấy người dùng nào</Text>
+              </View>
+            )
+          )}
+
+          {/* ── Blogs ── */}
+          {activeTab === 'blog' && (
+            blogs.length > 0 ? (
+              <View style={styles.sectionBlock}>
+                {blogs.map((blog, idx) => (
+                  <Animated.View key={blog.id} entering={FadeInDown.delay(idx * 40)}>
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => onNavigateToPost?.(blog.id)}
+                      style={[styles.trackCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
+                    >
+                      <View style={[styles.trackImage, { backgroundColor: palette.primary + '20', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }]}>
+                        {blog.imageUrl || blog.thumbnailUrl
+                          ? <Image source={{ uri: blog.imageUrl || blog.thumbnailUrl }} style={styles.trackImage} />
+                          : <Ionicons name="document-text" size={22} color={palette.primary} />}
+                      </View>
+                      <View style={styles.trackInfo}>
+                        <Text numberOfLines={1} style={[styles.trackName, { color: palette.textPrimary }]}>{blog.title}</Text>
+                        <Text numberOfLines={1} style={[styles.artistName, { color: palette.textSecondary }]}>
+                          Blog • {new Date(blog.createdAt || '').toLocaleDateString('vi-VN')}
+                        </Text>
+                      </View>
+                      <View style={[styles.favBtn, { backgroundColor: palette.primary + '15' }]}>
+                        <Ionicons name="chevron-forward" size={20} color={palette.primary} />
+                      </View>
+                    </TouchableOpacity>
+                  </Animated.View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyState}>
+                <Ionicons name="document-text-outline" size={48} color={palette.border} />
+                <Text style={[styles.emptyText, { color: palette.textSecondary }]}>Không tìm thấy blog nào</Text>
+              </View>
+            )
+          )}
+
+          {/* ── Schedules ── */}
+          {activeTab === 'schedule' && (
+            schedules.length > 0 ? (
+              <View style={styles.sectionBlock}>
+                {schedules.map((schedule, idx) => (
+                  <Animated.View key={schedule.id} entering={FadeInDown.delay(idx * 40)}>
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => onNavigateToLiveSession?.(schedule.liveSessionId || schedule.id)}
+                      style={[styles.trackCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
+                    >
+                      <View style={[styles.trackImage, { backgroundColor: palette.primary + '20', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }]}>
+                        {schedule.liveSession?.thumbnailUrl || schedule.thumbnailUrl
+                          ? <Image source={{ uri: (schedule.liveSession?.thumbnailUrl || schedule.thumbnailUrl) }} style={styles.trackImage} />
+                          : <Ionicons name="radio" size={22} color={palette.primary} />}
+                      </View>
+                      <View style={styles.trackInfo}>
+                        <Text numberOfLines={1} style={[styles.trackName, { color: palette.textPrimary }]}>{schedule.title || schedule.liveSession?.sessionName || 'Lịch phát'}</Text>
+                        <Text numberOfLines={1} style={[styles.artistName, { color: palette.textSecondary }]}>
+                          Lịch phát sóng {schedule.status ? `• ${schedule.status}` : ''}
+                        </Text>
+                      </View>
+                      <View style={[styles.favBtn, { backgroundColor: palette.primary + '15' }]}>
+                        <Ionicons name="chevron-forward" size={20} color={palette.primary} />
+                      </View>
+                    </TouchableOpacity>
+                  </Animated.View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyState}>
+                <Ionicons name="radio-outline" size={48} color={palette.border} />
+                <Text style={[styles.emptyText, { color: palette.textSecondary }]}>Không tìm thấy lịch phát nào</Text>
+              </View>
+            )
+          )}
           {activeTab === 'podcast' && (
             podcasts.length > 0 ? (
               <View style={styles.sectionBlock}>
@@ -314,14 +555,13 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   tabBar: {
-    flexDirection: 'row',
     borderBottomWidth: 1,
   },
   tabItem: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
+    paddingHorizontal: 16,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },

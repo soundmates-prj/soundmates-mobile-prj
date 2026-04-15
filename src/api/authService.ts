@@ -421,6 +421,37 @@ class AuthService {
             };
         }
     }
+
+    /**
+     * Search users
+     */
+    async searchUsers(params: { q: string; page?: number; pageSize?: number }): Promise<ApiResponse<{ items: UserProfileFullResponse[] }>> {
+        try {
+            const response = await authApiClient.get(USER_ENDPOINTS.SEARCH, {
+                params: {
+                    q: params.q,
+                    page: params.page || 1,
+                    pageSize: params.pageSize || 10
+                }
+            });
+
+            // Handle API wrapper response gracefully
+            const rawData = response.data as any;
+            const payload = rawData?.data ?? rawData;
+            
+            return {
+                success: true,
+                data: payload,
+            };
+        } catch (error: any) {
+            console.log('[AuthService] searchUsers error:', error);
+            return {
+                success: false,
+                message: handleApiError(error),
+                data: { items: [] }
+            };
+        }
+    }
 }
 
 // Export singleton instance
