@@ -381,8 +381,8 @@ export default function SearchResultsScreen({
                       style={[styles.trackCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
                     >
                       <View style={[styles.trackImage, { backgroundColor: palette.primary + '20', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }]}>
-                        {blog.imageUrl || blog.thumbnailUrl
-                          ? <Image source={{ uri: blog.imageUrl || blog.thumbnailUrl }} style={styles.trackImage} />
+                        {blog.imageUrl
+                          ? <Image source={{ uri: blog.imageUrl }} style={styles.trackImage} />
                           : <Ionicons name="document-text" size={22} color={palette.primary} />}
                       </View>
                       <View style={styles.trackInfo}>
@@ -418,8 +418,8 @@ export default function SearchResultsScreen({
                       style={[styles.trackCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
                     >
                       <View style={[styles.trackImage, { backgroundColor: palette.primary + '20', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }]}>
-                        {schedule.liveSession?.thumbnailUrl || schedule.thumbnailUrl
-                          ? <Image source={{ uri: (schedule.liveSession?.thumbnailUrl || schedule.thumbnailUrl) }} style={styles.trackImage} />
+                        {schedule.liveSession?.thumbnailUrl
+                          ? <Image source={{ uri: schedule.liveSession?.thumbnailUrl }} style={styles.trackImage} />
                           : <Ionicons name="radio" size={22} color={palette.primary} />}
                       </View>
                       <View style={styles.trackInfo}>

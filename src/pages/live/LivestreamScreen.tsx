@@ -29,6 +29,7 @@ import FormTextField from '../../components/ui/FormTextField';
 import { showToast } from '../../components/ui/Toast';
 import { useAudioPlayer } from '../../context/AudioPlayerContext';
 import { useUser } from '../../context/UserContext';
+import { liveHubService, HubChatMessage } from '../../services/liveHubService';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -762,6 +763,46 @@ export default function LivestreamScreen({
     void fetchAndValidateSession();
   }, [fetchAndValidateSession]);
 
+  // ── SignalR: join session & listen for chat ──────────────────────
+  useEffect(() => {
+    if (!activeSession) return;
+
+    const userId = user?.userId || null;
+    const myDisplayName = user?.firstName || user?.username || 'Bạn';
+    let unsubChat: (() => void) | null = null;
+
+    const connectHub = async () => {
+      try {
+        await liveHubService.start();
+        await liveHubService.joinSession(activeSession.id, userId);
+        console.log('[LivestreamScreen] SignalR joined session', activeSession.id);
+
+        // Listen for incoming chat messages
+        unsubChat = liveHubService.onReceiveChat((chat: HubChatMessage) => {
+          const incoming: ChatMessage = {
+            id: chat.id || `hub-${Date.now()}-${Math.random()}`,
+            author: chat.userName || `User ${chat.userId?.slice(0, 6) || '??'}`,
+            message: chat.message,
+            timestamp: chat.createdAt
+              ? new Date(chat.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+              : new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+            avatarColor: chat.userId === userId ? '#55C5F1' : '#A78BFA',
+          };
+          setMessages((prev) => [...prev, incoming]);
+        });
+      } catch (err) {
+        console.warn('[LivestreamScreen] SignalR connection error:', err);
+      }
+    };
+
+    void connectHub();
+
+    return () => {
+      if (unsubChat) unsubChat();
+      void liveHubService.leaveSession(activeSession.id, userId).catch(() => {});
+    };
+  }, [activeSession, user]);
+
   // ── Load audio when session found ───────────────────────────────
   useEffect(() => {
     if (!activeSession) return;
@@ -845,19 +886,46 @@ export default function LivestreamScreen({
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
   }, [isTypingMode]);
 
-  const handleSendMessage = useCallback(() => {
+  const handleSendMessage = useCallback(async () => {
     if (!inputMessage.trim()) return;
-    const msg: ChatMessage = {
-      id: Date.now().toString(),
-      author: user?.firstName || user?.username || 'Bạn',
-      message: inputMessage.trim(),
-      timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-      avatarColor: '#55C5F1',
-    };
-    setMessages((prev) => [...prev, msg]);
+    const userId = user?.userId;
+    if (!activeSession || !userId) {
+      // Fallback: local-only message if no hub connection
+      const msg: ChatMessage = {
+        id: Date.now().toString(),
+        author: user?.firstName || user?.username || 'Bạn',
+        message: inputMessage.trim(),
+        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        avatarColor: '#55C5F1',
+      };
+      setMessages((prev) => [...prev, msg]);
+      setInputMessage('');
+      Keyboard.dismiss();
+      return;
+    }
+
+    const text = inputMessage.trim();
     setInputMessage('');
     Keyboard.dismiss();
-  }, [inputMessage, user]);
+
+    try {
+      const displayName = user?.firstName || user?.username || 'Bạn';
+      await liveHubService.sendChat(activeSession.id, userId, text, displayName);
+      // The ReceiveChat event will add the message to the list
+    } catch (err) {
+      console.warn('[LivestreamScreen] sendChat failed:', err);
+      // Fallback: show locally if send fails
+      const msg: ChatMessage = {
+        id: Date.now().toString(),
+        author: user?.firstName || user?.username || 'Bạn',
+        message: text,
+        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        avatarColor: '#55C5F1',
+      };
+      setMessages((prev) => [...prev, msg]);
+      showToast.warning('Tin nhắn offline', 'Tin nhắn chỉ hiển thị ở thiết bị này.');
+    }
+  }, [inputMessage, user, activeSession]);
 
   const handleRequestSuccess = useCallback((songTitle: string) => {
     const msg: ChatMessage = {
@@ -1121,7 +1189,7 @@ export default function LivestreamScreen({
                     containerStyle={{ flex: 1 }}
                     value={inputMessage}
                     onChangeText={setInputMessage}
-                    onSubmitEditing={handleSendMessage}
+                    onSubmitEditing={() => void handleSendMessage()}
                     onFocus={() => setIsInputFocused(true)}
                     onBlur={() => setIsInputFocused(false)}
                     placeholder="Nhập bình luận..."
@@ -1130,7 +1198,7 @@ export default function LivestreamScreen({
                     style={styles.input}
                   />
                   <TouchableOpacity
-                    onPress={handleSendMessage}
+                    onPress={() => void handleSendMessage()}
                     disabled={!inputMessage.trim()}
                     style={[styles.sendButton, !inputMessage.trim() && styles.sendButtonDisabled]}
                   >
