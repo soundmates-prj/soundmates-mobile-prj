@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Dimensions,
   Image,
@@ -16,9 +17,9 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   UIManager,
-  View,
-  TouchableWithoutFeedback
+  View
 } from 'react-native';
 import authApiClient from '../../api/apiClient';
 import {
@@ -30,7 +31,7 @@ import FormTextField from '../../components/ui/FormTextField';
 import { showToast } from '../../components/ui/Toast';
 import { useAudioPlayer } from '../../context/AudioPlayerContext';
 import { useUser } from '../../context/UserContext';
-import { liveHubService, HubChatMessage } from '../../services/liveHubService';
+import { HubChatMessage, liveHubService } from '../../services/liveHubService';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -48,6 +49,7 @@ interface ChatMessage {
   isRequest?: boolean;
   requestSong?: string;
   avatarColor?: string;
+  isDeleted?: boolean;
 }
 
 interface FloatingEmoji {
@@ -376,83 +378,83 @@ function RequestSongModal({
         <Pressable style={StyleSheet.absoluteFill} onPress={() => { Keyboard.dismiss(); onClose(); }} />
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={styles.modalCard}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>🎵 Request Bài Hát</Text>
-            <TouchableOpacity onPress={onClose} style={styles.modalCloseButton}>
-              <Ionicons name="close" size={18} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>🎵 Request Bài Hát</Text>
+              <TouchableOpacity onPress={onClose} style={styles.modalCloseButton}>
+                <Ionicons name="close" size={18} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
 
-          <View style={styles.searchRow}>
-            <Ionicons name="search" size={16} color="rgba(255,255,255,0.4)" style={{ marginRight: 8 }} />
-            <FormTextField
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Tìm bài hát hoặc nghệ sĩ..."
-              placeholderTextColor="rgba(255,255,255,0.35)"
-              style={styles.searchInput}
-              containerStyle={{ flex: 1 }}
-            />
-          </View>
+            <View style={styles.searchRow}>
+              <Ionicons name="search" size={16} color="rgba(255,255,255,0.4)" style={{ marginRight: 8 }} />
+              <FormTextField
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Tìm bài hát hoặc nghệ sĩ..."
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                style={styles.searchInput}
+                containerStyle={{ flex: 1 }}
+              />
+            </View>
 
-          {/* Message to host */}
-          <View style={styles.requestMessageWrap}>
-            <FormTextField
-              value={requestMessage}
-              onChangeText={(text: string) => setRequestMessage(text.slice(0, 300))}
-              placeholder="Nhắn host (tuỳ chọn): ví dụ 'Cho mình nghe bài này tặng bạn A'"
-              placeholderTextColor="rgba(255,255,255,0.3)"
-              style={styles.requestMessageInput}
-              containerStyle={{ flex: 1 }}
-              multiline
-              numberOfLines={2}
-            />
-            <Text style={styles.requestMessageCount}>{requestMessage.length}/300</Text>
-          </View>
+            {/* Message to host */}
+            <View style={styles.requestMessageWrap}>
+              <FormTextField
+                value={requestMessage}
+                onChangeText={(text: string) => setRequestMessage(text.slice(0, 300))}
+                placeholder="Nhắn host (tuỳ chọn): ví dụ 'Cho mình nghe bài này tặng bạn A'"
+                placeholderTextColor="rgba(255,255,255,0.3)"
+                style={styles.requestMessageInput}
+                containerStyle={{ flex: 1 }}
+                multiline
+                numberOfLines={2}
+              />
+              <Text style={styles.requestMessageCount}>{requestMessage.length}/300</Text>
+            </View>
 
-          <View style={styles.requestListContainer}>
-            {isLoading ? (
-              <View style={styles.requestEmptyState}>
-                <ActivityIndicator color="#8B5CF6" />
-                <Text style={styles.requestEmptyText}>Đang tải danh sách bài hát...</Text>
-              </View>
-            ) : filteredCandidates.length === 0 ? (
-              <View style={styles.requestEmptyState}>
-                <Ionicons name="musical-notes-outline" size={20} color="#94A3B8" />
-                <Text style={styles.requestEmptyText}>Không tìm thấy bài hát phù hợp</Text>
-              </View>
-            ) : (
-              <ScrollView style={styles.requestList} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                {filteredCandidates.map((song) => {
-                  const requested = requestedIds.has(song.id);
-                  const isSubmitting = isSubmittingId === song.id;
-                  const canRequest = Boolean(song.mediaFileId);
-                  return (
-                    <View key={song.id} style={styles.requestItem}>
-                      <View style={styles.requestItemMeta}>
-                        <Text style={styles.requestItemTitle} numberOfLines={1}>{song.title}</Text>
-                        <Text style={styles.requestItemArtist} numberOfLines={1}>
-                          {song.artist}{song.album ? ` • ${song.album}` : ''}
-                        </Text>
+            <View style={styles.requestListContainer}>
+              {isLoading ? (
+                <View style={styles.requestEmptyState}>
+                  <ActivityIndicator color="#8B5CF6" />
+                  <Text style={styles.requestEmptyText}>Đang tải danh sách bài hát...</Text>
+                </View>
+              ) : filteredCandidates.length === 0 ? (
+                <View style={styles.requestEmptyState}>
+                  <Ionicons name="musical-notes-outline" size={20} color="#94A3B8" />
+                  <Text style={styles.requestEmptyText}>Không tìm thấy bài hát phù hợp</Text>
+                </View>
+              ) : (
+                <ScrollView style={styles.requestList} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                  {filteredCandidates.map((song) => {
+                    const requested = requestedIds.has(song.id);
+                    const isSubmitting = isSubmittingId === song.id;
+                    const canRequest = Boolean(song.mediaFileId);
+                    return (
+                      <View key={song.id} style={styles.requestItem}>
+                        <View style={styles.requestItemMeta}>
+                          <Text style={styles.requestItemTitle} numberOfLines={1}>{song.title}</Text>
+                          <Text style={styles.requestItemArtist} numberOfLines={1}>
+                            {song.artist}{song.album ? ` • ${song.album}` : ''}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          disabled={!canRequest || requested || !!isSubmittingId}
+                          style={[
+                            styles.requestItemButton,
+                            (!canRequest || requested || isSubmitting) && styles.requestItemButtonDisabled,
+                          ]}
+                          onPress={() => handleRequestSong(song)}
+                        >
+                          <Text style={styles.requestItemButtonText}>
+                            {requested ? 'Đã gửi' : isSubmitting ? 'Đang gửi...' : canRequest ? 'Request' : 'Không hỗ trợ'}
+                          </Text>
+                        </TouchableOpacity>
                       </View>
-                      <TouchableOpacity
-                        disabled={!canRequest || requested || !!isSubmittingId}
-                        style={[
-                          styles.requestItemButton,
-                          (!canRequest || requested || isSubmitting) && styles.requestItemButtonDisabled,
-                        ]}
-                        onPress={() => handleRequestSong(song)}
-                      >
-                        <Text style={styles.requestItemButtonText}>
-                          {requested ? 'Đã gửi' : isSubmitting ? 'Đang gửi...' : canRequest ? 'Request' : 'Không hỗ trợ'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  );
-                })}
-              </ScrollView>
-            )}
-          </View>
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </View>
           </View>
         </TouchableWithoutFeedback>
       </View>
@@ -573,7 +575,7 @@ function LyricScreen({
 
 // ── ChatSection ────────────────────────────────────────────────────────────
 
-function ChatSection({ messages }: { messages: ChatMessage[] }) {
+function ChatSection({ messages, onDelete }: { messages: ChatMessage[]; onDelete?: (msg: ChatMessage) => void }) {
   const scrollRef = useRef<ScrollView>(null);
 
   const scrollToBottom = useCallback((animated = false) => {
@@ -604,12 +606,16 @@ function ChatSection({ messages }: { messages: ChatMessage[] }) {
             ? styles.chatBubbleRequest
             : styles.chatBubble;
         return (
-          <View key={msg.id} style={styles.chatRow}>
-            <View style={[styles.chatAvatarCircle, { backgroundColor: msg.avatarColor || '#374151' }]}>
-              <Text style={styles.chatAvatarText}>
-                {(msg.author || '?').charAt(0).toUpperCase()}
-              </Text>
-            </View>
+          <TouchableOpacity key={msg.id} style={styles.chatRow} onLongPress={() => onDelete && onDelete(msg)}>
+            {msg.avatar ? (
+              <Image source={{ uri: msg.avatar }} style={[styles.chatAvatarCircle, { backgroundColor: '#374151' }]} />
+            ) : (
+              <View style={[styles.chatAvatarCircle, { backgroundColor: msg.avatarColor || '#374151' }]}>
+                <Text style={styles.chatAvatarText}>
+                  {(msg.author || '?').charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
             <View style={[styles.chatBubbleBase, bubbleStyle]}>
               <Text style={[styles.chatAuthorText, msg.isHost && styles.chatAuthorHost]}>
                 {msg.author}{msg.isHost ? ' (Host)' : ''}
@@ -620,10 +626,14 @@ function ChatSection({ messages }: { messages: ChatMessage[] }) {
                   <Text style={styles.chatRequestText}>{`Requested: ${msg.requestSong}`}</Text>
                 </View>
               )}
-              <Text style={styles.chatMessageText}>{msg.message}</Text>
+              {msg.isDeleted ? (
+                <Text style={[styles.chatMessageText, { fontStyle: 'italic', color: '#9CA3AF' }]}>Tin nhắn đã bị thu hồi/xoá.</Text>
+              ) : (
+                <Text style={styles.chatMessageText}>{msg.message}</Text>
+              )}
               <Text style={styles.chatTimestamp}>{msg.timestamp}</Text>
             </View>
-          </View>
+          </TouchableOpacity>
         );
       })}
     </ScrollView>
@@ -795,6 +805,8 @@ export default function LivestreamScreen({
     const userId = user?.userId || null;
     const myDisplayName = user?.firstName || user?.username || 'Bạn';
     let unsubChat: (() => void) | null = null;
+    let unsubChatHistory: (() => void) | null = null;
+    let unsubChatDeleted: (() => void) | null = null;
 
     const connectHub = async () => {
       try {
@@ -802,16 +814,40 @@ export default function LivestreamScreen({
         await liveHubService.joinSession(activeSession.id, userId);
         console.log('[LivestreamScreen] SignalR joined session', activeSession.id);
 
+        let latestHistoryRef: ChatMessage[] = [];
+
+        unsubChatHistory = liveHubService.onChatHistory((chats) => {
+          const history = chats.map((chat) => ({
+            id: chat.id || `hub-${Date.now()}-${Math.random()}`,
+            author: chat.userName || `User ${chat.userId?.slice(0, 6) || '??'}`,
+            message: chat.message,
+            avatar: chat.avatarUrl,
+            timestamp: chat.createdAt
+              ? new Date(chat.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+              : new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+            avatarColor: chat.userId === userId ? '#55C5F1' : '#A78BFA',
+            isHost: chat.userId === activeSession.userId,
+          }));
+          latestHistoryRef = history;
+          setMessages(history);
+        });
+
+        unsubChatDeleted = liveHubService.onChatDeleted((chatId) => {
+          setMessages((prev) => prev.map(m => m.id === chatId ? { ...m, isDeleted: true } : m));
+        });
+
         // Listen for incoming chat messages
         unsubChat = liveHubService.onReceiveChat((chat: HubChatMessage) => {
           const incoming: ChatMessage = {
             id: chat.id || `hub-${Date.now()}-${Math.random()}`,
             author: chat.userName || `User ${chat.userId?.slice(0, 6) || '??'}`,
             message: chat.message,
+            avatar: chat.avatarUrl,
             timestamp: chat.createdAt
               ? new Date(chat.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
               : new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
             avatarColor: chat.userId === userId ? '#55C5F1' : '#A78BFA',
+            isHost: chat.userId === activeSession.userId
           };
           setMessages((prev) => [...prev, incoming]);
         });
@@ -824,7 +860,9 @@ export default function LivestreamScreen({
 
     return () => {
       if (unsubChat) unsubChat();
-      void liveHubService.leaveSession(activeSession.id, userId).catch(() => {});
+      if (unsubChatHistory) unsubChatHistory();
+      if (unsubChatDeleted) unsubChatDeleted();
+      void liveHubService.leaveSession(activeSession.id, userId).catch(() => { });
     };
   }, [activeSession, user]);
 
@@ -935,7 +973,8 @@ export default function LivestreamScreen({
 
     try {
       const displayName = user?.firstName || user?.username || 'Bạn';
-      await liveHubService.sendChat(activeSession.id, userId, text, displayName);
+      const userAvatar = user?.profileImageUrl || ''; // Get user avatar if exists
+      await liveHubService.sendChat(activeSession.id, userId, text, displayName, userAvatar);
       // The ReceiveChat event will add the message to the list
     } catch (err) {
       console.warn('[LivestreamScreen] sendChat failed:', err);
@@ -964,6 +1003,37 @@ export default function LivestreamScreen({
     };
     setMessages((prev) => [...prev, msg]);
   }, [user]);
+
+  const handleDeleteChat = useCallback((msg: ChatMessage) => {
+    if (!activeSession || !user) return;
+    const userId = user.userId;
+    const role = user.roleName || 'User';
+
+    const isStaffOrHost = role === 'Host' || role === 'Staff' || role === 'Admin' || activeSession.userId === userId;
+    const isOwner = msg.id.includes(userId) || msg.author.includes('Bạn') || msg.avatarColor === '#55C5F1';
+
+    if (!isStaffOrHost && !isOwner) {
+      return;
+    }
+    Alert.alert(
+      'Xóa tin nhắn',
+      'Bạn có chắc chắn muốn thu hồi tin nhắn này không?',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Xóa',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await liveHubService.deleteChat(activeSession.id, msg.id, userId, role);
+            } catch (err) {
+              console.warn('Failed to delete chat:', err);
+            }
+          }
+        }
+      ]
+    );
+  }, [activeSession, user]);
 
   // ── Page swipe (left ↔ right, no right-swipe = back) ─────────────
   const handleMomentumScrollEnd = useCallback((e: any) => {
@@ -1199,7 +1269,7 @@ export default function LivestreamScreen({
               <Ionicons name="chatbubbles" size={14} color="#A78BFA" />
               <Text style={styles.chatHeaderText}>Chat trực tiếp</Text>
             </View>
-            <ChatSection messages={messages} />
+            <ChatSection messages={messages} onDelete={handleDeleteChat} />
           </View>
 
           {/* Bottom bar: input + actions */}

@@ -105,6 +105,7 @@ export interface HubChatMessage {
   liveSessionId: string;
   userId: string;
   userName?: string;
+  avatarUrl?: string; // NEW
   message: string;
   createdAt: string;
 }
@@ -302,12 +303,19 @@ class LiveHubService {
     this.joinedSessions.delete(sessionId);
   }
 
-  async sendChat(sessionId: string, userId: string, message: string, userName?: string): Promise<void> {
+  async sendChat(sessionId: string, userId: string, message: string, userName?: string, avatarUrl?: string): Promise<void> {
     const conn = this.getConnection();
     if (conn.state !== signalR.HubConnectionState.Connected) {
       throw new Error('Mất kết nối — không thể gửi tin nhắn');
     }
-    await conn.invoke('SendChat', sessionId, userId, message, userName || null);
+    await conn.invoke('SendChat', sessionId, userId, message, userName || null, avatarUrl || null);
+  }
+
+  async deleteChat(sessionId: string, chatId: string, requestUserId: string, role: string): Promise<void> {
+    const conn = this.getConnection();
+    if (conn.state === signalR.HubConnectionState.Connected) {
+      await conn.invoke('DeleteChat', sessionId, chatId, requestUserId, role);
+    }
   }
 
   // ── Event listeners ───────────────────────────────────────────────
@@ -316,6 +324,18 @@ class LiveHubService {
     const conn = this.getConnection();
     conn.on('ReceiveChat', callback);
     return () => conn.off('ReceiveChat', callback);
+  }
+
+  onChatHistory(callback: (chats: HubChatMessage[]) => void): () => void {
+    const conn = this.getConnection();
+    conn.on('ChatHistory', callback);
+    return () => conn.off('ChatHistory', callback);
+  }
+
+  onChatDeleted(callback: (chatId: string) => void): () => void {
+    const conn = this.getConnection();
+    conn.on('ChatDeleted', callback);
+    return () => conn.off('ChatDeleted', callback);
   }
 
   onSessionStarted(callback: (session: LiveSessionEvent) => void): () => void {

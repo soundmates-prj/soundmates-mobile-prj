@@ -2,7 +2,7 @@
   "expo": {
     "name": "SoundMates",
     "slug": "soundmates",
-    "version": "4.0.1",
+    "version": "4.0.2",
     "orientation": "portrait",
     "icon": "./assets/logo_notext_sq.png",
     "scheme": "soundmates",
