@@ -17,7 +17,8 @@ import {
   Text,
   TouchableOpacity,
   UIManager,
-  View
+  View,
+  TouchableWithoutFeedback
 } from 'react-native';
 import authApiClient from '../../api/apiClient';
 import {
@@ -283,6 +284,7 @@ function RequestSongModal({
   onRequestSuccess: (songTitle: string) => void;
 }) {
   const [search, setSearch] = useState('');
+  const [requestMessage, setRequestMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmittingId, setIsSubmittingId] = useState<string | null>(null);
   const [requestedIds, setRequestedIds] = useState<Set<string>>(new Set());
@@ -319,8 +321,10 @@ function RequestSongModal({
   useEffect(() => {
     if (!isOpen) return;
     setSearch('');
+    setRequestMessage('');
     loadCandidates();
-  }, [isOpen, loadCandidates]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   const filteredCandidates = useMemo(
     () =>
@@ -344,13 +348,17 @@ function RequestSongModal({
     }
     setIsSubmittingId(candidate.id);
     try {
-      await livestreamService.createSongRequest(liveSessionId, { mediaFileId: candidate.mediaFileId });
+      await livestreamService.createSongRequest(liveSessionId, {
+        mediaFileId: candidate.mediaFileId,
+        message: requestMessage.trim() || undefined,
+      });
       setRequestedIds((prev) => {
         const next = new Set(prev);
         next.add(candidate.id);
         return next;
       });
       onRequestSuccess(candidate.title);
+      setRequestMessage('');
       showToast.success('Đã gửi yêu cầu', `Bài "${candidate.title}" đã được gửi tới host`);
       onClose();
     } catch (error: any) {
@@ -365,8 +373,9 @@ function RequestSongModal({
   return (
     <Modal visible={isOpen} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.modalBackdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={styles.modalCard}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => { Keyboard.dismiss(); onClose(); }} />
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalCard}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>🎵 Request Bài Hát</Text>
             <TouchableOpacity onPress={onClose} style={styles.modalCloseButton}>
@@ -386,6 +395,21 @@ function RequestSongModal({
             />
           </View>
 
+          {/* Message to host */}
+          <View style={styles.requestMessageWrap}>
+            <FormTextField
+              value={requestMessage}
+              onChangeText={(text: string) => setRequestMessage(text.slice(0, 300))}
+              placeholder="Nhắn host (tuỳ chọn): ví dụ 'Cho mình nghe bài này tặng bạn A'"
+              placeholderTextColor="rgba(255,255,255,0.3)"
+              style={styles.requestMessageInput}
+              containerStyle={{ flex: 1 }}
+              multiline
+              numberOfLines={2}
+            />
+            <Text style={styles.requestMessageCount}>{requestMessage.length}/300</Text>
+          </View>
+
           <View style={styles.requestListContainer}>
             {isLoading ? (
               <View style={styles.requestEmptyState}>
@@ -398,7 +422,7 @@ function RequestSongModal({
                 <Text style={styles.requestEmptyText}>Không tìm thấy bài hát phù hợp</Text>
               </View>
             ) : (
-              <ScrollView style={styles.requestList} showsVerticalScrollIndicator={false}>
+              <ScrollView style={styles.requestList} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 {filteredCandidates.map((song) => {
                   const requested = requestedIds.has(song.id);
                   const isSubmitting = isSubmittingId === song.id;
@@ -429,7 +453,8 @@ function RequestSongModal({
               </ScrollView>
             )}
           </View>
-        </View>
+          </View>
+        </TouchableWithoutFeedback>
       </View>
     </Modal>
   );
@@ -1747,6 +1772,18 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   searchInput: { flex: 1, fontSize: 14, color: '#FFFFFF' },
+  requestMessageWrap: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
+    marginBottom: 14,
+  },
+  requestMessageInput: { fontSize: 13, color: '#FFFFFF', minHeight: 40, textAlignVertical: 'top' },
+  requestMessageCount: { color: 'rgba(255,255,255,0.3)', fontSize: 11, textAlign: 'right', marginTop: 4 },
   requestListContainer: { maxHeight: 320 },
   requestList: { maxHeight: 320 },
   requestItem: {
