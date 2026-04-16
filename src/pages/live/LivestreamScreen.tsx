@@ -21,6 +21,7 @@ import {
   UIManager,
   View
 } from 'react-native';
+import EmojiPicker from 'rn-emoji-keyboard';
 import authApiClient from '../../api/apiClient';
 import {
   TrackInfo,
@@ -820,6 +821,7 @@ export default function LivestreamScreen({
   const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(0); // 0 = main, 1 = lyrics
   const [chatActionTarget, setChatActionTarget] = useState<ChatMessage | null>(null);
+  const [isEmojiKeyboardOpen, setIsEmojiKeyboardOpen] = useState(false);
   // Separate open/data to avoid jump-to-top when closing (data persists through fade animation)
   const [dotMenuOpen, setDotMenuOpen] = useState(false);
   const [dotMenuData, setDotMenuData] = useState<{ msg: ChatMessage; pageX: number; pageY: number }>(
@@ -1444,6 +1446,13 @@ export default function LivestreamScreen({
               style={styles.bottomBar}
             >
               <View style={styles.bottomBarRow}>
+                <View style={styles.bottomAvatarWrap}>
+                  {user?.profileImageUrl ? (
+                    <Image source={{ uri: user.profileImageUrl }} style={styles.bottomAvatar} />
+                  ) : (
+                    <Text style={styles.bottomAvatarText}>{(user?.username || 'B').charAt(0).toUpperCase()}</Text>
+                  )}
+                </View>
                 <View style={styles.inputContainer}>
                   <FormTextField
                     containerStyle={{ flex: 1 }}
@@ -1453,24 +1462,35 @@ export default function LivestreamScreen({
                     onFocus={() => setIsInputFocused(true)}
                     onBlur={() => setIsInputFocused(false)}
                     placeholder="Nhập bình luận..."
-                    placeholderTextColor="rgba(255,255,255,0.5)"
+                    placeholderTextColor="#888"
                     returnKeyType="send"
                     style={styles.input}
                   />
                   <TouchableOpacity
-                    onPress={() => void handleSendMessage()}
-                    disabled={!inputMessage.trim()}
-                    style={[styles.sendButton, !inputMessage.trim() && styles.sendButtonDisabled]}
+                    onPress={() => setIsEmojiKeyboardOpen(true)}
                   >
-                    <Ionicons name="send" size={16} color="#FFFFFF" />
+                    <Ionicons name="happy-outline" size={24} color="gray" />
                   </TouchableOpacity>
                 </View>
 
-                {!isTypingMode && (
+                {isTypingMode ? (
+                  <TouchableOpacity
+                    onPress={() => void handleSendMessage()}
+                    disabled={!inputMessage.trim()}
+                    style={styles.sendButtonOutside}
+                  >
+                    <Ionicons
+                      name="send-outline"
+                      size={24}
+                      color={inputMessage.trim() ? "#000" : "rgba(0,0,0,0.3)"}
+                      style={{ transform: [{ rotate: '-45deg' }, { translateX: 2 }] }}
+                    />
+                  </TouchableOpacity>
+                ) : (
                   <>
-                    <TouchableOpacity style={styles.actionButton} onPress={() => setShowReactions(true)}>
+                    {/* <TouchableOpacity style={styles.actionButton} onPress={() => setShowReactions(true)}>
                       <Ionicons name="happy" size={20} color="#FFFFFF" />
-                    </TouchableOpacity>
+                    </TouchableOpacity> */}
                     <TouchableOpacity style={styles.actionButton} onPress={() => setShowRequestModal(true)}>
                       <Ionicons name="musical-notes" size={20} color="#FFFFFF" />
                     </TouchableOpacity>
@@ -1479,6 +1499,12 @@ export default function LivestreamScreen({
               </View>
             </LinearGradient>
           </View>
+          <EmojiPicker
+            onEmojiSelected={(e) => setInputMessage(prev => prev + e.emoji)}
+            open={isEmojiKeyboardOpen}
+            onClose={() => setIsEmojiKeyboardOpen(false)}
+            disableSafeArea={true}
+          />
         </View>
 
         {/* ══ PAGE 2: Lyric View ══ */}
@@ -1951,27 +1977,39 @@ const styles = StyleSheet.create({
     zIndex: 30,
   },
   bottomBar: { paddingHorizontal: 14, paddingTop: 12, paddingBottom: 10 },
-  bottomBarRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  bottomBarRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  bottomAvatarWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: '#1a9fd4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  bottomAvatar: { width: '100%', height: '100%' },
+  bottomAvatarText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
   inputContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    paddingHorizontal: 14,
-    paddingVertical: 5,
+    paddingLeft: 16,
+    paddingRight: 8,
+    paddingVertical: 4,
     gap: 6,
   },
-  input: { flex: 1, color: '#FFFFFF', fontSize: 14 },
-  sendButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#8B5CF6',
+  input: { flex: 1, color: '#000', fontSize: 14, minHeight: 36 },
+  sendButtonOutside: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#fff',
+    flexShrink: 0,
   },
   sendButtonDisabled: { opacity: 0.3 },
   actionButton: {
