@@ -28,7 +28,9 @@ import {
   userPlaylistService,
 } from '../../../api';
 import FormTextField from '../../../components/ui/FormTextField';
+import MiniPlayer from '../../../components/player/MiniPlayer';
 import { showToast } from '../../../components/ui/Toast';
+import { useAudioPlayer } from '../../../context/AudioPlayerContext';
 import { useTheme } from '../../../context/ThemeContext';
 
 interface PlaylistDetailModalProps {
@@ -82,6 +84,8 @@ export default function PlaylistDetailModal({
   const { isDarkMode } = useTheme();
   const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
 
+  const { loadTrack, activeTrack, isPlaying } = useAudioPlayer();
+
   const [playlistDetail, setPlaylistDetail] = useState<UserPlaylistResponse | null>(
     initialPlaylist,
   );
@@ -94,6 +98,38 @@ export default function PlaylistDetailModal({
   const [selectedCatalogMediaIds, setSelectedCatalogMediaIds] = useState<string[]>([]);
   const [isLoadingCatalogTracks, setIsLoadingCatalogTracks] = useState(false);
   const [isSubmittingTracks, setIsSubmittingTracks] = useState(false);
+
+  const handlePlayTrack = useCallback(async (track: PlaylistTrackResponse) => {
+    try {
+      let catalog = catalogTracks;
+      if (catalog.length === 0) {
+        showToast.info('Đang tải bài hát...', '');
+        const res = await userPlaylistService.getMusicCatalog();
+        if (res.success && res.data) {
+          catalog = res.data;
+          setCatalogTracks(res.data);
+        }
+      }
+      
+      const fileData = catalog.find((c) => c.id === track.mediaFileId);
+      if (!fileData?.fileUrl) {
+        showToast.warning('Lỗi', 'Không tìm thấy tệp âm thanh của bài hát này.');
+        return;
+      }
+      
+      loadTrack({
+        id: track.id,
+        url: fileData.fileUrl,
+        title: track.title,
+        artist: track.artist || 'Không rõ nghệ sĩ',
+        artUrl: fileData.artworkUrl || playlistDetail?.thumbnailUrl || '',
+        duration: track.durationSeconds,
+        type: 'playlist'
+      });
+    } catch (error) {
+      showToast.error('Lỗi', 'Không thể phát bài hát này.');
+    }
+  }, [catalogTracks, loadTrack, playlistDetail]);
 
   const [showPlaylistEditor, setShowPlaylistEditor] = useState(false);
   const [playlistNameInput, setPlaylistNameInput] = useState('');
@@ -564,8 +600,8 @@ export default function PlaylistDetailModal({
         presentationStyle="fullScreen"
         onRequestClose={handleRequestClose}
       >
-        <View style={[styles.container, { backgroundColor: palette.background }]}> 
-          <View style={[styles.header, { backgroundColor: palette.surface, borderBottomColor: palette.border }]}> 
+        <View style={[styles.container, { backgroundColor: palette.background }]}>
+          <View style={[styles.header, { backgroundColor: palette.surface, borderBottomColor: palette.border }]}>
             <TouchableOpacity
               style={[styles.headerButton, { backgroundColor: palette.background }]}
               onPress={onClose}
@@ -613,8 +649,8 @@ export default function PlaylistDetailModal({
                 />
               }
             >
-              <View style={[styles.heroCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
-                <View style={[styles.heroThumb, { backgroundColor: palette.primary + '1A' }]}> 
+              <View style={[styles.heroCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+                <View style={[styles.heroThumb, { backgroundColor: palette.primary + '1A' }]}>
                   {playlistDetail.thumbnailUrl ? (
                     <Image source={{ uri: playlistDetail.thumbnailUrl }} style={styles.heroThumbImage} />
                   ) : (
@@ -631,12 +667,12 @@ export default function PlaylistDetailModal({
                   </Text>
 
                   <View style={styles.badgeRow}>
-                    <View style={[styles.badge, { backgroundColor: palette.primary + '18' }]}> 
+                    <View style={[styles.badge, { backgroundColor: palette.primary + '18' }]}>
                       <Text style={[styles.badgeText, { color: palette.primary }]}>
                         {playlistDetail.totalTracks} bài hát
                       </Text>
                     </View>
-                    <View style={[styles.badge, { backgroundColor: '#E2E8F0' }]}> 
+                    <View style={[styles.badge, { backgroundColor: '#E2E8F0' }]}>
                       <Text style={[styles.badgeText, { color: '#475569' }]}>
                         {getPlaylistVisibilityLabel(playlistDetail.visibility)}
                       </Text>
@@ -660,16 +696,27 @@ export default function PlaylistDetailModal({
                 </View>
               </View>
 
-              <View style={[styles.sectionCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+              <View style={[styles.sectionCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>Danh sách bài hát</Text>
-                  <TouchableOpacity
-                    style={[styles.addButton, { backgroundColor: palette.primary }]}
-                    onPress={() => void openAddTrackModal()}
-                  >
-                    <Ionicons name="add" size={14} color="#FFFFFF" />
-                    <Text style={styles.addButtonText}>Thêm nhạc</Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {playlistTracks.length > 0 && (
+                      <TouchableOpacity
+                        style={[styles.addButton, { backgroundColor: palette.primary, paddingHorizontal: 12 }]}
+                        onPress={() => void handlePlayTrack(playlistTracks[0])}
+                      >
+                        <Ionicons name="play" size={14} color="#FFFFFF" />
+                        <Text style={styles.addButtonText}>Phát</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={[styles.addButton, { backgroundColor: palette.primary, paddingHorizontal: 12 }]}
+                      onPress={() => void openAddTrackModal()}
+                    >
+                      <Ionicons name="add" size={14} color="#FFFFFF" />
+                      <Text style={styles.addButtonText}>Thêm nhạc</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 {isLoadingDetail && playlistTracks.length === 0 ? (
@@ -685,21 +732,31 @@ export default function PlaylistDetailModal({
                   </View>
                 ) : (
                   <View style={styles.trackList}>
-                    {playlistTracks.map((track, index) => (
-                      <View
+                    {playlistTracks.map((track, index) => {
+                      const isThisTrack = activeTrack?.id === track.id;
+                      return (
+                      <TouchableOpacity
                         key={track.id}
+                        activeOpacity={0.8}
+                        onPress={() => void handlePlayTrack(track)}
                         style={[
                           styles.trackItem,
                           { borderBottomColor: palette.border },
                           index === playlistTracks.length - 1 ? styles.trackItemLast : null,
                         ]}
                       >
-                        <View style={[styles.trackIndexBubble, { backgroundColor: palette.primary + '18' }]}> 
-                          <Text style={[styles.trackIndexText, { color: palette.primary }]}>{index + 1}</Text>
+                        <View style={[styles.trackIndexBubble, { backgroundColor: isThisTrack ? palette.primary : palette.primary + '1A' }]}>
+                          {isThisTrack && isPlaying ? (
+                            <Ionicons name="stats-chart" size={12} color="#FFFFFF" />
+                          ) : isThisTrack && !isPlaying ? (
+                            <Ionicons name="pause" size={12} color="#FFFFFF" />
+                          ) : (
+                            <Ionicons name="play" size={12} color={palette.primary} style={{ marginLeft: 2 }} />
+                          )}
                         </View>
 
                         <View style={styles.trackInfo}>
-                          <Text style={[styles.trackTitle, { color: palette.textPrimary }]} numberOfLines={1}>
+                          <Text style={[styles.trackTitle, { color: isThisTrack ? palette.primary : palette.textPrimary }]} numberOfLines={1}>
                             {track.title}
                           </Text>
                           <Text style={[styles.trackSub, { color: palette.textSecondary }]} numberOfLines={1}>
@@ -714,8 +771,9 @@ export default function PlaylistDetailModal({
                         >
                           <Ionicons name="close-circle" size={20} color="#EF4444" />
                         </TouchableOpacity>
-                      </View>
-                    ))}
+                      </TouchableOpacity>
+                      );
+                    })}
                   </View>
                 )}
               </View>
@@ -733,12 +791,12 @@ export default function PlaylistDetailModal({
                 }}
               />
 
-              <View style={[styles.sheetCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+              <View style={[styles.sheetCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                 <View style={styles.sheetHandle}>
                   <View style={[styles.sheetHandleBar, { backgroundColor: palette.border }]} />
                 </View>
 
-                <View style={[styles.sheetHeader, { borderBottomColor: palette.border }]}> 
+                <View style={[styles.sheetHeader, { borderBottomColor: palette.border }]}>
                   <Text style={[styles.sheetTitle, { color: palette.textPrimary }]}>Thêm nhạc từ kho hệ thống</Text>
                   <TouchableOpacity
                     onPress={() => setShowAddTracksModal(false)}
@@ -787,7 +845,7 @@ export default function PlaylistDetailModal({
                             onPress={() => toggleCatalogSelection(track)}
                             disabled={!canAdd || alreadyAdded}
                           >
-                            <View style={[styles.addThumbWrap, { backgroundColor: palette.primary + '1A' }]}> 
+                            <View style={[styles.addThumbWrap, { backgroundColor: palette.primary + '1A' }]}>
                               {track.artworkUrl ? (
                                 <Image source={{ uri: track.artworkUrl }} style={styles.addThumbImage} />
                               ) : (
@@ -824,7 +882,7 @@ export default function PlaylistDetailModal({
                   )}
                 </View>
 
-                <View style={[styles.sheetFooter, { borderTopColor: palette.border }]}> 
+                <View style={[styles.sheetFooter, { borderTopColor: palette.border, backgroundColor: palette.surface }]}>
                   <TouchableOpacity
                     style={[styles.footerButton, styles.cancelButton, { borderColor: palette.border }]}
                     onPress={() => setShowAddTracksModal(false)}
@@ -867,12 +925,12 @@ export default function PlaylistDetailModal({
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 keyboardVerticalOffset={0}
               >
-                <View style={[styles.sheetCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+                <View style={[styles.sheetCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                   <View style={styles.sheetHandle}>
                     <View style={[styles.sheetHandleBar, { backgroundColor: palette.border }]} />
                   </View>
 
-                  <View style={[styles.sheetHeader, { borderBottomColor: palette.border }]}> 
+                  <View style={[styles.sheetHeader, { borderBottomColor: palette.border }]}>
                     <Text style={[styles.sheetTitle, { color: palette.textPrimary }]}>Chỉnh sửa playlist</Text>
                     <TouchableOpacity onPress={closeEditor} disabled={isSavingPlaylist || isUploadingPlaylistThumbnail}>
                       <Ionicons name="close" size={18} color={palette.textSecondary} />
@@ -956,7 +1014,7 @@ export default function PlaylistDetailModal({
                     </View>
                   </ScrollView>
 
-                  <View style={[styles.sheetFooter, { borderTopColor: palette.border }]}> 
+                  <View style={[styles.sheetFooter, { borderTopColor: palette.border }]}>
                     <TouchableOpacity
                       style={[styles.footerButton, styles.cancelButton, { borderColor: palette.border }]}
                       onPress={closeEditor}
@@ -988,8 +1046,8 @@ export default function PlaylistDetailModal({
                 onPress={() => setShowPlaylistThumbnailOptions(false)}
               />
 
-              <View style={[styles.popupCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
-                <View style={[styles.sheetHeader, { borderBottomColor: palette.border }]}> 
+              <View style={[styles.popupCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+                <View style={[styles.sheetHeader, { borderBottomColor: palette.border }]}>
                   <Text style={[styles.sheetTitle, { color: palette.textPrimary }]}>Ảnh bìa playlist</Text>
                   <TouchableOpacity onPress={() => setShowPlaylistThumbnailOptions(false)}>
                     <Ionicons name="close" size={18} color={palette.textSecondary} />
@@ -1027,6 +1085,8 @@ export default function PlaylistDetailModal({
               </View>
             </View>
           )}
+
+          <MiniPlayer />
         </View>
       </Modal>
     </>
@@ -1363,7 +1423,9 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   addList: {
-    marginTop: 8,
+    marginTop: 10,
+    marginBottom: 57,
+    maxHeight: 600,
   },
   addListContent: {
     paddingBottom: 10,
@@ -1404,6 +1466,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   sheetFooter: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     borderTopWidth: 1,
     paddingHorizontal: 16,
     paddingVertical: 12,

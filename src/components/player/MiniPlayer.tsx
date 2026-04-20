@@ -53,10 +53,17 @@ export default function MiniPlayer() {
   }
 
   // Data
-  const isPodcast = !!activeTrack;
   const track = activeTrack || nowPlaying?.currentTrack;
+  const trackType = track && 'type' in track ? (track as any).type : undefined;
+  const isPodcast = !!activeTrack && trackType !== 'playlist';
+  const isPlaylist = !!activeTrack && trackType === 'playlist';
   const artUrl = track?.artUrl || activeSession?.thumbnailUrl || undefined;
-  const sessionName = isPodcast ? 'Podcast' : (activeSession?.sessionName || 'Phiên live');
+  
+  let sessionName = 'Phiên live';
+  if (isPlaylist) sessionName = 'Playlist';
+  else if (isPodcast) sessionName = 'Podcast';
+  else if (activeSession?.sessionName) sessionName = activeSession.sessionName;
+
   const title = track?.title || 'Đang chờ bài hát';
   const subtitle = track?.artist || nowPlaying?.streamerName || activeSession?.stationName || '';
   const duration = track?.duration || 0;
@@ -77,7 +84,7 @@ export default function MiniPlayer() {
   };
 
   return (
-    <MiniPlayerContent
+  <MiniPlayerContent
       palette={palette}
       isDarkMode={isDarkMode}
       artUrl={artUrl}
@@ -89,6 +96,7 @@ export default function MiniPlayer() {
       isPlaying={isPlaying}
       isLoading={isLoading}
       isPodcast={isPodcast}
+      isPlaylist={isPlaylist}
       displayElapsed={displayElapsed}
       duration={duration}
       onOpenLive={handleOpenLive}
@@ -101,7 +109,7 @@ export default function MiniPlayer() {
 
 function MiniPlayerContent({
   palette, isDarkMode, artUrl, sessionName, title, subtitle, timeText,
-  progress, isPlaying, isLoading, isPodcast, displayElapsed, duration, 
+  progress, isPlaying, isLoading, isPodcast, isPlaylist, displayElapsed, duration, 
   onOpenLive, onToggle, onDismiss, onSeek
 }: {
   palette: MinimalPalette;
@@ -111,7 +119,7 @@ function MiniPlayerContent({
   title: string; subtitle: string;
   timeText: string;
   progress: number; isPlaying: boolean; isLoading: boolean;
-  isPodcast: boolean; displayElapsed: number; duration: number;
+  isPodcast: boolean; isPlaylist: boolean; displayElapsed: number; duration: number;
   onOpenLive: () => void;
   onToggle: () => void; onDismiss: () => void; onSeek: (t: number) => void;
 }) {
@@ -192,7 +200,7 @@ function MiniPlayerContent({
 
         {/* Controls */}
         <View style={styles.controls}>
-          {isPodcast && !isLoading ? (
+          {(isPodcast || isPlaylist) && !isLoading ? (
             <TouchableOpacity onPress={() => onSeek(Math.max(0, displayElapsed - 15))} style={styles.seekIconBtn} activeOpacity={0.7}>
                 <Ionicons name="play-back" size={20} color={palette.textSecondary} />
             </TouchableOpacity>
@@ -210,7 +218,7 @@ function MiniPlayerContent({
             )}
           </TouchableOpacity>
 
-          {isPodcast && !isLoading && duration > 0 ? (
+          {(isPodcast || isPlaylist) && !isLoading && duration > 0 ? (
             <TouchableOpacity onPress={() => onSeek(Math.min(duration, displayElapsed + 15))} style={styles.seekIconBtn} activeOpacity={0.7}>
                 <Ionicons name="play-forward" size={20} color={palette.textSecondary} />
             </TouchableOpacity>

@@ -10,6 +10,7 @@ export interface AudioTrack {
   artist: string;
   artUrl: string;
   duration?: number;
+  type?: 'podcast' | 'playlist';
 }
 
 export interface AudioPlayerState {

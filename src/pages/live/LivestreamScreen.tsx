@@ -33,6 +33,7 @@ import { showToast } from '../../components/ui/Toast';
 import { useAudioPlayer } from '../../context/AudioPlayerContext';
 import { useUser } from '../../context/UserContext';
 import { HubChatMessage, liveHubService } from '../../services/liveHubService';
+import { getLiveListenersCount } from '../../utils/listenerUtils';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -653,12 +654,14 @@ function DotMenuPopover({
   visible,
   pageX,
   pageY,
+  themeColor,
   onClose,
   onRevoke,
 }: {
   visible: boolean;
   pageX: number;
   pageY: number;
+  themeColor?: string;
   onClose: () => void;
   onRevoke: () => void;
 }) {
@@ -673,7 +676,7 @@ function DotMenuPopover({
       <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose}>
         <View
           pointerEvents="box-none"
-          style={[styles.dotPopover, { top, right: rightOffset }]}
+          style={[styles.dotPopover, { top, right: rightOffset, backgroundColor: themeColor || '#252235' }]}
         >
           <TouchableOpacity
             style={styles.dotPopoverItem}
@@ -1026,11 +1029,25 @@ export default function LivestreamScreen({
     loadSession(activeSession);
   }, [activeSession, loadSession, playerSession?.id]);
 
+  const [queue, setQueue] = useState<TrackInfo[]>([]);
+
+  useEffect(() => {
+    if (!activeSession) return;
+    const fetchQueue = () => {
+      livestreamService.getQueueBySession(activeSession.id)
+        .then(res => setQueue(res.queue || []))
+        .catch(() => { });
+    };
+    fetchQueue();
+    const interval = setInterval(fetchQueue, 10000);
+    return () => clearInterval(interval);
+  }, [activeSession]);
+
   // ── Derived data ─────────────────────────────────────────────────
   const liveTitle = activeSession?.sessionName || nowPlaying?.stationName || 'Live Session';
   const liveHost = nowPlaying?.streamerName || activeSession?.stationName || '';
   const liveCategory = nowPlaying?.currentTrack?.genre || activeSession?.genre || '';
-  const liveListeners = nowPlaying?.totalListeners ?? activeSession?.listenersCount ?? 0;
+  const liveListeners = getLiveListenersCount(activeSession, nowPlaying);
   const currentArtUrl = nowPlaying?.currentTrack?.artUrl || null;
   const hasStream = Boolean((activeSession?.streamUrl || '').trim());
   const elapsed = nowPlaying?.currentTrack ? displayElapsed : 0;
@@ -1047,18 +1064,9 @@ export default function LivestreamScreen({
         isPlaying: true,
       });
     }
-    if (nowPlaying.playingNext) {
+    queue.slice(0, 15).forEach((t, i) => {
       items.push({
-        id: `next-${nowPlaying.playingNext.shId}`,
-        title: nowPlaying.playingNext.title || 'Unknown',
-        artist: nowPlaying.playingNext.artist || 'Unknown',
-        duration: formatDuration(nowPlaying.playingNext.duration),
-        isPlaying: false,
-      });
-    }
-    nowPlaying.songHistory?.slice(0, 10).forEach((t, i) => {
-      items.push({
-        id: `hist-${i}-${t.shId}`,
+        id: `queue-${i}-${t.shId || Date.now()}`,
         title: t.title || 'Unknown',
         artist: t.artist || 'Unknown',
         duration: formatDuration(t.duration),
@@ -1066,7 +1074,7 @@ export default function LivestreamScreen({
       });
     });
     return items;
-  }, [nowPlaying]);
+  }, [nowPlaying, queue]);
 
   // ── Reactions ────────────────────────────────────────────────────
   const REACTION_OPTIONS = useMemo(() => [
@@ -1579,6 +1587,7 @@ export default function LivestreamScreen({
         visible={dotMenuOpen}
         pageX={dotMenuData.pageX}
         pageY={dotMenuData.pageY}
+        themeColor={bgColors[0]}
         onClose={() => setDotMenuOpen(false)}
         onRevoke={() => {
           handleDeleteChat(dotMenuData.msg);

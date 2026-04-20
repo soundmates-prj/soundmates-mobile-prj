@@ -145,6 +145,12 @@ export interface LiveScheduleSession {
   station?: LiveScheduleStation | null;
 }
 
+export interface LiveSessionQueueResult {
+  sessionId: string;
+  externalStationId: number;
+  queue: TrackInfo[];
+}
+
 export interface LiveScheduleResult {
   id: string;
   liveSessionId: string;
@@ -391,6 +397,18 @@ export const livestreamService = {
     }
 
     return normalizedData;
+  },
+
+  async getQueueBySession(sessionId: string): Promise<LiveSessionQueueResult> {
+    const response = await api.get<ApiGatewayResponse<LiveSessionQueueResult>>(
+      LIVESTREAM_ENDPOINTS.QUEUE_BY_SESSION(sessionId)
+    );
+    // You could normalize the tracks if needed
+    const rawData = response.data.data;
+    return {
+      ...rawData,
+      queue: (rawData.queue || []).map(normalizeTrackInfo)
+    };
   },
 
   async getStationMusicCatalog(stationId: string): Promise<MusicCatalogItem[]> {

@@ -48,4 +48,8 @@ export type {
     UpdateUserPlaylistRequest,
     UserPlaylistResponse
 } from './userPlaylistService';
+export { notificationService } from './notificationService';
+export type { NotificationItem, NotificationPage } from './notificationService';
+export { notificationHubService } from './notificationHubService';
+export type { RealtimeNotification, BroadcastNotification } from './notificationHubService';
 

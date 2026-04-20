@@ -131,6 +131,7 @@ export const LIVESTREAM_ENDPOINTS = {
     SCHEDULE_SEARCH: '/schedule/search',
     LIVE_SESSION_DETAIL: (sessionId: string) => `/livesession/${sessionId}`,
     NOW_PLAYING_BY_SESSION: (sessionId: string) => `/livesession/${sessionId}/now-playing`,
+    QUEUE_BY_SESSION: (sessionId: string) => `/livesession/${sessionId}/queue`,
     SONG_REQUESTS_BY_SESSION: (sessionId: string) => `/livesession/${sessionId}/song-requests`,
     CREATE_LIVE_SESSION: '/livesession',
     UPDATE_LIVE_SESSION: (sessionId: string) => `/livesession/${sessionId}`,

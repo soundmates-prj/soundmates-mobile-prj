@@ -49,7 +49,7 @@ import PostDetailScreen from '../blog/PostDetailScreen';
 import AccountInfoScreen from './AccountInfoScreen';
 import ChangePasswordScreen from './ChangePasswordScreen';
 import EditProfileScreen from './EditProfileScreen';
-import styles from './ProfileScreen.styles';
+import { createProfileStyles } from './ProfileScreen.styles';
 import SubscriptionDetailsScreen from './SubscriptionDetailsScreen';
 import PlaylistDetailModal from './components/PlaylistDetailModal';
 import ProfileFavoritesTab from './components/ProfileFavoritesTab';
@@ -61,9 +61,11 @@ export interface ApiTheme {
   name: string;
   mode: 'light' | 'dark';
   primaryColor: string;
+  secondaryColor?: string;
   backgroundColor: string;
   textColor: string;
   gradientBackground?: string;
+  configJson?: { backgroundImage?: string; [key: string]: string | undefined };
 }
 
 const defaultAvatarUrl = 'https://i.pravatar.cc/150?img=10';
@@ -183,6 +185,7 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
   palette: typeof SoundMateLightColors | typeof SoundMateColors;
   isDarkMode: boolean;
 }) {
+  const styles = createProfileStyles(palette);
   const openAfterClose = (callback?: () => void) => {
     onClose();
     if (callback) {
@@ -327,6 +330,7 @@ export default function ProfileScreen({
   const { user, refreshUser, saveUser } = useUser();
   const { themePreference, effectiveTheme, isDarkMode, setThemePreference } = useTheme();
   const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
+  const styles = createProfileStyles(palette);
   const joinedDateLabel = (() => {
     if (!user?.createdAt) return '';
     const parsed = new Date(user.createdAt);
@@ -367,6 +371,10 @@ export default function ProfileScreen({
   const [isLoadingThemes, setIsLoadingThemes] = useState(false);
   const [previewThemeId, setPreviewThemeId] = useState<string | null>(null);
   const [appliedTheme, setAppliedTheme] = useState<ApiTheme | null>(null);
+  const [bgColors, setBgColors] = useState<[string, string, string]>(
+    isDarkMode ? ['#0B0F1A', '#131B2E', '#1A1040'] : ['#F0F4FF', '#E8EFF8', '#EDE9FE']
+  );
+  const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
 
   const [globalScrollEnabled, setGlobalScrollEnabled] = useState(true);
 
@@ -403,24 +411,50 @@ export default function ProfileScreen({
     const loadSavedTheme = async () => {
       try {
         const savedId = await AsyncStorage.getItem('profilescreen_active_theme_id');
-        if (savedId) {
-          const res = await authApiClient.get('/themes/active');
-          if (res.data?.success && res.data?.data?.items) {
-            const items = res.data.data.items as ApiTheme[];
-            const theme = items.find(t => t.id === savedId);
-            if (theme) {
-              setAvailableThemes(items);
-              setAppliedTheme(theme);
-              setPreviewThemeId(theme.id);
+        const res = await authApiClient.get('/themes/active');
+        if (res.data?.success && res.data?.data?.items) {
+          const items = res.data.data.items as ApiTheme[];
+          setAvailableThemes(items);
+
+          // Pick the user's chosen theme, fall back to first available
+          const found = savedId ? items.find(t => t.id === savedId) : undefined;
+          const activeTheme = found ?? items[0] ?? null;
+
+          if (activeTheme) {
+            setAppliedTheme(activeTheme);
+            setPreviewThemeId(activeTheme.id);
+
+            // ── Background image from configJson ──
+            if (activeTheme.configJson?.backgroundImage) {
+              setBgImageUrl(activeTheme.configJson.backgroundImage);
+            }
+
+            // ── Gradient colors from gradientBackground (same parse as LivestreamScreen) ──
+            if (activeTheme.gradientBackground) {
+              const regex = /(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))/gi;
+              const matches = activeTheme.gradientBackground.match(regex);
+              if (matches && matches.length >= 2) {
+                setBgColors([matches[0], matches[1], matches[2] || matches[1]]);
+                return;
+              }
+            }
+
+            if (activeTheme.backgroundColor) {
+              setBgColors([
+                activeTheme.backgroundColor,
+                activeTheme.backgroundColor,
+                activeTheme.primaryColor || '#1A1040',
+              ]);
             }
           }
         }
       } catch (e) { }
-    }
-    loadSavedTheme();
+    };
+    void loadSavedTheme();
   }, []);
   const [subscriptionPlanName, setSubscriptionPlanName] = useState('Premium');
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null);
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
   const [activeProfileTab, setActiveProfileTab] = useState<ProfileContentTab>('posts');
   const [favoriteItemTypeFilter, setFavoriteItemTypeFilter] = useState<string>('track');
   const [favoriteSourceFilter, setFavoriteSourceFilter] = useState<string>('spotify');
@@ -504,6 +538,27 @@ export default function ProfileScreen({
         await AsyncStorage.setItem('profilescreen_active_theme_id', selectedTheme.id);
       } catch (e) { }
 
+      // ── Update background layers immediately (same logic as loadSavedTheme) ──
+      if (selectedTheme.configJson?.backgroundImage) {
+        setBgImageUrl(selectedTheme.configJson.backgroundImage);
+      } else {
+        setBgImageUrl(null);
+      }
+
+      if (selectedTheme.gradientBackground) {
+        const regex = /(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))/gi;
+        const matches = selectedTheme.gradientBackground.match(regex);
+        if (matches && matches.length >= 2) {
+          setBgColors([matches[0], matches[1], matches[2] || matches[1]]);
+        }
+      } else if (selectedTheme.backgroundColor) {
+        setBgColors([
+          selectedTheme.backgroundColor,
+          selectedTheme.backgroundColor,
+          selectedTheme.primaryColor || '#1A1040',
+        ]);
+      }
+
       showToast.success('Đã cập nhật giao diện', `Áp dụng chủ đề: ${selectedTheme.name}`);
     }
   }, [previewThemeId, availableThemes, setThemePreference]);
@@ -531,13 +586,16 @@ export default function ProfileScreen({
         setSubscriptionEndDate(endDate);
 
         if (planName) {
+          setHasActiveSubscription(true);
           setSubscriptionPlanName(planName);
           return;
         }
 
+        setHasActiveSubscription(false);
         setSubscriptionPlanName(user?.roleName || 'Premium');
       } catch (error) {
         if (isMounted) {
+          setHasActiveSubscription(false);
           setSubscriptionPlanName(user?.roleName || 'Premium');
           setSubscriptionEndDate(null);
         }
@@ -1320,6 +1378,16 @@ export default function ProfileScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
+      {/* ── Theme background layers (same pattern as LivestreamScreen) ── */}
+      <LinearGradient colors={bgColors} style={StyleSheet.absoluteFillObject} />
+      {bgImageUrl && (
+        <Image
+          source={{ uri: bgImageUrl }}
+          style={StyleSheet.absoluteFillObject}
+          resizeMode="cover"
+        />
+      )}
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -1545,19 +1613,68 @@ export default function ProfileScreen({
         <View style={styles.popupOverlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={handleCancelThemePicker} />
 
-          <View style={[styles.popupCard, { backgroundColor: palette.surface, borderColor: palette.border, maxHeight: '80%' }]}>
+          <View style={[styles.popupCard, { backgroundColor: palette.surface, borderColor: palette.border, maxHeight: '88%' }]}>
+            {/* Header */}
             <View style={[styles.popupHeader, { borderBottomColor: palette.border }]}>
-              <Text style={[styles.popupTitle, { color: palette.textPrimary }]}>Giao diện thư viện</Text>
+              <Text style={[styles.popupTitle, { color: palette.textPrimary }]}>Chế độ hiển thị</Text>
               <TouchableOpacity onPress={handleCancelThemePicker}>
                 <Ionicons name="close" size={18} color={palette.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 300 }}>
+            {/* ── Section 1: Quick Light / Dark / System ── */}
+            <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: palette.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
+                Chế độ nền
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                {([
+                  { key: 'light', label: 'Sáng', icon: 'sunny-outline' },
+                  { key: 'dark', label: 'Tối', icon: 'moon-outline' },
+                  { key: 'system', label: 'Tự động', icon: 'phone-portrait-outline' },
+                ] as const).map(opt => {
+                  const isActive = themePreference === opt.key;
+                  return (
+                    <TouchableOpacity
+                      key={opt.key}
+                      onPress={() => setThemePreference(opt.key)}
+                      style={{
+                        flex: 1,
+                        alignItems: 'center',
+                        paddingVertical: 12,
+                        borderRadius: 12,
+                        borderWidth: 2,
+                        borderColor: isActive ? palette.primary : palette.border,
+                        backgroundColor: isActive ? (palette.primary + '18') : palette.background,
+                      }}
+                    >
+                      <Ionicons
+                        name={opt.icon as any}
+                        size={22}
+                        color={isActive ? palette.primary : palette.textSecondary}
+                        style={{ marginBottom: 4 }}
+                      />
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: isActive ? palette.primary : palette.textSecondary }}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* ── Section 2: Library themes from API ── */}
+            <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: palette.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
+                Chủ đề giao diện
+              </Text>
+            </View>
+
+            <ScrollView style={{ maxHeight: 240 }}>
               {isLoadingThemes ? (
                 <ActivityIndicator style={{ padding: 20 }} color={palette.primary} />
               ) : availableThemes.length === 0 ? (
-                <Text style={{ textAlign: 'center', padding: 20, color: palette.textSecondary }}>Đang trống.</Text>
+                <Text style={{ textAlign: 'center', padding: 20, color: palette.textSecondary }}>Chưa có chủ đề nào.</Text>
               ) : (
                 availableThemes.map(theme => (
                   <TouchableOpacity
@@ -1565,10 +1682,12 @@ export default function ProfileScreen({
                     style={[styles.popupOption, { borderBottomColor: palette.border, paddingVertical: 12 }]}
                     onPress={() => handlePreviewApiTheme(theme.id)}
                   >
-                    <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: theme.primaryColor, marginRight: 12 }} />
+                    <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: theme.primaryColor, marginRight: 12, borderWidth: 1, borderColor: palette.border }} />
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>{theme.name}</Text>
-                      <Text style={{ fontSize: 12, color: palette.textSecondary, marginTop: 2 }}>{theme.mode === 'dark' ? 'Giao diện tối' : 'Giao diện sáng'}</Text>
+                      <Text style={{ fontSize: 12, color: palette.textSecondary, marginTop: 2 }}>
+                        {theme.mode === 'dark' ? '🌙 Giao diện tối' : '☀️ Giao diện sáng'}
+                      </Text>
                     </View>
                     {previewThemeId === theme.id && <Ionicons name="checkmark-circle" size={22} color="#10B981" />}
                   </TouchableOpacity>
@@ -1576,12 +1695,16 @@ export default function ProfileScreen({
               )}
             </ScrollView>
 
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingTop: 16, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: palette.border }}>
+            {/* Footer */}
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingTop: 12, paddingBottom: 4, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: palette.border }}>
               <TouchableOpacity onPress={handleCancelThemePicker} style={{ marginRight: 16, paddingVertical: 8, paddingHorizontal: 16 }}>
                 <Text style={{ color: palette.textSecondary, fontWeight: '600' }}>Hủy</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleConfirmApiTheme} style={{ paddingVertical: 8, paddingHorizontal: 16, backgroundColor: palette.primary, borderRadius: 6 }}>
-                <Text style={{ color: 'white', fontWeight: 'bold' }}>Xác nhận</Text>
+              <TouchableOpacity
+                onPress={handleConfirmApiTheme}
+                style={{ paddingVertical: 8, paddingHorizontal: 16, backgroundColor: palette.primary, borderRadius: 6 }}
+              >
+                <Text style={{ color: 'white', fontWeight: 'bold' }}>Áp dụng</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1833,7 +1956,9 @@ export default function ProfileScreen({
           setShowAccountInfo(true);
         }}
         onOpenSubscription={() => {
-          if (onNavigateToSubscription) {
+          if (hasActiveSubscription) {
+            setShowSubscriptionDetails(true);
+          } else if (onNavigateToSubscription) {
             onNavigateToSubscription();
           }
         }}
@@ -1882,7 +2007,13 @@ export default function ProfileScreen({
           subscriptionEndDate={subscriptionEndDate}
           onOpenSubscription={() => {
             setShowAccountInfo(false);
-            setTimeout(() => setShowSubscriptionDetails(true), 220);
+            setTimeout(() => {
+              if (hasActiveSubscription) {
+                setShowSubscriptionDetails(true);
+              } else if (onNavigateToSubscription) {
+                onNavigateToSubscription();
+              }
+            }, 220);
           }}
         />
       </Modal>

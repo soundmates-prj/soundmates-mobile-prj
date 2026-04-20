@@ -336,7 +336,7 @@ function AppContent() {
                         showToast.success('Xác thực thành công!', 'Hãy hoàn thiện hồ sơ của bạn');
                         safeNavigate('ProfileSetup');
                     } else {
-                        showToast.success('�ăng nhập thành công!', 'Chào mừng bạn quay trở lại!');
+                        showToast.success('Đăng nhập thành công!', 'Chào mừng bạn quay trở lại!');
                         setIsAuthenticated(true);
                     }
                 } else {

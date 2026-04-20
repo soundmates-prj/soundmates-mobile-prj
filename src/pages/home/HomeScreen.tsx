@@ -17,11 +17,15 @@ import {
     SpotifyTrack,
     UserPlaylistResponse,
     userPlaylistService,
+    notificationService,
+    notificationHubService,
 } from '../../api';
 import { BlogPostCard, DisplayPost, ReactionType } from '../../components/blog/BlogPostCard';
 import FormTextField from '../../components/ui/FormTextField';
 import { useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getLiveListenersCount } from '../../utils/listenerUtils';
 import BlogScreen from '../blog/BlogScreen';
 import CreatePostScreen, { EditablePostDraft } from '../blog/CreatePostScreen';
 import PostDetailScreen from '../blog/PostDetailScreen';
@@ -31,6 +35,7 @@ import PodcastScreen from '../podcast/PodcastScreen';
 import PlaylistDetailModal from '../profile/components/PlaylistDetailModal';
 import ProfileScreen from '../profile/ProfileScreen';
 import SearchResultsScreen, { SearchResultBundle } from '../search/SearchResultsScreen';
+import NotificationScreen from './NotificationScreen';
 import {
     MyPlaylistCard,
     PodcastHotCard,
@@ -38,9 +43,7 @@ import {
     TopHitPlaylistCard,
 } from './HomeScreen.cards';
 import {
-    PLAYLIST_TABS,
     PlaylistItem,
-    PLAYLISTS,
     PlaylistTab,
     PodcastItem,
     ScheduleItem,
@@ -152,6 +155,8 @@ export default function HomeScreen({
     const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
     const [activeTab, setActiveTab] = useState<TabName>(initialTab);
     const [showCreatePost, setShowCreatePost] = useState(false);
+    const [showNotificationScreen, setShowNotificationScreen] = useState(false);
+    const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
     const [createPostDraft, setCreatePostDraft] = useState<EditablePostDraft | null>(null);
     const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
     const [communityPosts, setCommunityPosts] = useState<DisplayPost[]>([]);
@@ -222,22 +227,14 @@ export default function HomeScreen({
     const onHorizontalListTouchEnd = useCallback(() => { isHorizontalListActiveRef.current = false; }, []);
 
     const filteredPlaylists = useMemo(() => {
-        if (personalPlaylists) {
-            return personalPlaylists;
-        }
+        return personalPlaylists || [];
+    }, [personalPlaylists]);
 
-        if (activePlaylistTab === 'Mới') {
-            return PLAYLISTS;
-        }
+    const shouldShowPlaylistTabs = false;
 
-        return PLAYLISTS.filter((item) => item.category === activePlaylistTab);
-    }, [activePlaylistTab, personalPlaylists]);
-
-    const shouldShowPlaylistTabs = !personalPlaylists;
-
-    const featuredPlaylist = filteredPlaylists[0] || PLAYLISTS[0];
+    const featuredPlaylist = filteredPlaylists[0] || null;
     const playlistCarouselItems = useMemo(
-        () => (filteredPlaylists.length > 1 ? filteredPlaylists.slice(1) : filteredPlaylists),
+        () => (filteredPlaylists.length > 1 ? filteredPlaylists.slice(1) : []),
         [filteredPlaylists]
     );
     // Hot Podcasts from server
@@ -919,12 +916,22 @@ export default function HomeScreen({
         }
     }, [user?.userId]);
 
+    const [activeBannerSession, setActiveBannerSession] = useState<any>(null);
+
     const fetchLiveBannerData = useCallback(async () => {
         try {
-            const data = await livestreamService.getNowPlaying();
-            setLiveBannerData(data);
+            const activeSessions = await livestreamService.getActiveSessions();
+            if (activeSessions && activeSessions.length > 0) {
+                setActiveBannerSession(activeSessions[0]);
+                const data = await livestreamService.getNowPlayingBySession(activeSessions[0].id);
+                setLiveBannerData(data);
+            } else {
+                setActiveBannerSession(null);
+                setLiveBannerData(null);
+            }
         } catch (error) {
             console.log('[HomeScreen] fetchLiveBannerData error:', error);
+            setActiveBannerSession(null);
             setLiveBannerData(null);
         }
     }, []);
@@ -950,14 +957,14 @@ export default function HomeScreen({
                     id: item.id,
                     title: item.playlistName,
                     subtitle: `${item.totalTracks || 0} bài hát`,
-                    image: item.thumbnailUrl || PLAYLISTS[index % PLAYLISTS.length].image,
+                    image: item.thumbnailUrl || `https://api.dicebear.com/7.x/initials/png?seed=${encodeURIComponent(item.playlistName)}&backgroundColor=55C5F1`,
                     category: PLAYLIST_VISIBILITY_CATEGORY_MAP[item.visibility] || 'Mới',
                 }));
 
             setPersonalPlaylists(mapped);
         } catch (error) {
             console.log('[HomeScreen] fetchPersonalPlaylists error:', error);
-            setPersonalPlaylists(null);
+            setPersonalPlaylists([]);
         } finally {
             setIsPlaylistLoading(false);
         }
@@ -1033,6 +1040,56 @@ export default function HomeScreen({
     }, [fetchAllData]);
 
     useEffect(() => {
+        const loadInitialCount = async () => {
+            try {
+                const token = await AsyncStorage.getItem('accessToken');
+                if (!token) return;
+                const page = await notificationService.getUnreadNotifications(1, 1);
+                setUnreadNotificationCount(page.totalCount);
+            } catch (e) {
+                // ignore
+            }
+        };
+
+        let cancelled = false;
+
+        const setupHub = async () => {
+            try {
+                const token = await AsyncStorage.getItem('accessToken');
+                if (!token || cancelled) return;
+
+                await notificationHubService.start(token);
+
+                if (cancelled) return; // component unmounted while start was pending
+
+                notificationHubService.onReceiveNotification(() => {
+                    setUnreadNotificationCount(c => c + 1);
+                });
+
+                notificationHubService.onReceiveBroadcastNotification(() => {
+                    setUnreadNotificationCount(c => c + 1);
+                });
+
+            } catch (error) {
+                if (!cancelled) {
+                    console.log('[HomeScreen] notificationHubService setup failed:', error);
+                }
+            }
+        };
+
+        if (user) {
+            loadInitialCount();
+            setupHub();
+        }
+
+        return () => {
+            cancelled = true;
+            notificationHubService.offAll();
+            notificationHubService.stop().catch(() => {});
+        };
+    }, [user]);
+
+    useEffect(() => {
         if (activeTab === 'home') {
             fetchAllData();
         }
@@ -1046,12 +1103,10 @@ export default function HomeScreen({
         return () => clearInterval(intervalId);
     }, [activeTab, fetchAllData, fetchLiveBannerData]);
 
-    const liveBannerTitle = liveBannerData?.stationName || 'SoundMate Radio';
-    const liveBannerHost = liveBannerData?.streamerName || 'Emily_vui';
-    const liveBannerListeners = liveBannerData?.totalListeners ?? 256;
-    const isLiveNow = liveBannerData
-        ? liveBannerData.isLive || liveBannerData.isOnline
-        : true;
+    const liveBannerTitle = activeBannerSession?.sessionName || activeBannerSession?.station?.stationName || liveBannerData?.stationName || 'Chưa có phiên live';
+    const liveBannerHost = activeBannerSession?.stationName || '---';
+    const liveBannerListeners = getLiveListenersCount(activeBannerSession, null);
+    const isLiveNow = !!activeBannerSession;
 
     const renderHomeTabContent = () => (
         <ScrollView
@@ -1076,7 +1131,7 @@ export default function HomeScreen({
                 <View style={styles.topBar}>
                     <View style={styles.brandWrapper}>
                         <Image
-                            source={require('../../../assets/dark_logo.png')}
+                            source={isDarkMode ? require('../../../assets/dark_logo.png') : require('../../../assets/light_logo.png')}
                             style={styles.brandLogoIcon}
                         />
                         <Image
@@ -1089,8 +1144,28 @@ export default function HomeScreen({
                         <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8} onPress={openSearch}>
                             <Ionicons name="search" size={18} color="#FFFFFF" />
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8}>
+                        <TouchableOpacity style={styles.headerIconButton} activeOpacity={0.8} onPress={() => setShowNotificationScreen(true)}>
                             <Ionicons name="notifications-outline" size={18} color="#FFFFFF" />
+                            {unreadNotificationCount > 0 && (
+                                <View style={{
+                                    position: 'absolute',
+                                    top: 4,
+                                    right: 4,
+                                    backgroundColor: '#EF4444',
+                                    borderRadius: 8,
+                                    minWidth: 16,
+                                    height: 16,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    paddingHorizontal: 3,
+                                    borderWidth: 1.5,
+                                    borderColor: palette.primary,
+                                }}>
+                                    <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#FFFFFF' }}>
+                                        {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                                    </Text>
+                                </View>
+                            )}
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -1318,47 +1393,6 @@ export default function HomeScreen({
             >
                 <SectionHeader title="Playlist cá nhân" titleColor={palette.primary} />
 
-                {shouldShowPlaylistTabs && (
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.playlistTabScrollContent}
-                    >
-                        {PLAYLIST_TABS.map((tab) => {
-                            const isActive = tab === activePlaylistTab;
-
-                            return (
-                                <TouchableOpacity
-                                    key={tab}
-                                    style={[
-                                        styles.playlistTabChip,
-                                        {
-                                            backgroundColor: isActive
-                                                ? palette.primary
-                                                : isDarkMode
-                                                    ? '#1F2937'
-                                                    : '#EEF2FF',
-                                        },
-                                    ]}
-                                    activeOpacity={0.85}
-                                    onPress={() => setActivePlaylistTab(tab)}
-                                >
-                                    <Text
-                                        style={[
-                                            styles.playlistTabChipText,
-                                            {
-                                                color: isActive ? '#FFFFFF' : palette.textSecondary,
-                                            },
-                                        ]}
-                                    >
-                                        {tab}
-                                    </Text>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </ScrollView>
-                )}
-
                 {isPlaylistLoading ? (
                     <View style={styles.searchLoadingBlock}>
                         <ActivityIndicator size="small" color={palette.primary} />
@@ -1368,32 +1402,34 @@ export default function HomeScreen({
                     <Text style={[styles.searchHintText, { color: palette.textSecondary }]}>Bạn chưa có playlist cá nhân.</Text>
                 ) : (
                     <>
-                        <TouchableOpacity
-                            style={styles.playlistFeaturedCard}
-                            activeOpacity={0.92}
-                        >
-                            <Image source={{ uri: featuredPlaylist.image }} style={styles.playlistFeaturedImage} />
-                            <LinearGradient
-                                colors={['rgba(2,6,23,0.78)', 'rgba(2,6,23,0.16)']}
-                                start={{ x: 0, y: 1 }}
-                                end={{ x: 0, y: 0 }}
-                                style={styles.playlistFeaturedOverlay}
-                            />
+                        {featuredPlaylist && (
+                            <TouchableOpacity
+                                style={styles.playlistFeaturedCard}
+                                activeOpacity={0.92}
+                            >
+                                <Image source={{ uri: featuredPlaylist.image }} style={styles.playlistFeaturedImage} />
+                                <LinearGradient
+                                    colors={['rgba(2,6,23,0.78)', 'rgba(2,6,23,0.16)']}
+                                    start={{ x: 0, y: 1 }}
+                                    end={{ x: 0, y: 0 }}
+                                    style={styles.playlistFeaturedOverlay}
+                                />
 
-                            <View style={styles.playlistFeaturedInfo}>
-                                <Text style={styles.playlistFeaturedTitle} numberOfLines={1}>{featuredPlaylist.title}</Text>
-                                <Text style={styles.playlistFeaturedSubtitle} numberOfLines={1}>{featuredPlaylist.subtitle}</Text>
+                                <View style={styles.playlistFeaturedInfo}>
+                                    <Text style={styles.playlistFeaturedTitle} numberOfLines={1}>{featuredPlaylist.title}</Text>
+                                    <Text style={styles.playlistFeaturedSubtitle} numberOfLines={1}>{featuredPlaylist.subtitle}</Text>
 
-                                <View style={styles.playlistFeaturedFooter}>
-                                    <View style={styles.playlistFeaturedChip}>
-                                        <Text style={styles.playlistFeaturedChipText}>{featuredPlaylist.category}</Text>
-                                    </View>
-                                    <View style={styles.playlistFeaturedPlayButton}>
-                                        <Ionicons name="play" size={15} color="#0F172A" />
+                                    <View style={styles.playlistFeaturedFooter}>
+                                        <View style={styles.playlistFeaturedChip}>
+                                            <Text style={styles.playlistFeaturedChipText}>{featuredPlaylist.category}</Text>
+                                        </View>
+                                        <View style={styles.playlistFeaturedPlayButton}>
+                                            <Ionicons name="play" size={15} color="#0F172A" />
+                                        </View>
                                     </View>
                                 </View>
-                            </View>
-                        </TouchableOpacity>
+                            </TouchableOpacity>
+                        )}
 
                         <ScrollView
                             horizontal
@@ -1737,6 +1773,16 @@ export default function HomeScreen({
                         />
                     )}
                 </View>
+            ) : showNotificationScreen ? (
+                <NotificationScreen
+                    onBack={() => {
+                        setShowNotificationScreen(false);
+                        // Refresh unread count when closing notification screen
+                        notificationService.getUnreadNotifications(1, 1).then(page => {
+                            setUnreadNotificationCount(page.totalCount);
+                        }).catch(() => {});
+                    }}
+                />
             ) : selectedPostId ? (
                 <PostDetailScreen
                     postId={selectedPostId}

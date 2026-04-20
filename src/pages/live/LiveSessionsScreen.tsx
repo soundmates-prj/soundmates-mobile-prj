@@ -13,6 +13,7 @@ import {
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { LiveScheduleResult, LiveSessionResult, livestreamService } from '../../api';
 import { useTheme } from '../../context/ThemeContext';
+import { getLiveListenersCount } from '../../utils/listenerUtils';
 import BottomNavigation, { TabName } from '../BottomNavigation';
 
 interface LiveSessionsScreenProps {
@@ -278,6 +279,7 @@ export default function LiveSessionsScreen({ onBack, onSelectSession, onTabPress
           const timeB = new Date(b.startedAt || b.createdAt).getTime();
           return timeB - timeA;
         });
+        console.log('sortedActive', sortedActive);
         setActiveSessions(sortedActive);
       } else {
         setActiveSessions([]);
@@ -363,8 +365,8 @@ export default function LiveSessionsScreen({ onBack, onSelectSession, onTabPress
   }, [onTabPress]);
 
   return (
-    <View style={[styles.container, { backgroundColor: palette.background }]}> 
-      <View style={[styles.header, { borderBottomColor: palette.border, backgroundColor: palette.surface }]}> 
+    <View style={[styles.container, { backgroundColor: palette.background }]}>
+      <View style={[styles.header, { borderBottomColor: palette.border, backgroundColor: palette.surface }]}>
         <TouchableOpacity style={styles.headerButton} onPress={onBack} activeOpacity={0.8}>
           <Ionicons name="arrow-back" size={20} color={palette.textPrimary} />
         </TouchableOpacity>
@@ -397,21 +399,21 @@ export default function LiveSessionsScreen({ onBack, onSelectSession, onTabPress
           }
           showsVerticalScrollIndicator={false}
         >
-          
+
           <View style={styles.sectionHeader}>
             <Ionicons name="radio" size={16} color="#EF4444" />
             <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>{activeTitle}</Text>
           </View>
 
           {activeSessions.length === 0 ? (
-            <View style={[styles.emptyCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+            <View style={[styles.emptyCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
               <Ionicons name="radio-outline" size={26} color={palette.textMuted} />
               <Text style={[styles.emptyTitle, { color: palette.textPrimary }]}>Hiện chưa có phiên live active</Text>
               <Text style={[styles.emptySubtitle, { color: palette.textSecondary }]}>Danh sách sẽ tự cập nhật khi có host bắt đầu live.</Text>
             </View>
           ) : (
             activeSessions.map((session) => {
-              const listeners = session.listenersCount || session.totalListeners || 0;
+              const listeners = getLiveListenersCount(session, null);
               return (
                 <TouchableOpacity
                   key={session.id}
@@ -466,7 +468,7 @@ export default function LiveSessionsScreen({ onBack, onSelectSession, onTabPress
             <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>{upcomingTitle}</Text>
           </View>
 
-          <View style={[styles.weekSelectorWrap, { borderColor: palette.border, backgroundColor: palette.surface }]}> 
+          <View style={[styles.weekSelectorWrap, { borderColor: palette.border, backgroundColor: palette.surface }]}>
             <ScrollView
               ref={weekScrollRef}
               horizontal
@@ -535,7 +537,7 @@ export default function LiveSessionsScreen({ onBack, onSelectSession, onTabPress
           </View>
 
           {selectedDaySchedules.length === 0 ? (
-            <View style={[styles.emptyCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+            <View style={[styles.emptyCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
               <Ionicons name="time-outline" size={26} color={palette.textMuted} />
               <Text style={[styles.emptyTitle, { color: palette.textPrimary }]}>Ngày này chưa có lịch live</Text>
               <Text style={[styles.emptySubtitle, { color: palette.textSecondary }]}>Hãy chọn ngày khác trong tuần để xem thêm phiên đã lên lịch.</Text>
@@ -564,7 +566,7 @@ export default function LiveSessionsScreen({ onBack, onSelectSession, onTabPress
                     <Text style={[styles.countdownText, { color: isLiveStatus ? '#EF4444' : palette.primary }]}>{countdown}</Text>
                   </View>
 
-                  <View style={[styles.startTimeHighlight, { borderColor: palette.primary + '55', backgroundColor: palette.primary + '12' }]}> 
+                  <View style={[styles.startTimeHighlight, { borderColor: palette.primary + '55', backgroundColor: palette.primary + '12' }]}>
                     <Text style={[styles.startTimeCaption, { color: palette.primary }]}>THỜI GIAN BẮT ĐẦU</Text>
                     <Text style={[styles.startTimeValue, { color: palette.textPrimary }]}>{startTimeText}</Text>
                     <Text style={[styles.startTimeDateText, { color: palette.textSecondary }]}>{startDateText}</Text>

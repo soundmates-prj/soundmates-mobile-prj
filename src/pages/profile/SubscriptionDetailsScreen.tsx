@@ -9,8 +9,10 @@ import {
     Text,
     TouchableOpacity,
     View,
+    Platform,
+    StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import {
     paymentService,
@@ -64,6 +66,9 @@ const getStatusColor = (value?: string) => {
 export default function SubscriptionDetailsScreen({ onBack }: SubscriptionDetailsScreenProps) {
   const { isDarkMode } = useTheme();
   const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
+  const insets = useSafeAreaInsets();
+  const fallbackTopInset = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
+  const topInset = Math.max(insets.top, fallbackTopInset);
 
   const [activeTab, setActiveTab] = useState<TabKey>('current');
   const [loading, setLoading] = useState(true);
@@ -257,7 +262,7 @@ export default function SubscriptionDetailsScreen({ onBack }: SubscriptionDetail
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}>
+    <SafeAreaView style={[styles.container, { paddingTop: topInset, backgroundColor: palette.background }]} edges={['left', 'right', 'bottom']}>
       <View style={[styles.header, { backgroundColor: palette.surface, borderBottomColor: palette.border }]}> 
         <TouchableOpacity onPress={onBack} style={styles.headerButton}>
           <Ionicons name="arrow-back" size={22} color={palette.textPrimary} />
