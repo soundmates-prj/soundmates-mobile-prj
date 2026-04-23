@@ -89,7 +89,7 @@ class NotificationHubService {
                 this.startPromise = null;
             })
             .catch((err) => {
-                console.error("[NotificationHub] Connection failed:", err);
+                console.log("[NotificationHub] Connection failed:", err);
                 this.startPromise = null;
                 this.connection = null; // reset so next call can rebuild cleanly
                 throw err;

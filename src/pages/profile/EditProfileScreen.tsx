@@ -15,6 +15,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { authService, UpdateProfileRequest } from '../../api';
+import paymentService from '../../api/paymentService';
 import DateField from '../../components/ui/DateField';
 import FormTextField from '../../components/ui/FormTextField';
 import SelectField from '../../components/ui/SelectField';
@@ -80,6 +81,25 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
   const [hasRequestedProfile, setHasRequestedProfile] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
+  // Bank Account
+  const [isPremium, setIsPremium] = useState(false);
+  const [showBankPicker, setShowBankPicker] = useState(false);
+  const [bankForm, setBankForm] = useState({ bankId: '', accountNumber: '', accountName: '' });
+  const [originalBankForm, setOriginalBankForm] = useState({ bankId: '', accountNumber: '', accountName: '' });
+
+  const bankOptions = [
+    { id: '970415', name: 'VietinBank' },
+    { id: '970436', name: 'Vietcombank' },
+    { id: '970418', name: 'BIDV' },
+    { id: '970405', name: 'Agribank' },
+    { id: '970403', name: 'Sacombank' },
+    { id: '970407', name: 'Techcombank' },
+    { id: '970422', name: 'MBBank' },
+    { id: '970423', name: 'TPBank' },
+    { id: '970432', name: 'VPBank' },
+    { id: '970416', name: 'ACB' },
+  ];
+
   const edgeBackPanResponder = React.useMemo(
     () =>
       PanResponder.create({
@@ -96,6 +116,36 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
   const genderOptions = ['Nam', 'Nữ', 'Khác'];
 
   useEffect(() => { setProfileData(buildProfileData(user)); }, [user]);
+
+  // Fetch Premium & Bank info
+  useEffect(() => {
+    const fetchExtraData = async () => {
+      if (user) {
+         try {
+            const subRes = await paymentService.getMySubscription();
+            if (subRes.success && subRes.data) {
+               const planName = subRes.data.planName?.toLowerCase() || '';
+               if (planName.includes('premium') || planName.includes('elite')) {
+                  setIsPremium(true);
+                  const bankRes = await authService.getBankAccount();
+                  if (bankRes.success && bankRes.data) {
+                     const b = {
+                        bankId: bankRes.data.bankId || '',
+                        accountNumber: bankRes.data.accountNumber || '',
+                        accountName: bankRes.data.accountName || ''
+                     };
+                     setBankForm(b);
+                     setOriginalBankForm(b);
+                  }
+               }
+            }
+         } catch (e) {
+            console.log('Error fetching extra data', e);
+         }
+      }
+    };
+    fetchExtraData();
+  }, [user]);
 
   const insets = useSafeAreaInsets();
   const fallbackTopInset = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
@@ -170,6 +220,20 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
       return;
     }
 
+    if (isPremium) {
+       const hasBankChanges = 
+         bankForm.bankId !== originalBankForm.bankId ||
+         bankForm.accountNumber !== originalBankForm.accountNumber ||
+         bankForm.accountName !== originalBankForm.accountName;
+       
+       if (hasBankChanges) {
+           if (!bankForm.bankId || !bankForm.accountNumber || !bankForm.accountName) {
+               showToast.error('Lỗi', 'Vui lòng nhập đầy đủ thông tin ngân hàng');
+               return;
+           }
+       }
+    }
+
     setIsSaving(true);
     try {
       const payload: UpdateProfileRequest = {
@@ -184,7 +248,26 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
       const result = await authService.updateProfile(payload);
       if (!result.success) {
         showToast.error('Cập nhật thất bại', result.message || 'Vui lòng thử lại sau');
+        setIsSaving(false);
         return;
+      }
+
+      if (isPremium) {
+         const hasBankChanges = 
+           bankForm.bankId !== originalBankForm.bankId ||
+           bankForm.accountNumber !== originalBankForm.accountNumber ||
+           bankForm.accountName !== originalBankForm.accountName;
+
+         if (hasBankChanges && bankForm.bankId && bankForm.accountNumber && bankForm.accountName) {
+            const bankRes = await authService.updateBankAccount(bankForm);
+            if (bankRes.success) {
+                setOriginalBankForm({ ...bankForm });
+            } else {
+                showToast.error('Cập nhật ngân hàng thất bại', bankRes.message || 'Lỗi');
+                setIsSaving(false);
+                return;
+            }
+         }
       }
 
       await refreshUser({
@@ -401,6 +484,103 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
             </View>
           </View>
         </View>
+
+        {/* TÀI KHOẢN NGÂN HÀNG */}
+        {isPremium && (
+          <View style={styles.formSection}>
+            <Text style={[styles.sectionTitle, { color: palette.textMuted }]}>TÀI KHOẢN NGÂN HÀNG (NHẬN THANH TOÁN)</Text>
+            <View style={[styles.card, styles.popupHostCard, { backgroundColor: palette.surface, borderColor: palette.border, paddingBottom: 16 }]}>
+              
+              <Text style={{ paddingHorizontal: 16, paddingTop: 16, fontSize: 12, color: palette.textSecondary, marginBottom: 8, lineHeight: 18 }}>
+                Thành viên Premium có thể nhận thanh toán từ việc bán nội dung hoặc nhận donate. Vui lòng cung cấp chính xác thông tin.
+              </Text>
+
+              {/* Ngân hàng */}
+              <View style={styles.genderFieldWrap}>
+                <View style={styles.inputRow}>
+                  <View style={[styles.iconBox, { backgroundColor: '#3B82F6' + '1A' }]}>
+                    <Ionicons name="card-outline" size={18} color="#3B82F6" />
+                  </View>
+                  <SelectField
+                    containerStyle={styles.inputContent}
+                    onPress={() => { setShowDatePicker(false); setShowGenderPicker(false); setShowBankPicker(!showBankPicker); }}
+                    label="Ngân hàng"
+                    labelStyle={[styles.inputLabel, { color: palette.textMuted }]}
+                    value={bankOptions.find(b => b.id === bankForm.bankId)?.name || 'Chọn ngân hàng'}
+                    valueTextStyle={[styles.genderValue, { color: bankForm.bankId ? palette.textPrimary : palette.textMuted }]}
+                    rowStyle={styles.genderRow}
+                    showChevron
+                    isExpanded={showBankPicker}
+                    chevronColor={palette.textMuted}
+                  />
+                </View>
+                {showBankPicker && (
+                  <View style={[styles.genderPicker, { backgroundColor: isDarkMode ? '#111827' : '#F9FAFB', borderColor: palette.border, maxHeight: 200 }]}>
+                    <ScrollView nestedScrollEnabled>
+                      {bankOptions.map((option) => (
+                        <TouchableOpacity
+                          key={option.id}
+                          style={[styles.genderOption, bankForm.bankId === option.id && styles.genderOptionSelected]}
+                          onPress={() => { setBankForm({ ...bankForm, bankId: option.id }); setShowBankPicker(false); }}
+                        >
+                          <Text style={[styles.genderOptionText, { color: palette.textPrimary }, bankForm.bankId === option.id && styles.genderOptionTextSelected]}>
+                            {option.name}
+                          </Text>
+                          {bankForm.bankId === option.id && <Ionicons name="checkmark" size={16} color="#55C5F1" />}
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+
+              <View style={[styles.divider, { backgroundColor: palette.border }]} />
+
+              {/* Số tài khoản */}
+              <View style={styles.inputRow}>
+                <View style={[styles.iconBox, { backgroundColor: '#8B5CF6' + '1A' }]}>
+                  <Ionicons name="keypad-outline" size={18} color="#8B5CF6" />
+                </View>
+                <View style={styles.inputContent}>
+                  <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Số tài khoản</Text>
+                  <FormTextField
+                    value={bankForm.accountNumber}
+                    onChangeText={(value) => setBankForm({ ...bankForm, accountNumber: value })}
+                    onFocus={() => setEditingField('accountNumber')}
+                    onBlur={() => setEditingField(null)}
+                    placeholder="VD: 1012345678"
+                    keyboardType="number-pad"
+                    placeholderTextColor={palette.textMuted}
+                    style={[styles.input, { color: palette.textPrimary }, editingField === 'accountNumber' && styles.inputFocused]}
+                  />
+                </View>
+              </View>
+
+              <View style={[styles.divider, { backgroundColor: palette.border }]} />
+
+              {/* Tên chủ tài khoản */}
+              <View style={styles.inputRow}>
+                <View style={[styles.iconBox, { backgroundColor: '#14B8A6' + '1A' }]}>
+                  <Ionicons name="person-circle-outline" size={18} color="#14B8A6" />
+                </View>
+                <View style={styles.inputContent}>
+                  <Text style={[styles.inputLabel, { color: palette.textMuted }]}>Tên chủ tài khoản</Text>
+                  <FormTextField
+                    value={bankForm.accountName}
+                    onChangeText={(value) => setBankForm({ ...bankForm, accountName: value })}
+                    onFocus={() => setEditingField('accountName')}
+                    onBlur={() => setEditingField(null)}
+                    placeholder="NGUYEN VAN A"
+                    autoCapitalize="characters"
+                    placeholderTextColor={palette.textMuted}
+                    style={[styles.input, { color: palette.textPrimary }, editingField === 'accountName' && styles.inputFocused]}
+                  />
+                </View>
+              </View>
+
+            </View>
+          </View>
+        )}
 
         {/* Privacy Note */}
         <View style={styles.formSection}>

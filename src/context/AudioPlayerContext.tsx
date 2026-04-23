@@ -31,6 +31,7 @@ interface AudioPlayerActions {
   togglePlayback: () => Promise<void>;
   toggleMute: () => Promise<void>;
   stopAndUnload: () => Promise<void>;
+  setVolume: (volume: number) => Promise<void>;
 }
 
 type AudioPlayerContextValue = AudioPlayerState & AudioPlayerActions;
@@ -380,6 +381,14 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     }
   }, [isMuted]);
 
+  const setVolume = useCallback(async (volume: number) => {
+    if (soundRef.current) {
+      try {
+        await soundRef.current.setVolumeAsync(volume);
+      } catch { /* ignore */ }
+    }
+  }, []);
+
   const stopAndUnload = useCallback(async () => {
     loadingUrlRef.current = null;
     await unloadSound();
@@ -406,7 +415,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       value={{
         isPlaying, isLoading, isMuted, streamUrl,
         nowPlaying, activeSession, activeTrack, displayElapsed,
-        loadSession, loadTrack, seekTo, togglePlayback, toggleMute, stopAndUnload,
+        loadSession, loadTrack, seekTo, togglePlayback, toggleMute, stopAndUnload, setVolume,
       }}
     >
       {children}

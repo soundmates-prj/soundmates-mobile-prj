@@ -452,6 +452,42 @@ class AuthService {
             };
         }
     }
+
+    /**
+     * Get user bank account
+     */
+    async getBankAccount(): Promise<ApiResponse<any>> {
+        try {
+            const response = await authApiClient.get('/users/bank-account');
+            return {
+                success: true,
+                data: response.data?.data ?? response.data,
+            };
+        } catch (error: any) {
+            return {
+                success: false,
+                message: handleApiError(error),
+            };
+        }
+    }
+
+    /**
+     * Update user bank account
+     */
+    async updateBankAccount(data: any): Promise<ApiResponse<any>> {
+        try {
+            const response = await authApiClient.put('/users/bank-account', data);
+            return {
+                success: true,
+                data: response.data?.data ?? response.data,
+            };
+        } catch (error: any) {
+            return {
+                success: false,
+                message: handleApiError(error),
+            };
+        }
+    }
 }
 
 // Export singleton instance

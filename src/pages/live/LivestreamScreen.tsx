@@ -294,28 +294,36 @@ function RequestSongModal({
   const [isSubmittingId, setIsSubmittingId] = useState<string | null>(null);
   const [requestedIds, setRequestedIds] = useState<Set<string>>(new Set());
   const [candidates, setCandidates] = useState<RequestSongCandidate[]>([]);
+  const [requestLimits, setRequestLimits] = useState<{ limit: number; usedToday: number; remaining: number } | null>(null);
 
   const loadCandidates = useCallback(async () => {
     setIsLoading(true);
     try {
       if (!stationId) {
         setCandidates(buildFallbackCandidates(songHistory));
-        return;
+      } else {
+        const stationCatalog = await livestreamService.getStationMusicCatalog(stationId);
+        if (stationCatalog.length > 0) {
+          setCandidates(
+            stationCatalog.map((song) => ({
+              id: song.id,
+              mediaFileId: song.id,
+              title: song.title || 'Unknown',
+              artist: song.artist || 'Unknown',
+              album: song.album || '',
+            })),
+          );
+        } else {
+          setCandidates(buildFallbackCandidates(songHistory));
+        }
       }
-      const stationCatalog = await livestreamService.getStationMusicCatalog(stationId);
-      if (stationCatalog.length > 0) {
-        setCandidates(
-          stationCatalog.map((song) => ({
-            id: song.id,
-            mediaFileId: song.id,
-            title: song.title || 'Unknown',
-            artist: song.artist || 'Unknown',
-            album: song.album || '',
-          })),
-        );
-        return;
+
+      try {
+        const limits = await livestreamService.getMySongRequestLimits();
+        setRequestLimits(limits);
+      } catch (err) {
+        setRequestLimits(null);
       }
-      setCandidates(buildFallbackCandidates(songHistory));
     } catch {
       setCandidates(buildFallbackCandidates(songHistory));
     } finally {
@@ -362,14 +370,28 @@ function RequestSongModal({
         next.add(candidate.id);
         return next;
       });
+      setRequestLimits(prev => prev ? ({ ...prev, remaining: Math.max(0, prev.remaining - 1), usedToday: prev.usedToday + 1 }) : prev);
       onRequestSuccess(candidate.title);
       setRequestMessage('');
       showToast.success('Đã gửi yêu cầu', `Bài "${candidate.title}" đã được gửi tới host`);
       onClose();
     } catch (error: any) {
       const apiMessage = error?.response?.data?.message || error?.response?.data?.Message;
-      const resolvedApiMessage = typeof apiMessage === 'string' ? apiMessage : undefined;
-      showToast.error('Yêu cầu thất bại', resolvedApiMessage || 'Vui lòng thử lại sau');
+      const resolvedApiMessage = typeof apiMessage === 'string' ? apiMessage : 'Vui lòng thử lại sau';
+      if (resolvedApiMessage.includes('không hỗ trợ') || resolvedApiMessage.includes('Bạn đã đạt giới hạn')) {
+        onClose();
+        if (requestLimits && requestLimits.limit >= 15) {
+          showToast.error('Hết lượt', 'Bạn đã dùng hết lượt yêu cầu nhạc hôm nay!');
+        } else {
+          Alert.alert(
+            'Yêu cầu nâng cấp',
+            'Bạn cần nâng cấp gói cước trong Cài đặt chung để có thêm lượt request nhạc.',
+            [{ text: 'Đã hiểu' }]
+          );
+        }
+      } else {
+        showToast.error('Yêu cầu thất bại', resolvedApiMessage);
+      }
     } finally {
       setIsSubmittingId(null);
     }
@@ -382,7 +404,14 @@ function RequestSongModal({
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>🎵 Request Bài Hát</Text>
+              <View>
+                <Text style={styles.modalTitle}>🎵 Request Bài Hát</Text>
+                {requestLimits && (
+                  <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 }}>
+                    Còn lại {requestLimits.remaining} lượt hôm nay
+                  </Text>
+                )}
+              </View>
               <TouchableOpacity onPress={onClose} style={styles.modalCloseButton}>
                 <Ionicons name="close" size={18} color="#FFFFFF" />
               </TouchableOpacity>
@@ -806,12 +835,14 @@ export default function LivestreamScreen({
     nowPlaying,
     displayElapsed,
     activeSession: playerSession,
+    setVolume,
   } = useAudioPlayer();
 
   // ── State ────────────────────────────────────────────────────────
   const [activeSession, setActiveSession] = useState<LiveSessionResult | null>(null);
   const [isSessionsLoading, setIsSessionsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isHostMicActive, setIsHostMicActive] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [showReactions, setShowReactions] = useState(false);
@@ -960,6 +991,9 @@ export default function LivestreamScreen({
     let unsubChat: (() => void) | null = null;
     let unsubChatHistory: (() => void) | null = null;
     let unsubChatDeleted: (() => void) | null = null;
+    let unsubHostMicStarted: (() => void) | null = null;
+    let unsubHostMicStopped: (() => void) | null = null;
+    let unsubGlobalVolumeUpdated: (() => void) | null = null;
 
     const connectHub = async () => {
       try {
@@ -1003,12 +1037,27 @@ export default function LivestreamScreen({
           setMessages((prev) => [...prev, incoming]);
         });
 
+        unsubHostMicStarted = liveHubService.onHostMicStarted(() => {
+          setIsHostMicActive(true);
+        });
+
+        unsubHostMicStopped = liveHubService.onHostMicStopped(() => {
+          setIsHostMicActive(false);
+          // Restore volume to 100% when mic stops just in case global volume wasn't updated
+          void setVolume(1.0);
+        });
+
+        unsubGlobalVolumeUpdated = liveHubService.onGlobalVolumeUpdated((volume) => {
+          // volume comes in as 0.0 to 1.0
+          void setVolume(volume);
+        });
+
         await liveHubService.start();
         await liveHubService.joinSession(activeSession.id, userId);
         console.log('[LivestreamScreen] SignalR joined session', activeSession.id);
 
       } catch (err) {
-        console.warn('[LivestreamScreen] SignalR connection error:', err);
+        console.log('[LivestreamScreen] SignalR connection error:', err);
       }
     };
 
@@ -1018,6 +1067,9 @@ export default function LivestreamScreen({
       if (unsubChat) unsubChat();
       if (unsubChatHistory) unsubChatHistory();
       if (unsubChatDeleted) unsubChatDeleted();
+      if (unsubHostMicStarted) unsubHostMicStarted();
+      if (unsubHostMicStopped) unsubHostMicStopped();
+      if (unsubGlobalVolumeUpdated) unsubGlobalVolumeUpdated();
       void liveHubService.leaveSession(activeSession.id, userId).catch(() => { });
     };
   }, [activeSession, user]);
@@ -1138,7 +1190,7 @@ export default function LivestreamScreen({
       await liveHubService.sendChat(activeSession.id, userId, text, displayName, userAvatar);
       // The ReceiveChat event will add the message to the list
     } catch (err) {
-      console.warn('[LivestreamScreen] sendChat failed:', err);
+      console.log('[LivestreamScreen] sendChat failed:', err);
       // Fallback: show locally if send fails
       const msg: ChatMessage = {
         id: Date.now().toString(),
@@ -1194,7 +1246,7 @@ export default function LivestreamScreen({
             try {
               await liveHubService.deleteChat(activeSession.id, msg.id, userId, role);
             } catch (err) {
-              console.warn('Failed to delete chat:', err);
+              console.log('Failed to delete chat:', err);
             }
           }
         }
@@ -1364,6 +1416,12 @@ export default function LivestreamScreen({
                 </View>
               )}
               <Text style={styles.hostName}>{liveHost}</Text>
+              {isHostMicActive && (
+                <View style={[styles.categoryBadge, { backgroundColor: '#EF4444', marginLeft: 6 }]}>
+                  <Ionicons name="mic" size={10} color="#FFFFFF" />
+                  <Text style={[styles.categoryText, { marginLeft: 2 }]}>Mic On</Text>
+                </View>
+              )}
               {!!liveCategory && (
                 <View style={styles.categoryBadge}>
                   <Text style={styles.categoryText}>{liveCategory}</Text>

@@ -133,6 +133,7 @@ export const LIVESTREAM_ENDPOINTS = {
     NOW_PLAYING_BY_SESSION: (sessionId: string) => `/livesession/${sessionId}/now-playing`,
     QUEUE_BY_SESSION: (sessionId: string) => `/livesession/${sessionId}/queue`,
     SONG_REQUESTS_BY_SESSION: (sessionId: string) => `/livesession/${sessionId}/song-requests`,
+    MY_SONG_REQUEST_LIMITS: '/livesession/song-requests/my-limits',
     CREATE_LIVE_SESSION: '/livesession',
     UPDATE_LIVE_SESSION: (sessionId: string) => `/livesession/${sessionId}`,
     START_LIVE_SESSION: (sessionId: string) => `/livesession/${sessionId}/start`,

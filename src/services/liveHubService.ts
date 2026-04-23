@@ -215,7 +215,7 @@ class LiveHubService {
           void this.connection
             ?.invoke('JoinSession', sessionId, state.userId, state.anonymousIdentifier)
             .then(() => console.log(`[LiveHub-Mobile] Re-joined ${sessionId}`))
-            .catch((err) => console.warn(`[LiveHub-Mobile] Re-join failed ${sessionId}:`, err));
+            .catch((err) => console.log(`[LiveHub-Mobile] Re-join failed ${sessionId}:`, err));
         }
       });
 
@@ -234,7 +234,7 @@ class LiveHubService {
         console.log('[LiveHub-Mobile] Connected');
         this.reconnectAttempt = 0;
       } catch (err) {
-        console.error('[LiveHub-Mobile] Connection failed:', err);
+        console.log('[LiveHub-Mobile] Connection failed:', err);
         throw err;
       }
     }
@@ -285,7 +285,7 @@ class LiveHubService {
           '';
 
         const finalMsg = serverMsg.trim() || signalrMsg || 'JoinSession failed on server';
-        console.error('[LiveHub-Mobile] JoinSession error:', finalMsg);
+        console.log('[LiveHub-Mobile] JoinSession error:', finalMsg);
         throw new Error(finalMsg);
       }
     }
@@ -404,6 +404,24 @@ class LiveHubService {
     return () => conn.off('SongRequestCreated', callback);
   }
 
+  onHostMicStarted(callback: (sessionId: string) => void): () => void {
+    const conn = this.getConnection();
+    conn.on('HostMicStarted', callback);
+    return () => conn.off('HostMicStarted', callback);
+  }
+
+  onHostMicStopped(callback: (sessionId: string) => void): () => void {
+    const conn = this.getConnection();
+    conn.on('HostMicStopped', callback);
+    return () => conn.off('HostMicStopped', callback);
+  }
+
+  onGlobalVolumeUpdated(callback: (volume: number) => void): () => void {
+    const conn = this.getConnection();
+    conn.on('GlobalVolumeUpdated', callback);
+    return () => conn.off('GlobalVolumeUpdated', callback);
+  }
+
   offAll(): void {
     const conn = this.getConnection();
     conn.off('SessionStarted');
@@ -415,6 +433,9 @@ class LiveHubService {
     conn.off('SongChanged');
     conn.off('NowPlayingUpdated');
     conn.off('SongRequestCreated');
+    conn.off('HostMicStarted');
+    conn.off('HostMicStopped');
+    conn.off('GlobalVolumeUpdated');
   }
 }
 

@@ -431,7 +431,13 @@ export const livestreamService = {
       LIVESTREAM_ENDPOINTS.SONG_REQUESTS_BY_SESSION(sessionId),
       payload,
     );
+    return response.data.data;
+  },
 
+  async getMySongRequestLimits(): Promise<{ limit: number; usedToday: number; remaining: number }> {
+    const response = await api.get<ApiGatewayResponse<{ limit: number; usedToday: number; remaining: number }>>(
+      LIVESTREAM_ENDPOINTS.MY_SONG_REQUEST_LIMITS
+    );
     return response.data.data;
   },
 

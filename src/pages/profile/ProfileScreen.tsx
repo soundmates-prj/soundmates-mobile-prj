@@ -1676,22 +1676,38 @@ export default function ProfileScreen({
               ) : availableThemes.length === 0 ? (
                 <Text style={{ textAlign: 'center', padding: 20, color: palette.textSecondary }}>Chưa có chủ đề nào.</Text>
               ) : (
-                availableThemes.map(theme => (
-                  <TouchableOpacity
-                    key={theme.id}
-                    style={[styles.popupOption, { borderBottomColor: palette.border, paddingVertical: 12 }]}
-                    onPress={() => handlePreviewApiTheme(theme.id)}
-                  >
-                    <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: theme.primaryColor, marginRight: 12, borderWidth: 1, borderColor: palette.border }} />
+                availableThemes.map(theme => {
+                  const isFree = subscriptionPlanName.toLowerCase().includes('free') || subscriptionPlanName.toLowerCase().includes('miễn phí');
+                  const hasPaidPlan = !isFree;
+                  const isPremiumPlan = subscriptionPlanName.toLowerCase().includes('premium');
+                  const isThemePremium = theme.name.toLowerCase().includes('premium');
+                  const locked = !hasPaidPlan || (isThemePremium && !isPremiumPlan);
+
+                  return (
+                    <TouchableOpacity
+                      key={theme.id}
+                      style={[styles.popupOption, { borderBottomColor: palette.border, paddingVertical: 12, opacity: locked ? 0.6 : 1 }]}
+                      onPress={() => {
+                        if (locked) {
+                          Alert.alert('Chủ đề độc quyền', !hasPaidPlan ? 'Vui lòng nâng cấp gói cước để sử dụng chủ đề này.' : 'Chủ đề này chỉ dành cho gói Premium.');
+                        } else {
+                          handlePreviewApiTheme(theme.id);
+                        }
+                      }}
+                    >
+                      <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: theme.primaryColor, marginRight: 12, borderWidth: 1, borderColor: palette.border, justifyContent: 'center', alignItems: 'center' }}>
+                        {locked && <Ionicons name="lock-closed" size={10} color="#FFFFFF" />}
+                      </View>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>{theme.name}</Text>
                       <Text style={{ fontSize: 12, color: palette.textSecondary, marginTop: 2 }}>
-                        {theme.mode === 'dark' ? '🌙 Giao diện tối' : '☀️ Giao diện sáng'}
+                        {locked ? (!hasPaidPlan ? '🔒 Dành cho gói trả phí' : '🔒 Dành cho gói Premium') : (theme.mode === 'dark' ? '🌙 Giao diện tối' : '☀️ Giao diện sáng')}
                       </Text>
                     </View>
-                    {previewThemeId === theme.id && <Ionicons name="checkmark-circle" size={22} color="#10B981" />}
+                    {previewThemeId === theme.id && !locked && <Ionicons name="checkmark-circle" size={22} color="#10B981" />}
                   </TouchableOpacity>
-                ))
+                  );
+                })
               )}
             </ScrollView>
 

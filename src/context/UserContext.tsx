@@ -102,6 +102,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const clearUser = useCallback(async () => {
         try {
             await AsyncStorage.removeItem(USER_STORAGE_KEY);
+            await AsyncStorage.removeItem('liveGuestIdentifier');
             setUserState(null);
         } catch (error) {
             console.log('Error clearing user data:', error);
