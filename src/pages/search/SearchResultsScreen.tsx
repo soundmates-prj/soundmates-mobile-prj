@@ -7,6 +7,7 @@ import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme'
 import { favoriteService, PodcastResponse, SpotifyArtist, SpotifyAlbum, SpotifyTrack, UserPlaylistResponse, UserProfileFullResponse, BlogPostResponse, LiveScheduleResult } from '../../api';
 import { showToast } from '../../components/ui/Toast';
 import { useTheme } from '../../context/ThemeContext';
+import { resolveAuthorName } from '../../utils/authorUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -460,7 +461,7 @@ export default function SearchResultsScreen({
                       <View style={styles.trackInfo}>
                         <Text numberOfLines={1} style={[styles.trackName, { color: palette.textPrimary }]}>{pod.title}</Text>
                         <Text numberOfLines={1} style={[styles.artistName, { color: palette.textSecondary }]}>
-                          {pod.author || pod.createdBy || 'Podcast'} · {pod.episodeCount} tập
+                          {resolveAuthorName(pod.author) || pod.createdBy || 'Podcast'} · {pod.episodeCount} tập
                         </Text>
                       </View>
                       <View style={[styles.favBtn, { backgroundColor: palette.primary + '15' }]}>

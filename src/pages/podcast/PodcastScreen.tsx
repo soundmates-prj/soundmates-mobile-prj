@@ -28,6 +28,7 @@ import Animated, {
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { PodcastResponse, podcastService } from '../../api';
 import { useTheme } from '../../context/ThemeContext';
+import { resolveAuthorAvatar, resolveAuthorName } from '../../utils/authorUtils';
 import { PodcastDetailScreen } from './PodcastDetailScreen';
 
 const { width } = Dimensions.get('window');
@@ -67,8 +68,8 @@ const mapToPodcastVM = (raw: PodcastResponse): PodcastVM => ({
   id: raw.id,
   title: raw.title,
   subtitle: raw.description || '',
-  host: raw.author || 'Unknown',
-  hostAvatar: DEFAULT_AVATAR,
+  host: resolveAuthorName(raw.author) || 'Unknown',
+  hostAvatar: resolveAuthorAvatar(raw.author) || DEFAULT_AVATAR,
   coverImage: raw.banner || DEFAULT_COVER,
   followers: 0,
   episodes: raw.episodeCount,

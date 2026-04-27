@@ -21,11 +21,19 @@ export interface PodcastEpisode {
     createdAt?: string;
 }
 
+export interface PodcastAuthor {
+    name: string;
+    avatar: string;
+    email: string;
+    plan: string;
+    userId: string;
+}
+
 export interface PodcastResponse {
     id: string;
     title: string;
     description: string | null;
-    author: string | null;
+    author: string | PodcastAuthor | null;
     status: string;
     type: string | null;
     banner: string | null;

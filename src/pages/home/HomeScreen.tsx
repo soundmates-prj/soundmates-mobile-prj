@@ -36,6 +36,7 @@ import PlaylistDetailModal from '../profile/components/PlaylistDetailModal';
 import ProfileScreen from '../profile/ProfileScreen';
 import SearchResultsScreen, { SearchResultBundle } from '../search/SearchResultsScreen';
 import NotificationScreen from './NotificationScreen';
+import { resolveAuthorName } from '../../utils/authorUtils';
 import {
     MyPlaylistCard,
     PodcastHotCard,
@@ -249,7 +250,7 @@ export default function HomeScreen({
                 const mapped: PodcastItem[] = data.map((p) => ({
                     id: p.id,
                     title: p.title,
-                    host: p.author || p.createdBy || 'Unknown',
+                    host: resolveAuthorName(p.author) || p.createdBy || 'Unknown',
                     image: p.banner || `https://api.dicebear.com/7.x/initials/png?seed=${encodeURIComponent(p.title)}&backgroundColor=55C5F1`,
                 }));
                 setHotPodcasts(mapped);
@@ -336,7 +337,7 @@ export default function HomeScreen({
                 ? podcastsRes.value.filter((p) =>
                     p.title.toLowerCase().includes(kw) ||
                     (p.description || '').toLowerCase().includes(kw) ||
-                    (p.author || '').toLowerCase().includes(kw)
+                    resolveAuthorName(p.author).toLowerCase().includes(kw)
                 ).slice(0, 5)
                 : [];
 

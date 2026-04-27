@@ -43,6 +43,7 @@ import FormTextField from '../../components/ui/FormTextField';
 import { showToast } from '../../components/ui/Toast';
 import { useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
+import { resolveAuthorName } from '../../utils/authorUtils';
 import BottomNavigation, { TabName } from '../BottomNavigation';
 import CreatePostScreen, { EditablePostDraft } from '../blog/CreatePostScreen';
 import PostDetailScreen from '../blog/PostDetailScreen';
@@ -983,7 +984,7 @@ export default function ProfileScreen({
           itemType: 'podcast',
           source: 'soundmates',
           name: p.title,
-          artistName: p.author || 'Podcast',
+          artistName: resolveAuthorName(p.author) || 'Podcast',
           imgUrl: p.banner || undefined,
         }));
         setFavoriteItems(mapped);
