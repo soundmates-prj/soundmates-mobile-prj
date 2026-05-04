@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -398,34 +399,37 @@ function RequestSongModal({
   };
 
   return (
-    <Modal visible={isOpen} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={isOpen} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalBackdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => { Keyboard.dismiss(); onClose(); }} />
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={styles.modalCard}>
+          <BlurView intensity={80} tint="dark" style={styles.modalCard}>
+            {/* Handle Bar */}
+            <View style={styles.modalHandle} />
+
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>🎵 Request Bài Hát</Text>
+                <Text style={styles.modalTitle}>🎵 Request Nhạc</Text>
                 {requestLimits && (
-                  <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 }}>
-                    Còn lại {requestLimits.remaining} lượt hôm nay
-                  </Text>
+                  <View style={styles.limitsBadge}>
+                    <Text style={styles.limitsBadgeText}>Còn {requestLimits.remaining} lượt hôm nay</Text>
+                  </View>
                 )}
               </View>
               <TouchableOpacity onPress={onClose} style={styles.modalCloseButton}>
-                <Ionicons name="close" size={18} color="#FFFFFF" />
+                <Ionicons name="close" size={20} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
 
             <View style={styles.searchRow}>
-              <Ionicons name="search" size={16} color="rgba(255,255,255,0.4)" style={{ marginRight: 8 }} />
+              <Ionicons name="search" size={20} color="rgba(255,255,255,0.5)" style={{ marginRight: 8 }} />
               <FormTextField
                 value={search}
                 onChangeText={setSearch}
-                placeholder="Tìm bài hát hoặc nghệ sĩ..."
-                placeholderTextColor="rgba(255,255,255,0.35)"
+                placeholder="Tìm bài hát, nghệ sĩ..."
+                placeholderTextColor="rgba(255,255,255,0.4)"
                 style={styles.searchInput}
-                containerStyle={{ flex: 1 }}
+                containerStyle={{ flex: 1, backgroundColor: 'transparent', borderWidth: 0, minHeight: 0 }}
               />
             </View>
 
@@ -434,10 +438,10 @@ function RequestSongModal({
               <FormTextField
                 value={requestMessage}
                 onChangeText={(text: string) => setRequestMessage(text.slice(0, 300))}
-                placeholder="Nhắn host (tuỳ chọn): ví dụ 'Cho mình nghe bài này tặng bạn A'"
-                placeholderTextColor="rgba(255,255,255,0.3)"
+                placeholder="Lời nhắn cho Host (tuỳ chọn)..."
+                placeholderTextColor="rgba(255,255,255,0.35)"
                 style={styles.requestMessageInput}
-                containerStyle={{ flex: 1 }}
+                containerStyle={{ flex: 1, backgroundColor: 'transparent', borderWidth: 0, minHeight: 0 }}
                 multiline
                 numberOfLines={2}
               />
@@ -447,13 +451,15 @@ function RequestSongModal({
             <View style={styles.requestListContainer}>
               {isLoading ? (
                 <View style={styles.requestEmptyState}>
-                  <ActivityIndicator color="#8B5CF6" />
+                  <ActivityIndicator color="#8B5CF6" size="large" />
                   <Text style={styles.requestEmptyText}>Đang tải danh sách bài hát...</Text>
                 </View>
               ) : filteredCandidates.length === 0 ? (
                 <View style={styles.requestEmptyState}>
-                  <Ionicons name="musical-notes-outline" size={20} color="#94A3B8" />
-                  <Text style={styles.requestEmptyText}>Không tìm thấy bài hát phù hợp</Text>
+                  <View style={styles.requestEmptyIconWrap}>
+                     <Ionicons name="musical-notes-outline" size={32} color="#A78BFA" />
+                  </View>
+                  <Text style={styles.requestEmptyText}>Không tìm thấy bài hát</Text>
                 </View>
               ) : (
                 <ScrollView style={styles.requestList} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -463,6 +469,9 @@ function RequestSongModal({
                     const canRequest = Boolean(song.mediaFileId);
                     return (
                       <View key={song.id} style={styles.requestItem}>
+                        <View style={styles.requestItemIcon}>
+                          <Ionicons name="musical-note" size={22} color="#E0E7FF" />
+                        </View>
                         <View style={styles.requestItemMeta}>
                           <Text style={styles.requestItemTitle} numberOfLines={1}>{song.title}</Text>
                           <Text style={styles.requestItemArtist} numberOfLines={1}>
@@ -477,7 +486,7 @@ function RequestSongModal({
                           ]}
                           onPress={() => handleRequestSong(song)}
                         >
-                          <Text style={styles.requestItemButtonText}>
+                          <Text style={[styles.requestItemButtonText, (!canRequest || requested || isSubmitting) && styles.requestItemButtonTextDisabled]}>
                             {requested ? 'Đã gửi' : isSubmitting ? 'Đang gửi...' : canRequest ? 'Request' : 'Không hỗ trợ'}
                           </Text>
                         </TouchableOpacity>
@@ -487,7 +496,7 @@ function RequestSongModal({
                 </ScrollView>
               )}
             </View>
-          </View>
+          </BlurView>
         </TouchableWithoutFeedback>
       </View>
     </Modal>
@@ -2197,25 +2206,46 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#1A1F35',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(139,92,246,0.2)',
-    maxHeight: SCREEN_H * 0.75,
+    backgroundColor: 'rgba(20, 23, 38, 0.65)',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 24,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    maxHeight: SCREEN_H * 0.85,
+    overflow: 'hidden',
+  },
+  modalHandle: {
+    width: 48,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    alignSelf: 'center',
+    marginBottom: 20,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
+    marginBottom: 20,
   },
-  modalTitle: { fontSize: 17, fontWeight: '700', color: '#FFFFFF' },
+  modalTitle: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.3 },
+  limitsBadge: {
+    backgroundColor: 'rgba(139,92,246,0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.3)',
+  },
+  limitsBadgeText: { color: '#C4B5FD', fontSize: 11, fontWeight: '700' },
   modalCloseButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2223,50 +2253,66 @@ const styles = StyleSheet.create({
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 16,
+    paddingHorizontal: 16,
     paddingVertical: 4,
-    marginBottom: 14,
+    marginBottom: 16,
+    minHeight: 50,
   },
-  searchInput: { flex: 1, fontSize: 14, color: '#FFFFFF' },
+  searchInput: { flex: 1, fontSize: 16, color: '#FFFFFF' },
   requestMessageWrap: {
     backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 4,
-    marginBottom: 14,
+    borderColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+    marginBottom: 20,
   },
-  requestMessageInput: { fontSize: 13, color: '#FFFFFF', minHeight: 40, textAlignVertical: 'top' },
-  requestMessageCount: { color: 'rgba(255,255,255,0.3)', fontSize: 11, textAlign: 'right', marginTop: 4 },
-  requestListContainer: { maxHeight: 320 },
-  requestList: { maxHeight: 320 },
+  requestMessageInput: { fontSize: 14, color: '#FFFFFF', minHeight: 44, textAlignVertical: 'top' },
+  requestMessageCount: { color: 'rgba(255,255,255,0.3)', fontSize: 11, textAlign: 'right', marginTop: 6 },
+  requestListContainer: { maxHeight: SCREEN_H * 0.45 },
+  requestList: { },
   requestItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
+    gap: 14,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  requestItemIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(139,92,246,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   requestItemMeta: { flex: 1, minWidth: 0 },
-  requestItemTitle: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
-  requestItemArtist: { marginTop: 2, color: 'rgba(255,255,255,0.5)', fontSize: 12 },
+  requestItemTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', marginBottom: 2 },
+  requestItemArtist: { color: 'rgba(255,255,255,0.6)', fontSize: 13 },
   requestItemButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 999,
     backgroundColor: '#8B5CF6',
   },
   requestItemButtonDisabled: { backgroundColor: 'rgba(255,255,255,0.1)' },
-  requestItemButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
-  requestEmptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 28, gap: 10 },
-  requestEmptyText: { color: 'rgba(255,255,255,0.45)', fontSize: 13 },
+  requestItemButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
+  requestItemButtonTextDisabled: { color: 'rgba(255,255,255,0.4)' },
+  requestEmptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40, gap: 16 },
+  requestEmptyIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(139,92,246,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  requestEmptyText: { color: 'rgba(255,255,255,0.6)', fontSize: 15, fontWeight: '500' },
 
   // Lyric page
   lyricPageWrapper: { flex: 1, paddingTop: 8, paddingHorizontal: 16, paddingBottom: 20 },

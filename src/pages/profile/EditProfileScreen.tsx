@@ -406,7 +406,7 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
         </View>
 
         {/* THÔNG TIN CÁ NHÂN */}
-        <View style={styles.formSection}>
+        <View style={[styles.formSection, { zIndex: 50 }]}>
           <Text style={[styles.sectionTitle, { color: palette.textMuted }]}>THÔNG TIN CÁ NHÂN</Text>
           <View style={[styles.card, styles.popupHostCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
             {/* Gender */}
@@ -605,18 +605,13 @@ export default function EditProfileScreen({ onBack }: EditProfileScreenProps) {
           <TouchableOpacity
             onPress={handleSave}
             disabled={isSaving}
-            style={[styles.primaryButton, isSaving && styles.primaryButtonDisabled]}
+            style={[styles.primaryButton, { backgroundColor: palette.primary }, isSaving && styles.primaryButtonDisabled]}
           >
-            <LinearGradient
-              colors={['#55C5F1', '#A78BFA']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.primaryButtonGradient}
-            >
+            <View style={styles.primaryButtonGradient}>
               <Text style={styles.primaryButtonText}>
                 {isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
               </Text>
-            </LinearGradient>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -677,22 +672,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    height: 56,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-    marginBottom: 12,
+    height: 60,
+    marginBottom: 8,
   },
   headerButton: {
     padding: 4,
   },
   headerTitle: {
-    fontSize: 17,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '800',
     color: '#1E293B',
+    letterSpacing: 0.2,
   },
   saveButton: {
-    // backgroundColor: '#55C5F1',
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 12,
@@ -717,19 +709,25 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     color: '#9CA3AF',
-    letterSpacing: 0.5,
-    marginBottom: 12,
-    paddingHorizontal: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+    paddingHorizontal: 6,
   },
   card: {
     backgroundColor: 'white',
-    borderRadius: 16,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 2,
   },
   popupHostCard: {
     overflow: 'visible',
@@ -739,9 +737,9 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    gap: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
   },
   nameRow: {
     flexDirection: 'row',
@@ -751,9 +749,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -853,13 +851,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    zIndex: 28,
+    zIndex: 999,
     elevation: 9,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.14,
     shadowRadius: 10,
     overflow: 'hidden',
+    height: 200,
   },
   genderValue: {
     fontSize: 15,
@@ -875,7 +874,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
     overflow: 'hidden',
-    zIndex: 30,
+    zIndex: 999,
     elevation: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
@@ -951,12 +950,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginHorizontal: 20,
-    marginBottom: 32,
+    marginBottom: 16,
   },
   cancelButton: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 16,
+    paddingVertical: 16,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     backgroundColor: 'white',
@@ -964,27 +963,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelButtonText: {
-    fontSize: 15,
+    fontSize: 16,
     color: '#6B7280',
-    fontWeight: '600',
+    fontWeight: '700',
   },
   primaryButton: {
-    flex: 1,
-    borderRadius: 16,
+    flex: 1.5,
+    borderRadius: 20,
     overflow: 'hidden',
+    shadowColor: '#55C5F1',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
   },
   primaryButtonDisabled: {
     opacity: 0.6,
   },
   primaryButtonGradient: {
-    paddingVertical: 14,
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryButtonText: {
-    fontSize: 15,
+    fontSize: 16,
     color: 'white',
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 
   // Bottom Spacer

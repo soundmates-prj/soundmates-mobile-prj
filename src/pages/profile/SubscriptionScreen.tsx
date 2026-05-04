@@ -212,50 +212,59 @@ function PlanCard({
   const isPremium = plan.tier === 'premium';
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.92}
-      onPress={onSelect}
-      style={[
-        styles.planCard,
-        { backgroundColor: palette.surface },
-        isSelected
-          ? isPremium
-            ? styles.planCardPremiumSelected
-            : { borderColor: plan.color, shadowColor: plan.color, shadowOpacity: 0.2, elevation: 5 }
-          : styles.planCardDefault,
-      ]}
-    >
+    <View style={styles.planCardOuter}>
       {plan.popular && (
         <View style={styles.planBadgeWrapper}>
-          <View style={styles.popularBadge}>
-            <Ionicons name="sparkles-outline" size={12} color="#1E293B" />
-            <Text style={styles.popularBadgeText}>Phổ biến nhất</Text>
-          </View>
+          <LinearGradient
+            colors={['#004395', '#55C5F1']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.popularBadge}
+          >
+            <Ionicons name="sparkles" size={12} color="white" />
+            <Text style={styles.popularBadgeText}>YÊU THÍCH NHẤT</Text>
+          </LinearGradient>
         </View>
       )}
 
-      {plan.current && (
-        <View style={styles.planBadgeWrapper}>
+      {plan.current && !plan.popular && (
+        <View style={[styles.planBadgeWrapper, { alignItems: 'flex-end', paddingRight: 16 }]}>
           <View style={styles.currentBadge}>
             <Ionicons name="checkmark" size={12} color="white" />
-            <Text style={styles.currentBadgeText}>Gói hiện tại</Text>
+            <Text style={styles.currentBadgeText}>ĐANG DÙNG</Text>
           </View>
         </View>
       )}
 
-      <View style={[styles.planHeader, isPremium ? styles.planHeaderPremium : [styles.planHeaderDefault, { backgroundColor: isDarkMode ? '#111827' : '#F8FAFC' }]]}>
-        {isPremium && (
-          <>
-            <LinearGradient
-              colors={[plan.gradientFrom, plan.gradientTo]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFillObject}
-            />
-            <View style={styles.planDecorCircleTop} />
-            <View style={styles.planDecorCircleBottom} />
-          </>
-        )}
+      <TouchableOpacity
+        activeOpacity={0.92}
+        onPress={onSelect}
+        style={[
+          styles.planCardInner,
+          { backgroundColor: isPremium ? (isDarkMode ? '#1a2235' : '#f8feff') : palette.surface },
+          isSelected
+            ? isPremium
+              ? styles.planCardPremiumSelected
+              : { borderColor: plan.color, shadowColor: plan.color, shadowOpacity: 0.2, elevation: 5 }
+            : isPremium 
+              ? styles.planCardPremiumDefault 
+              : styles.planCardDefault,
+        ]}
+      >
+
+        <View style={[styles.planHeader, isPremium ? styles.planHeaderPremium : [styles.planHeaderDefault, { backgroundColor: isDarkMode ? '#111827' : '#F8FAFC' }]]}>
+          {isPremium && (
+            <>
+              <LinearGradient
+                colors={[plan.gradientFrom, plan.gradientTo]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFillObject}
+              />
+              <View style={styles.planDecorCircleTop} />
+              <View style={styles.planDecorCircleBottom} />
+            </>
+          )}
 
         <View style={styles.planHeaderContent}>
           <View style={styles.planNameRow}>
@@ -328,32 +337,39 @@ function PlanCard({
         )}
       </View>
 
-      <View style={[styles.planCtaWrap, { backgroundColor: palette.surface }]}>
-        {plan.current ? (
-          <View style={[styles.planCta, styles.planCtaCurrent]}>
-            <Text style={[styles.planCtaText, styles.planCtaTextLight]}>Gói hiện tại của bạn</Text>
-          </View>
-        ) : (
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={onPurchase}
-            style={[
-              styles.planCta,
-              isPremium ? styles.planCtaPremium : styles.planCtaStandard,
-            ]}
-          >
-            <Text
-              style={[
-                styles.planCtaText,
-                isPremium ? styles.planCtaTextLight : styles.planCtaTextDark,
-              ]}
+        <View style={[styles.planCtaWrap, { backgroundColor: 'transparent' }]}>
+          {plan.current ? (
+            <View style={[styles.planCta, styles.planCtaCurrent]}>
+              <Text style={[styles.planCtaText, styles.planCtaTextLight]}>Đang sử dụng</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={onPurchase}
+              style={[styles.planCta, isPremium ? styles.planCtaPremium : styles.planCtaStandard]}
             >
-              Mua Ngay
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </TouchableOpacity>
+              {isPremium ? (
+                <LinearGradient
+                  colors={['#004395', '#3a9fd8', '#55c5f1']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[StyleSheet.absoluteFillObject, { borderRadius: 16 }]}
+                />
+              ) : null}
+              <Text
+                style={[
+                  styles.planCtaText,
+                  isPremium ? styles.planCtaTextLight : styles.planCtaTextDark,
+                  isPremium && { zIndex: 2 }
+                ]}
+              >
+                {isPremium ? 'Đăng ký Hội Viên' : 'Chọn Gói Này'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -589,16 +605,16 @@ export default function SubscriptionScreen({ onBack, onSelectPlan }: Subscriptio
       >
         <View style={styles.titleSection}>
           <LinearGradient
-            colors={['#55C5F1', '#3B82F6']}
+            colors={['#55C5F1', '#004395']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.titleIconWrap}
           >
-            <Ionicons name="diamond-outline" size={28} color="white" />
+            <Ionicons name="sparkles" size={28} color="white" />
           </LinearGradient>
-          <Text style={[styles.titleMain, { color: palette.textPrimary }]}>Nâng cấp trải nghiệm</Text>
+          <Text style={[styles.titleMain, { color: palette.textPrimary }]}>Chọn gói dịch vụ</Text>
           <Text style={[styles.titleDescription, { color: palette.textSecondary }]}>
-            Chọn gói phù hợp để mở khóa toàn bộ tính năng của SoundMates
+            Nâng cao trải nghiệm âm nhạc và sáng tạo nội dung với các gói dịch vụ linh hoạt, phù hợp với mọi nhu cầu.
           </Text>
         </View>
 
@@ -833,24 +849,36 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  planCard: {
-    borderWidth: 2,
-    borderRadius: 20,
+  planCardOuter: {
+    marginBottom: 24,
+    paddingTop: 14, // Space for the top badge
+  },
+  planCardInner: {
+    borderWidth: 1.5,
+    borderRadius: 24,
     overflow: 'hidden',
     backgroundColor: 'white',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
     elevation: 3,
   },
   planCardDefault: {
     borderColor: '#E5E7EB',
   },
+  planCardPremiumDefault: {
+    borderColor: 'rgba(85, 197, 241, 0.25)',
+    shadowColor: '#55C5F1',
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 4,
+  },
   planCardPremiumSelected: {
     borderColor: '#55C5F1',
     shadowColor: '#55C5F1',
-    shadowOpacity: 0.2,
-    elevation: 6,
+    shadowOpacity: 0.4,
+    shadowRadius: 28,
+    elevation: 8,
   },
   planBadgeWrapper: {
     position: 'absolute',
@@ -859,49 +887,65 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 10,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   popularBadge: {
-    backgroundColor: '#67F700',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
     paddingHorizontal: 16,
-    paddingVertical: 4,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    shadowColor: '#004395',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
   popularBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1E293B',
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#ffffff',
+    letterSpacing: 1,
   },
   currentBadge: {
-    backgroundColor: '#3C5F99',
+    backgroundColor: '#10B981',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
   currentBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '800',
     color: 'white',
+    letterSpacing: 0.5,
   },
 
   planHeader: {
-    paddingTop: 40,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+    paddingTop: 32,
+    paddingBottom: 24,
+    paddingHorizontal: 24,
     position: 'relative',
   },
   planHeaderPremium: {
-    backgroundColor: '#55C5F1',
+    // For premium, the background gradient handles it
   },
   planHeaderDefault: {
     backgroundColor: '#F8FAFC',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   planDecorCircleTop: {
     position: 'absolute',
@@ -942,61 +986,68 @@ const styles = StyleSheet.create({
   },
   planName: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   planNamePremium: {
     color: 'white',
   },
   planNameDefault: {
-    color: '#1E293B',
+    color: '#0F172A',
   },
   planPriceRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
     marginBottom: 8,
   },
   planCurrency: {
-    fontSize: 14,
-    marginBottom: 6,
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 4,
+    marginRight: 2,
   },
   planPrice: {
-    fontSize: 36,
-    fontWeight: '700',
-    lineHeight: 40,
-    marginLeft: 2,
+    fontSize: 42,
+    fontWeight: '800',
+    lineHeight: 48,
+    letterSpacing: -1,
   },
   planPricePremium: {
     color: 'white',
   },
   planPriceDefault: {
-    color: '#3C5F99',
+    color: '#0F172A',
   },
   planPeriod: {
     fontSize: 16,
-    marginLeft: 3,
-    marginBottom: 5,
+    marginLeft: 4,
+    alignSelf: 'flex-end',
+    marginBottom: 8,
+    fontWeight: '600',
   },
   planMutedPremium: {
     color: 'rgba(255,255,255,0.7)',
   },
   planMutedDefault: {
-    color: '#9CA3AF',
+    color: '#64748B',
   },
   planDescription: {
     fontSize: 13,
     lineHeight: 20,
+    fontWeight: '500',
   },
   planDescriptionPremium: {
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255,255,255,0.85)',
   },
   planDescriptionDefault: {
-    color: '#6B7280',
+    color: '#64748B',
   },
 
   planFeaturesSection: {
-    backgroundColor: 'white',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 24,
+    paddingVertical: 20,
   },
   planFeatureTitle: {
     fontSize: 12,
@@ -1046,9 +1097,8 @@ const styles = StyleSheet.create({
   },
 
   planCtaWrap: {
-    backgroundColor: 'white',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingHorizontal: 24,
+    paddingBottom: 24,
   },
   planCta: {
     width: '100%',
@@ -1067,8 +1117,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
   },
   planCtaText: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   planCtaTextLight: {
     color: 'white',
