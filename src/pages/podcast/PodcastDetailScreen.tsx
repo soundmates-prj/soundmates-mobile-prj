@@ -22,6 +22,7 @@ import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme'
 import { podcastService } from '../../api';
 import { useAudioPlayer } from '../../context/AudioPlayerContext';
 import { useTheme } from '../../context/ThemeContext';
+import { PodcastPurchaseModal } from '../../components/common/PodcastPurchaseModal';
 
 const { width, height } = Dimensions.get('window');
 
@@ -37,6 +38,9 @@ interface PodcastDetail {
   followers: number;
   episodes: number;
   category: string;
+  isPaid?: boolean;
+  isPurchased?: boolean;
+  price?: number;
 }
 
 interface EpisodeVM {
@@ -70,6 +74,8 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
   const [loadingEpisodes, setLoadingEpisodes] = useState(false);
   const [isFollowed, setIsFollowed] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPurchaseModalVisible, setIsPurchaseModalVisible] = useState(false);
+  const [localPurchased, setLocalPurchased] = useState(false);
 
   const scrollY = useRef(new RNAnimated.Value(0)).current;
 
@@ -224,32 +230,48 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(400)} style={styles.actionRow}>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                if (episodes.length === 0 || !episodes[0].audioUrl) return;
-                const latestEp = episodes[0];
-                if (activeTrack?.id === latestEp.id) {
-                  void togglePlayback();
-                } else {
-                  loadTrack({
-                    id: latestEp.id,
-                    url: latestEp.audioUrl!,
-                    title: latestEp.title,
-                    artist: podcast.host || 'Podcast',
-                    artUrl: latestEp.thumbnailUrl || podcast.coverImage,
-                    duration: latestEp.durationSeconds,
-                  });
-                }
-              }}
-              style={[styles.followBtn, { backgroundColor: palette.primary }]}
-            >
-              <Ionicons name={activeTrack?.id === episodes[0]?.id && isPlaying ? "pause" : "play"} size={20} color="#FFFFFF" />
-              <Text style={[styles.followBtnText, { color: "#FFFFFF" }]}>
-                {activeTrack?.id === episodes[0]?.id && isPlaying ? 'Đang phát' : 'Phát tập mới nhất'}
-              </Text>
-            </TouchableOpacity>
+            {podcast.isPaid && !podcast.isPurchased && !localPurchased ? (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setIsPurchaseModalVisible(true);
+                }}
+                style={[styles.followBtn, { backgroundColor: '#F59E0B' }]}
+              >
+                <Ionicons name="lock-closed" size={20} color="#FFFFFF" />
+                <Text style={[styles.followBtnText, { color: "#FFFFFF" }]}>
+                  Mua {podcast.price?.toLocaleString('vi-VN')}đ
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  if (episodes.length === 0 || !episodes[0].audioUrl) return;
+                  const latestEp = episodes[0];
+                  if (activeTrack?.id === latestEp.id) {
+                    void togglePlayback();
+                  } else {
+                    loadTrack({
+                      id: latestEp.id,
+                      url: latestEp.audioUrl!,
+                      title: latestEp.title,
+                      artist: podcast.host || 'Podcast',
+                      artUrl: latestEp.thumbnailUrl || podcast.coverImage,
+                      duration: latestEp.durationSeconds,
+                    });
+                  }
+                }}
+                style={[styles.followBtn, { backgroundColor: palette.primary }]}
+              >
+                <Ionicons name={activeTrack?.id === episodes[0]?.id && isPlaying ? "pause" : "play"} size={20} color="#FFFFFF" />
+                <Text style={[styles.followBtnText, { color: "#FFFFFF" }]}>
+                  {activeTrack?.id === episodes[0]?.id && isPlaying ? 'Đang phát' : 'Phát tập mới nhất'}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               activeOpacity={0.8}
@@ -304,6 +326,10 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
                     style={[styles.episodeCard, { backgroundColor: isCurrentTrack ? palette.primary + '10' : palette.surface, borderColor: isCurrentTrack ? palette.primary : palette.border }]}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      if (podcast.isPaid && !podcast.isPurchased && !localPurchased) {
+                        setIsPurchaseModalVisible(true);
+                        return;
+                      }
                       if (!episode.audioUrl) return;
                       if (isCurrentTrack) {
                         void togglePlayback();
@@ -340,6 +366,36 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
         </View>
       </RNAnimated.ScrollView>
 
+      <PodcastPurchaseModal
+        visible={isPurchaseModalVisible}
+        podcastId={podcast.id}
+        title={podcast.title}
+        coverImage={podcast.coverImage}
+        price={podcast.price || 0}
+        author={podcast.host}
+        onClose={() => setIsPurchaseModalVisible(false)}
+        onPaymentSuccess={() => {
+          setIsPurchaseModalVisible(false);
+          setLocalPurchased(true);
+          Toast.show({
+            type: 'success',
+            text1: 'Thanh toán thành công',
+            text2: 'Bạn đã mở khóa Podcast này.',
+          });
+          // Refresh episode list to get actual audioUrls if they were stripped
+          fetchEpisodeInfo();
+        }}
+        onPaymentFailed={(reason) => {
+          setIsPurchaseModalVisible(false);
+          if (reason) {
+            Toast.show({
+              type: 'error',
+              text1: 'Thanh toán thất bại',
+              text2: reason,
+            });
+          }
+        }}
+      />
     </View>
   );
 }

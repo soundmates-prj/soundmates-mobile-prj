@@ -121,6 +121,9 @@ export const PODCAST_ENDPOINTS = {
     DETAIL: (id: string) => `/podcast/${id}`,
     SAVED_PODCASTS: '/me/saved-podcasts',
     TOGGLE_SAVE: (id: string) => `/me/saved-podcasts/${id}`,
+    MY_PODCASTS: '/podcast/my',
+    PODCAST_REQUESTS: '/podcast-requests',
+    EPISODE_REQUESTS: '/podcast-episode-requests',
 };
 
 // Livestream / Live Session Endpoints
@@ -159,6 +162,11 @@ export const USER_PLAYLIST_ENDPOINTS = {
 export const MUSIC_CATALOG_ENDPOINTS = {
     LIST: '/musiccatalog',
     STATION: (stationId: string) => `/musiccatalog/station/${stationId}`,
+};
+
+export const NOTIFICATION_ENDPOINTS = {
+    ME_NOTIFICATIONS: '/me/notifications',
+    MARK_AS_READ: (id: string) => `/me/notifications/${id}/read`,
 };
 
 export default API_CONFIG;

@@ -56,6 +56,9 @@ import PlaylistDetailModal from './components/PlaylistDetailModal';
 import ProfileFavoritesTab from './components/ProfileFavoritesTab';
 import ProfilePlaylistsTab from './components/ProfilePlaylistsTab';
 import ProfilePostsTab from './components/ProfilePostsTab';
+import TransactionHistoryScreen from './TransactionHistoryScreen';
+import MyPodcastsScreen from './MyPodcastsScreen';
+import BankAccountScreen from './BankAccountScreen';
 
 export interface ApiTheme {
   id: string;
@@ -107,6 +110,14 @@ const MENU_ITEMS = [
     items: [
       { icon: 'person-outline', label: 'Thông tin tài khoản', color: '#55C5F1' },
       { icon: 'card-outline', label: 'Gói đăng ký', color: '#A78BFA', badge: 'Premium' },
+    ],
+  },
+  {
+    group: 'Quản lý Podcast (Creator)',
+    items: [
+      { icon: 'mic-outline', label: 'Quản lý Podcast', color: '#F59E0B' },
+      { icon: 'receipt-outline', label: 'Doanh thu & Lịch sử', color: '#10B981' },
+      { icon: 'card-outline', label: 'Tài khoản ngân hàng', color: '#3B82F6' },
     ],
   },
   {
@@ -180,6 +191,9 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
   onOpenAccountInfo?: () => void;
   onOpenSubscription?: () => void;
   onOpenThemeSettings?: () => void;
+  onOpenMyPodcasts?: () => void;
+  onOpenTransactionHistory?: () => void;
+  onOpenBankAccount?: () => void;
   themeLabel?: string;
   subscriptionPlanLabel?: string;
   onLogout?: () => void;
@@ -201,6 +215,12 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
       openAfterClose(onOpenAccountInfo);
     } else if (label === 'Gói đăng ký' && onOpenSubscription) {
       openAfterClose(onOpenSubscription);
+    } else if (label === 'Quản lý Podcast' && onOpenMyPodcasts) {
+      openAfterClose(onOpenMyPodcasts);
+    } else if (label === 'Doanh thu & Lịch sử' && onOpenTransactionHistory) {
+      openAfterClose(onOpenTransactionHistory);
+    } else if (label === 'Tài khoản ngân hàng' && onOpenBankAccount) {
+      openAfterClose(onOpenBankAccount);
     } else if (label === 'Giao diện' && onOpenThemeSettings) {
       openAfterClose(onOpenThemeSettings);
     }
@@ -348,6 +368,9 @@ export default function ProfileScreen({
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showAccountInfo, setShowAccountInfo] = useState(false);
   const [showSubscriptionDetails, setShowSubscriptionDetails] = useState(false);
+  const [showMyPodcasts, setShowMyPodcasts] = useState(false);
+  const [showTransactionHistory, setShowTransactionHistory] = useState(false);
+  const [showBankAccount, setShowBankAccount] = useState(false);
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [editingPost, setEditingPost] = useState<EditablePostDraft | null>(null);
   const [activeBottomTab, setActiveBottomTab] = useState<TabName>('profile');
@@ -483,6 +506,9 @@ export default function ProfileScreen({
     || showChangePassword
     || showAccountInfo
     || showSubscriptionDetails
+    || showMyPodcasts
+    || showTransactionHistory
+    || showBankAccount
     || showCreatePost
     || !!selectedPostId;
 
@@ -1979,6 +2005,9 @@ export default function ProfileScreen({
             onNavigateToSubscription();
           }
         }}
+        onOpenMyPodcasts={() => setShowMyPodcasts(true)}
+        onOpenTransactionHistory={() => setShowTransactionHistory(true)}
+        onOpenBankAccount={() => setShowBankAccount(true)}
         onOpenThemeSettings={handleOpenThemeSettings}
         themeLabel={themeLabel}
         subscriptionPlanLabel={subscriptionPlanName}
@@ -1986,6 +2015,50 @@ export default function ProfileScreen({
         palette={palette}
         isDarkMode={isDarkMode}
       />
+
+      {showSubscriptionDetails && (
+        <Modal
+          visible={showSubscriptionDetails}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={() => setShowSubscriptionDetails(false)}
+        >
+          <SubscriptionDetailsScreen onBack={() => setShowSubscriptionDetails(false)} />
+        </Modal>
+      )}
+
+      {showMyPodcasts && (
+        <Modal
+          visible={showMyPodcasts}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={() => setShowMyPodcasts(false)}
+        >
+          <MyPodcastsScreen onBack={() => setShowMyPodcasts(false)} />
+        </Modal>
+      )}
+
+      {showTransactionHistory && (
+        <Modal
+          visible={showTransactionHistory}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={() => setShowTransactionHistory(false)}
+        >
+          <TransactionHistoryScreen onBack={() => setShowTransactionHistory(false)} />
+        </Modal>
+      )}
+
+      {showBankAccount && (
+        <Modal
+          visible={showBankAccount}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={() => setShowBankAccount(false)}
+        >
+          <BankAccountScreen onBack={() => setShowBankAccount(false)} />
+        </Modal>
+      )}
 
       {/* ── Change Password Modal ── */}
       <Modal

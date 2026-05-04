@@ -42,6 +42,29 @@ export interface PodcastResponse {
     createdBy: string;
     episodeCount: number;
     allEpisodes?: PodcastEpisode[];
+    price?: number;
+    isPaid?: boolean;
+    isPurchased?: boolean;
+}
+
+export interface CreatePodcastRequestPayload {
+    title: string;
+    episodeTitle?: string;
+    type?: string;
+    description: string;
+    bannerUrl: string;
+    price: number;
+    isPaid: boolean;
+    targetPodcastId?: string;
+}
+
+export interface CreatePodcastEpisodeRequestPayload {
+    podcastId: string;
+    title: string;
+    description?: string;
+    thumbnailUrl?: string;
+    audioUrl: string;
+    duration: number;
 }
 
 interface ApiResponse<T> {
@@ -116,6 +139,52 @@ export const podcastService = {
     async unsavePodcast(id: string): Promise<boolean> {
         await authApiClient.delete(PODCAST_ENDPOINTS.TOGGLE_SAVE(id));
         return true;
+    },
+
+    /**
+     * Get user's created podcasts
+     */
+    async getMyPodcasts(): Promise<PodcastResponse[]> {
+        try {
+            const response = await authApiClient.get<ApiResponse<PodcastResponse[]>>(
+                PODCAST_ENDPOINTS.MY_PODCASTS
+            );
+            return response.data.data ?? [];
+        } catch {
+            return [];
+        }
+    },
+
+    /**
+     * Submit a request to create or update a podcast
+     */
+    async createPodcastRequest(payload: CreatePodcastRequestPayload): Promise<boolean> {
+        try {
+            const response = await authApiClient.post<ApiResponse<any>>(
+                PODCAST_ENDPOINTS.PODCAST_REQUESTS,
+                payload
+            );
+            return response.data.success;
+        } catch (error: any) {
+            console.error('[PodcastService] createPodcastRequest error:', error);
+            throw new Error(error.response?.data?.message || 'Không thể tạo yêu cầu Podcast');
+        }
+    },
+
+    /**
+     * Submit a request to add an episode
+     */
+    async createPodcastEpisodeRequest(payload: CreatePodcastEpisodeRequestPayload): Promise<boolean> {
+        try {
+            const response = await authApiClient.post<ApiResponse<any>>(
+                PODCAST_ENDPOINTS.EPISODE_REQUESTS,
+                payload
+            );
+            return response.data.success;
+        } catch (error: any) {
+            console.error('[PodcastService] createPodcastEpisodeRequest error:', error);
+            throw new Error(error.response?.data?.message || 'Không thể thêm tập mới');
+        }
     },
 };
 
