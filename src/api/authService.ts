@@ -423,6 +423,30 @@ class AuthService {
     }
 
     /**
+     * Get user public profile
+     */
+    async getUserPublicProfile(userId: string): Promise<ApiResponse<UserProfileFullResponse>> {
+        try {
+            const response = await authApiClient.get<UserProfileFullResponse>(
+                `/users/${userId}/public-profile`
+            );
+
+            const rawData = response.data as any;
+            const payload = rawData?.data ?? rawData?.result ?? rawData?.profile ?? rawData;
+
+            return {
+                success: true,
+                data: payload,
+            };
+        } catch (error: any) {
+            return {
+                success: false,
+                message: handleApiError(error),
+            };
+        }
+    }
+
+    /**
      * Search users
      */
     async searchUsers(params: { q: string; page?: number; pageSize?: number }): Promise<ApiResponse<{ items: UserProfileFullResponse[] }>> {

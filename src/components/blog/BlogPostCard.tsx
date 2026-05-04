@@ -11,6 +11,7 @@ import Animated, {
 import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/theme';
 import { blogService } from '../../api';
 import { useTheme } from '../../context/ThemeContext';
+import { PostReactionsModal } from './PostReactionsModal';
 
 export type ReactionType = 'like' | 'love' | 'haha' | 'wow' | 'sad' | 'angry';
 
@@ -100,12 +101,13 @@ export interface BlogPostCardProps {
     /** @deprecated Use onReaction instead */
     onLike?: () => void;
     onNavigateToDetail?: (postId: string) => void;
+    onNavigateToUser?: (userId: string) => void;
     showOwnerActions?: boolean;
     onEdit?: (postId: string) => void;
     onDelete?: (postId: string) => void;
 }
 
-export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, showOwnerActions = false, onEdit, onDelete }: BlogPostCardProps) {
+export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, onNavigateToUser, showOwnerActions = false, onEdit, onDelete }: BlogPostCardProps) {
     const { isDarkMode } = useTheme();
     const palette = isDarkMode ? SoundMateDarkColors : SoundMateLightColors;
     const isDraftPost = post.status?.toLowerCase?.() === 'draft';
@@ -117,6 +119,7 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
     const [myReaction, setMyReaction] = useState<ReactionType | null>(normalizeReaction(post.myReactionType) ?? (post.isLiked ? 'like' : null));
     const [reactionCountLocal, setReactionCountLocal] = useState(post.reactionCount);
     const [showOwnerMenu, setShowOwnerMenu] = useState(false);
+    const [showReactionsModal, setShowReactionsModal] = useState(false);
     const [topReactions, setTopReactions] = useState<ReactionType[]>([]);
 
     useEffect(() => {
@@ -353,7 +356,11 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
             <View style={[styles.cardInner, { backgroundColor: palette.surface, borderColor: isDraftPost ? '#F59E0B' : palette.border }]}>
                 {/* Header: Avatar & User Info */}
                 <View style={styles.cardHeader}>
-                    <View style={styles.userInfo}>
+                    <TouchableOpacity
+                        style={styles.userInfo}
+                        activeOpacity={0.8}
+                        onPress={() => onNavigateToUser?.(post.userId)}
+                    >
                         <Image
                             source={{ uri: avatarUri }}
                             style={styles.avatar}
@@ -374,8 +381,8 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
                                 {isDraftPost ? 'Chưa đăng công khai' : formatTimeAgo(post.publishedAt || post.createdAt)}
                             </Text>
                         </View>
-                    </View>
-                    {showOwnerActions ? (
+                    </TouchableOpacity>
+                    {showOwnerActions && (
                         <View style={styles.ownerActionsWrap}>
                             <TouchableOpacity
                                 style={styles.moreButton}
@@ -398,10 +405,6 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
                                 </View>
                             )}
                         </View>
-                    ) : (
-                        <TouchableOpacity style={styles.moreButton} activeOpacity={0.7}>
-                            <Ionicons name="flag-outline" size={18} color={palette.textMuted} />
-                        </TouchableOpacity>
                     )}
                 </View>
 
@@ -496,7 +499,11 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
                         {(reactionCountLocal > 0 || post.commentCount > 0) && (
                             <View style={styles.statsSummary}>
                                 {reactionCountLocal > 0 ? (
-                                    <View style={styles.reactionSummaryGroup}>
+                                    <TouchableOpacity
+                                        style={styles.reactionSummaryGroup}
+                                        activeOpacity={0.7}
+                                        onPress={() => setShowReactionsModal(true)}
+                                    >
                                         {finalReactions.map((type, index) => {
                                             const meta = getReactionMeta(type);
                                             if (!meta) return null;
@@ -519,7 +526,7 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
                                         <Text style={[styles.statsSummaryText, { color: palette.textSecondary, marginLeft: 6 }]}>
                                             {formatNumber(reactionCountLocal)}
                                         </Text>
-                                    </View>
+                                    </TouchableOpacity>
                                 ) : <View />}
                                 {post.commentCount > 0 && (
                                     <TouchableOpacity onPress={handleNavigateToDetail}>
@@ -561,11 +568,11 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
                                     <Ionicons name="chatbubble-outline" size={20} color={palette.textSecondary} />
                                     <Text style={[styles.actionBtnLabel, { color: palette.textSecondary }]}>Bình luận</Text>
                                 </TouchableOpacity>
-
+                                {/* 
                                 <TouchableOpacity style={styles.actionButton}>
                                     <Ionicons name="arrow-redo-outline" size={20} color={palette.textSecondary} />
                                     <Text style={[styles.actionBtnLabel, { color: palette.textSecondary }]}>Chia sẻ</Text>
-                                </TouchableOpacity>
+                                </TouchableOpacity> */}
                             </View>
                         </View>
                     </>
@@ -596,6 +603,13 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, sho
                     })}
                 </View>
             )}
+
+            <PostReactionsModal
+                postId={post.id}
+                visible={showReactionsModal}
+                onClose={() => setShowReactionsModal(false)}
+                onNavigateToUser={onNavigateToUser}
+            />
         </View>
     );
 }
@@ -860,13 +874,16 @@ const styles = StyleSheet.create({
         borderTopColor: 'rgba(0,0,0,0.06)',
     },
     leftActions: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
     },
     reactionBtn: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: 6,
         paddingHorizontal: 12,
         paddingVertical: 8,
@@ -878,8 +895,10 @@ const styles = StyleSheet.create({
         fontWeight: '700',
     },
     actionButton: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: 5,
         paddingHorizontal: 10,
         paddingVertical: 8,

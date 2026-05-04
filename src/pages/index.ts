@@ -27,3 +27,4 @@ export { default as SubscriptionScreen } from './profile/SubscriptionScreen';
 export { default as PaymentCheckoutScreen } from './subscription/PaymentCheckoutScreen';
 export { default as PaymentResultScreen } from './subscription/PaymentResultScreen';
 
+export { default as PublicProfileScreen } from './profile/PublicProfileScreen';

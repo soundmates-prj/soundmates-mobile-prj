@@ -31,7 +31,7 @@ export type { LiveScheduleResult, LiveSessionResult, NowPlayingData, SongRequest
 export { paymentService } from './paymentService';
 export type {
     CreatePaymentRequest, CreatePaymentResponse, PaymentCallbackVerificationResponse,
-    SubscriptionHistoryPaginationResponse, SubscriptionPlanResponse, SubscriptionResponse, TransactionHistoryPaginationResponse, TransactionResponse
+    SubscriptionHistoryPaginationResponse, SubscriptionPlanResponse, SubscriptionResponse, TransactionHistoryPaginationResponse, TransactionResponse, RevenueResponse
 } from './paymentService';
 export { podcastService } from './podcastService';
 export type { PodcastResponse, PodcastEpisode } from './podcastService';

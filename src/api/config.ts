@@ -107,6 +107,7 @@ export const SUBSCRIPTION_ENDPOINTS = {
 
 export const TRANSACTION_ENDPOINTS = {
     MY_TRANSACTION_HISTORY: '/me/transaction/history',
+    REVENUES: '/me/revenues',
 };
 
 // Payment Endpoints

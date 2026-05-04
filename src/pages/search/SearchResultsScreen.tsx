@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
-import { favoriteService, PodcastResponse, SpotifyArtist, SpotifyAlbum, SpotifyTrack, UserPlaylistResponse, UserProfileFullResponse, BlogPostResponse, LiveScheduleResult } from '../../api';
+import { BlogPostResponse, favoriteService, LiveScheduleResult, PodcastResponse, SpotifyAlbum, SpotifyArtist, SpotifyTrack, UserPlaylistResponse, UserProfileFullResponse } from '../../api';
 import { showToast } from '../../components/ui/Toast';
 import { useTheme } from '../../context/ThemeContext';
 import { resolveAuthorName } from '../../utils/authorUtils';
@@ -32,6 +32,7 @@ interface SearchResultsScreenProps {
   onOpenPodcastTab?: (podcastId: string) => void;
   onNavigateToPost?: (postId: string) => void;
   onNavigateToLiveSession?: (sessionId: string) => void;
+  onNavigateToUser?: (userId: string) => void;
   onAddFavoriteTrack: (track: SpotifyTrack) => Promise<{
     success: boolean;
     message?: string;
@@ -49,6 +50,7 @@ export default function SearchResultsScreen({
   onOpenPodcastTab,
   onNavigateToPost,
   onNavigateToLiveSession,
+  onNavigateToUser,
   onAddFavoriteTrack,
 }: SearchResultsScreenProps) {
   const { isDarkMode } = useTheme();
@@ -344,7 +346,8 @@ export default function SearchResultsScreen({
                   return (
                     <Animated.View key={user.id} entering={FadeInDown.delay(idx * 40)}>
                       <TouchableOpacity
-                        activeOpacity={1}
+                        activeOpacity={0.8}
+                        onPress={() => onNavigateToUser?.(user.id!)}
                         style={[styles.trackCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
                       >
                         <Image
@@ -520,7 +523,7 @@ export default function SearchResultsScreen({
 
       {isAddingFavorite && (
         <View style={styles.favoriteLoadingOverlay}>
-          <View style={[styles.favoriteLoadingCard, { backgroundColor: palette.surface, borderColor: palette.border }]}> 
+          <View style={[styles.favoriteLoadingCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
             <ActivityIndicator size="small" color={palette.primary} />
             <Text style={[styles.favoriteLoadingText, { color: palette.textPrimary }]}>Đang thêm vào yêu thích...</Text>
           </View>

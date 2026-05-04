@@ -287,7 +287,7 @@ export default function PaymentCheckoutScreen({
     };
 
     return (
-        <SafeAreaView style={[styles.container]} edges={['left', 'right', 'bottom']}>
+        <SafeAreaView style={[styles.container]} edges={['top', 'left', 'right', 'bottom']}>
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity

@@ -20,8 +20,11 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
-import { podcastService, PodcastResponse } from '../../api';
+import * as ImagePicker from 'expo-image-picker';
+import { podcastService, PodcastResponse, authApiClient } from '../../api';
+import { uploadService } from '../../api/uploadService';
 import { useTheme } from '../../context/ThemeContext';
+import MyPodcastDetailModal from './MyPodcastDetailModal';
 
 interface MyPodcastsScreenProps {
     onBack: () => void;
@@ -42,12 +45,14 @@ export default function MyPodcastsScreen({ onBack }: MyPodcastsScreenProps) {
     // Modal state
     const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [editPodcast, setEditPodcast] = useState<PodcastResponse | null>(null);
+    
+    const [selectedPodcastId, setSelectedPodcastId] = useState<string | null>(null);
 
     // Form state
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [bannerUrl, setBannerUrl] = useState('');
+    const [isUploadingBanner, setIsUploadingBanner] = useState(false);
     const [isPaid, setIsPaid] = useState(false);
     const [price, setPrice] = useState('0');
 
@@ -90,23 +95,35 @@ export default function MyPodcastsScreen({ onBack }: MyPodcastsScreenProps) {
         void loadData(false);
     }, [loadData]);
 
-    const openCreateModal = () => {
-        setEditPodcast(null);
+    const openCreateModal = async () => {
+        try {
+            const bankRes = await authApiClient.get('/users/bank-account');
+            const bankData = bankRes.data?.data;
+            if (!bankData || !bankData.bankId || !bankData.accountNumber || !bankData.accountName) {
+                Alert.alert(
+                    'Cập nhật thông tin thanh toán',
+                    'Bạn cần cập nhật Tài khoản ngân hàng trong mục Hồ sơ để nhận doanh thu Podcast.',
+                    [
+                        { text: 'Hủy', style: 'cancel' },
+                        { text: 'Cập nhật', onPress: () => onBack() }
+                    ]
+                );
+                return;
+            }
+        } catch (error) {
+            Alert.alert(
+                'Cập nhật thông tin thanh toán',
+                'Bạn cần cập nhật Tài khoản ngân hàng trong mục Hồ sơ để nhận doanh thu Podcast.',
+                [{ text: 'Đóng', style: 'cancel', onPress: () => onBack() }]
+            );
+            return;
+        }
+
         setTitle('');
         setDescription('');
         setBannerUrl('');
         setIsPaid(false);
         setPrice('0');
-        setIsCreateModalVisible(true);
-    };
-
-    const openEditModal = (podcast: PodcastResponse) => {
-        setEditPodcast(podcast);
-        setTitle(podcast.title);
-        setDescription(podcast.description || '');
-        setBannerUrl(podcast.banner || '');
-        setIsPaid(podcast.isPaid || false);
-        setPrice(podcast.price ? podcast.price.toString() : '0');
         setIsCreateModalVisible(true);
     };
 
@@ -130,12 +147,11 @@ export default function MyPodcastsScreen({ onBack }: MyPodcastsScreenProps) {
                 bannerUrl,
                 isPaid,
                 price: isPaid ? priceNum : 0,
-                targetPodcastId: editPodcast ? editPodcast.id : undefined,
                 type: 'Story',
             });
 
             if (success) {
-                Alert.alert('Thành công', editPodcast ? 'Đã gửi yêu cầu cập nhật Podcast.' : 'Đã gửi yêu cầu tạo Podcast mới. Vui lòng chờ admin duyệt.');
+                Alert.alert('Thành công', 'Đã gửi yêu cầu tạo Podcast mới. Vui lòng chờ admin duyệt.');
                 setIsCreateModalVisible(false);
                 void loadData(true);
             } else {
@@ -148,18 +164,51 @@ export default function MyPodcastsScreen({ onBack }: MyPodcastsScreenProps) {
         }
     };
 
+    const handlePickBanner = async () => {
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['images'],
+                allowsEditing: true,
+                aspect: [16, 9],
+                quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+                setIsUploadingBanner(true);
+                const uploadResult = await uploadService.uploadImageToCloudinary({
+                    uri: result.assets[0].uri,
+                    mimeType: result.assets[0].mimeType,
+                    fileName: result.assets[0].fileName,
+                });
+
+                if (uploadResult.success) {
+                    setBannerUrl(uploadResult.data || '');
+                } else {
+                    Alert.alert('Lỗi', uploadResult.message || 'Không thể tải ảnh lên');
+                }
+                setIsUploadingBanner(false);
+            }
+        } catch (err) {
+            setIsUploadingBanner(false);
+            Alert.alert('Lỗi', 'Có lỗi xảy ra khi chọn ảnh');
+        }
+    };
+
     const renderPodcastCard = ({ item }: { item: PodcastResponse }) => {
+        const statusStr = (item.status || '').toLowerCase();
+        const isApproved = statusStr === 'published' || statusStr === 'approved';
+
         return (
-            <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+            <TouchableOpacity onPress={() => setSelectedPodcastId(item.id)} style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
                 <Image source={{ uri: item.banner || 'https://via.placeholder.com/150' }} style={styles.cardImage} />
                 <View style={styles.cardContent}>
                     <Text style={[styles.cardTitle, { color: palette.textPrimary }]} numberOfLines={1}>{item.title}</Text>
                     <Text style={[styles.cardDesc, { color: palette.textSecondary }]} numberOfLines={2}>{item.description}</Text>
                     
                     <View style={styles.cardMeta}>
-                        <View style={[styles.statusBadge, { backgroundColor: item.status === 'Active' ? '#10B9811A' : '#F59E0B1A' }]}>
-                            <Text style={[styles.statusText, { color: item.status === 'Active' ? '#10B981' : '#F59E0B' }]}>
-                                {item.status === 'Active' ? 'Đã duyệt' : 'Chờ duyệt'}
+                        <View style={[styles.statusBadge, { backgroundColor: isApproved ? '#10B9811A' : '#F59E0B1A' }]}>
+                            <Text style={[styles.statusText, { color: isApproved ? '#10B981' : '#F59E0B' }]}>
+                                {isApproved ? 'Đã duyệt' : 'Chờ duyệt'}
                             </Text>
                         </View>
                         
@@ -175,10 +224,7 @@ export default function MyPodcastsScreen({ onBack }: MyPodcastsScreenProps) {
                         )}
                     </View>
                 </View>
-                <TouchableOpacity onPress={() => openEditModal(item)} style={[styles.editButton, { backgroundColor: palette.background }]}>
-                    <Ionicons name="pencil" size={18} color={palette.textPrimary} />
-                </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
         );
     };
 
@@ -228,7 +274,7 @@ export default function MyPodcastsScreen({ onBack }: MyPodcastsScreenProps) {
                         <TouchableOpacity onPress={() => setIsCreateModalVisible(false)} style={styles.headerButton}>
                             <Ionicons name="close" size={24} color={palette.textPrimary} />
                         </TouchableOpacity>
-                        <Text style={[styles.headerTitle, { color: palette.textPrimary }]}>{editPodcast ? 'Chỉnh sửa Podcast' : 'Yêu cầu tạo Podcast'}</Text>
+                        <Text style={[styles.headerTitle, { color: palette.textPrimary }]}>Yêu cầu tạo Podcast</Text>
                         <TouchableOpacity onPress={handleSave} disabled={isSubmitting} style={styles.headerButton}>
                             {isSubmitting ? (
                                 <ActivityIndicator size="small" color="#55C5F1" />
@@ -264,14 +310,17 @@ export default function MyPodcastsScreen({ onBack }: MyPodcastsScreenProps) {
                         </View>
 
                         <View style={styles.inputGroup}>
-                            <Text style={[styles.label, { color: palette.textPrimary }]}>URL Ảnh Bìa</Text>
-                            <TextInput
-                                style={[styles.input, { backgroundColor: palette.surface, color: palette.textPrimary, borderColor: palette.border }]}
-                                value={bannerUrl}
-                                onChangeText={setBannerUrl}
-                                placeholder="https://..."
-                                placeholderTextColor={palette.textMuted}
-                            />
+                            <Text style={[styles.label, { color: palette.textPrimary }]}>Ảnh Bìa</Text>
+                            <TouchableOpacity style={[styles.uploadButton, { borderColor: palette.border, backgroundColor: palette.surface }]} onPress={handlePickBanner} disabled={isUploadingBanner}>
+                                {isUploadingBanner ? (
+                                    <ActivityIndicator size="small" color="#55C5F1" />
+                                ) : (
+                                    <>
+                                        <Ionicons name="image-outline" size={24} color={palette.textMuted} />
+                                        <Text style={[styles.uploadText, { color: palette.textMuted }]}>Chọn ảnh từ thư viện</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
                             {!!bannerUrl && (
                                 <Image source={{ uri: bannerUrl }} style={styles.previewImage} />
                             )}
@@ -309,6 +358,14 @@ export default function MyPodcastsScreen({ onBack }: MyPodcastsScreenProps) {
                     </ScrollView>
                 </SafeAreaView>
             </Modal>
+
+            {/* Detail & Episodes Modal */}
+            <MyPodcastDetailModal
+                visible={!!selectedPodcastId}
+                podcastId={selectedPodcastId!}
+                onClose={() => setSelectedPodcastId(null)}
+                onRefreshList={() => loadData(true)}
+            />
         </SafeAreaView>
     );
 }
@@ -356,4 +413,6 @@ const styles = StyleSheet.create({
     helperText: { fontSize: 12, marginTop: 4, fontStyle: 'italic' },
     warningBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 16, borderRadius: 12, borderWidth: 1, marginTop: 8 },
     warningText: { flex: 1, fontSize: 13, lineHeight: 20 },
+    uploadButton: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, height: 80, alignItems: 'center', justifyContent: 'center', gap: 8, flexDirection: 'row' },
+    uploadText: { fontSize: 14 },
 });

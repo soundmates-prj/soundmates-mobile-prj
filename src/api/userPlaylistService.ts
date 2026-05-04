@@ -163,6 +163,24 @@ export const userPlaylistService = {
     }
   },
 
+  async getPlaylistsByUserId(userId: string, isPublicOnly: boolean = false): Promise<UserPlaylistResponse[]> {
+    try {
+      const response = await authApiClient.get<ApiResponse<unknown>>(
+        `/userplaylist/user/${userId}`
+      );
+      
+      let playlists = extractPlaylists(response.data.data);
+      if (isPublicOnly) {
+        // visibility 0 = Public
+        playlists = playlists.filter(p => p.visibility === 0);
+      }
+      return playlists;
+    } catch (error: any) {
+      console.log('[userPlaylistService] getPlaylistsByUserId error:', error);
+      return [];
+    }
+  },
+
   async createUserPlaylist(payload: CreateUserPlaylistRequest): Promise<{
     success: boolean;
     data?: UserPlaylistResponse;

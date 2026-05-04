@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigation } from '@react-navigation/native';
 import {
   ActivityIndicator,
   Alert,
@@ -35,6 +36,9 @@ import { useAudioPlayer } from '../../context/AudioPlayerContext';
 import { useUser } from '../../context/UserContext';
 import { HubChatMessage, liveHubService } from '../../services/liveHubService';
 import { getLiveListenersCount } from '../../utils/listenerUtils';
+import { notificationService } from '../../api/notificationService';
+import { notificationHubService } from '../../api/notificationHubService';
+import NotificationScreen from '../home/NotificationScreen';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -739,11 +743,13 @@ function ChatSection({
   onShowActions,
   onShowDotMenu,
   currentUserId,
+  navigation,
 }: {
   messages: ChatMessage[];
   onShowActions?: (msg: ChatMessage) => void;
   onShowDotMenu?: (msg: ChatMessage, pageX: number, pageY: number) => void;
   currentUserId?: string;
+  navigation: any;
 }) {
   const scrollRef = useRef<ScrollView>(null);
 
@@ -779,6 +785,11 @@ function ChatSection({
             key={msg.id}
             style={styles.chatRow}
             onLongPress={() => onShowActions && onShowActions(msg)}
+            onPress={() => {
+              if (msg.userId) {
+                navigation.navigate('PublicProfile', { userId: msg.userId });
+              }
+            }}
             activeOpacity={0.85}
           >
             {msg.avatar ? (
@@ -833,6 +844,7 @@ export default function LivestreamScreen({
   onBack: () => void;
   sessionId?: string;
 }) {
+  const navigation = useNavigation<any>();
   const { user } = useUser();
   const {
     loadSession,
@@ -871,6 +883,28 @@ export default function LivestreamScreen({
     { msg: {} as ChatMessage, pageX: 0, pageY: 0 }
   );
   const pageScrollRef = useRef<ScrollView>(null);
+  const [showNotificationScreen, setShowNotificationScreen] = useState(false);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+
+  // ── Notifications ───────────────────────────────────────────────
+  const loadUnreadCount = useCallback(async () => {
+    try {
+      const page = await notificationService.getNotifications(1, 40);
+      const unread = page.items.filter(n => !n.isRead).length;
+      setUnreadNotificationCount(unread);
+    } catch (error) {
+      console.log('Error loading unread count:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    void loadUnreadCount();
+    const unsub = notificationHubService.onReceiveNotification(() => {
+      setUnreadNotificationCount((prev) => prev + 1);
+    });
+    return () => unsub();
+  }, [loadUnreadCount, user]);
 
   // ── Theme loading ────────────────────────────────────────────────
   useEffect(() => {
@@ -1378,9 +1412,21 @@ export default function LivestreamScreen({
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity onPress={() => setShowSidebar(true)} style={styles.headerButton}>
-            <Ionicons name="menu" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity onPress={() => setShowNotificationScreen(true)} style={[styles.headerButton, { marginRight: 4 }]}>
+              <Ionicons name="notifications-outline" size={20} color="#FFFFFF" />
+              {unreadNotificationCount > 0 && (
+                <View style={[styles.badgeWrap, { position: 'absolute', top: 4, right: 4, backgroundColor: '#EF4444', borderRadius: 10, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: 'bold' }}>
+                    {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowSidebar(true)} style={styles.headerButton}>
+              <Ionicons name="menu" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Page indicators */}
@@ -1511,6 +1557,7 @@ export default function LivestreamScreen({
                 setDotMenuOpen(true);
               }}
               currentUserId={user?.userId}
+              navigation={navigation}
             />
           </View>
 
@@ -1593,10 +1640,27 @@ export default function LivestreamScreen({
         </View>
       </ScrollView>
 
-      {/* ── Floating emojis ── */}
       {floatingEmojis.map((emoji) => (
         <FloatingEmojiView key={emoji.id} emoji={emoji} onDone={handleRemoveEmoji} />
       ))}
+
+      {/* ── Notification Modal ── */}
+      {showNotificationScreen && (
+        <Modal
+          visible={showNotificationScreen}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={() => {
+            setShowNotificationScreen(false);
+            void loadUnreadCount();
+          }}
+        >
+          <NotificationScreen onBack={() => {
+            setShowNotificationScreen(false);
+            void loadUnreadCount();
+          }} />
+        </Modal>
+      )}
 
       {/* ── Reaction picker ── */}
       {showReactions && (
@@ -2376,4 +2440,15 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   lyricEmptyText: { color: 'rgba(255,255,255,0.5)', fontSize: 14 },
+  badgeWrap: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

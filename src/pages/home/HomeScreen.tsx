@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, Dimensions, Easing, Image, Linking, PanResponder, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, Dimensions, Easing, Image, Linking, PanResponder, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import {
     authService,
@@ -160,6 +161,7 @@ export default function HomeScreen({
     const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
     const [createPostDraft, setCreatePostDraft] = useState<EditablePostDraft | null>(null);
     const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+    const navigation = useNavigation<any>();
     const [communityPosts, setCommunityPosts] = useState<DisplayPost[]>([]);
     const [isCommunityLoading, setIsCommunityLoading] = useState(false);
     const [personalPlaylists, setPersonalPlaylists] = useState<PlaylistItem[] | null>(null);
@@ -305,8 +307,8 @@ export default function HomeScreen({
         fetchPublicPlaylists();
     }, []);
 
-    const handleOpenPlaylistModal = useCallback((playlist: UserPlaylistResponse) => {
-        setSelectedPlaylistForModal(playlist);
+    const handleOpenPlaylistModal = useCallback((playlist: PlaylistItem | UserPlaylistResponse) => {
+        setSelectedPlaylistForModal(playlist as UserPlaylistResponse);
         setShowPlaylistModal(true);
     }, []);
 
@@ -314,6 +316,25 @@ export default function HomeScreen({
         setShowPlaylistModal(false);
         setSelectedPlaylistForModal(null);
     }, []);
+
+    useEffect(() => {
+        const podcastSub = DeviceEventEmitter.addListener('NavigateToPodcast', (podcastId: string) => {
+            setSelectedPodcastFromSearch(podcastId);
+            setActiveTab('podcast');
+        });
+        const postSub = DeviceEventEmitter.addListener('NavigateToPost', (postId: string) => {
+            setSelectedPostId(postId);
+        });
+        const playlistSub = DeviceEventEmitter.addListener('OpenPlaylistModal', (playlist: UserPlaylistResponse) => {
+            handleOpenPlaylistModal(playlist);
+        });
+        
+        return () => {
+            podcastSub.remove();
+            postSub.remove();
+            playlistSub.remove();
+        };
+    }, [handleOpenPlaylistModal]);
 
     const fetchSearchBundle = useCallback(async (keyword: string, limit: number): Promise<SearchResultBundle> => {
         const [spotifyRes, podcastsRes, playlistsRes, usersRes, blogsRes, schedulesRes] = await Promise.allSettled([
@@ -1045,8 +1066,9 @@ export default function HomeScreen({
             try {
                 const token = await AsyncStorage.getItem('accessToken');
                 if (!token) return;
-                const page = await notificationService.getUnreadNotifications(1, 1);
-                setUnreadNotificationCount(page.totalCount);
+                const page = await notificationService.getNotifications(1, 40);
+                const unread = page.items.filter(n => !n.isRead).length;
+                setUnreadNotificationCount(unread);
             } catch (e) {
                 // ignore
             }
@@ -1548,6 +1570,7 @@ export default function HomeScreen({
                             post={post}
                             onReaction={(type) => handleCommunityReaction(post.id, type)}
                             onNavigateToDetail={(postId) => setSelectedPostId(postId)}
+                            onNavigateToUser={(userId) => navigation.navigate('PublicProfile', { userId })}
                         />
                     ))
                 )}
@@ -1767,6 +1790,7 @@ export default function HomeScreen({
                             onOpenPlaylistDetail={handleOpenPlaylistModal}
                             onNavigateToPost={(postId) => setSelectedPostId(postId)}
                             onNavigateToLiveSession={onNavigateToLiveSession}
+                            onNavigateToUser={(userId) => navigation.navigate('PublicProfile', { userId })}
                             onOpenPodcastTab={(podcastId) => {
                                 setSelectedPodcastFromSearch(podcastId);
                                 setActiveTab('podcast');
@@ -1779,15 +1803,11 @@ export default function HomeScreen({
                     onBack={() => {
                         setShowNotificationScreen(false);
                         // Refresh unread count when closing notification screen
-                        notificationService.getUnreadNotifications(1, 1).then(page => {
-                            setUnreadNotificationCount(page.totalCount);
+                        notificationService.getNotifications(1, 40).then(page => {
+                            const unread = page.items.filter(n => !n.isRead).length;
+                            setUnreadNotificationCount(unread);
                         }).catch(() => {});
                     }}
-                />
-            ) : selectedPostId ? (
-                <PostDetailScreen
-                    postId={selectedPostId}
-                    onBack={() => setSelectedPostId(null)}
                 />
             ) : showCreatePost ? (
                 <CreatePostScreen
@@ -1848,6 +1868,15 @@ export default function HomeScreen({
                 initialPlaylist={selectedPlaylistForModal}
                 onClose={handleClosePlaylistModal}
             />
+
+            {selectedPostId && (
+                <View style={StyleSheet.absoluteFillObject}>
+                    <PostDetailScreen
+                        postId={selectedPostId}
+                        onBack={() => setSelectedPostId(null)}
+                    />
+                </View>
+            )}
         </View>
     );
 }

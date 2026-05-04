@@ -48,17 +48,18 @@ import BottomNavigation, { TabName } from '../BottomNavigation';
 import CreatePostScreen, { EditablePostDraft } from '../blog/CreatePostScreen';
 import PostDetailScreen from '../blog/PostDetailScreen';
 import AccountInfoScreen from './AccountInfoScreen';
+import BankAccountScreen from './BankAccountScreen';
 import ChangePasswordScreen from './ChangePasswordScreen';
 import EditProfileScreen from './EditProfileScreen';
+import MyPodcastsScreen from './MyPodcastsScreen';
 import { createProfileStyles } from './ProfileScreen.styles';
 import SubscriptionDetailsScreen from './SubscriptionDetailsScreen';
+import TransactionHistoryScreen from './TransactionHistoryScreen';
+import RevenueScreen from './RevenueScreen';
 import PlaylistDetailModal from './components/PlaylistDetailModal';
 import ProfileFavoritesTab from './components/ProfileFavoritesTab';
 import ProfilePlaylistsTab from './components/ProfilePlaylistsTab';
 import ProfilePostsTab from './components/ProfilePostsTab';
-import TransactionHistoryScreen from './TransactionHistoryScreen';
-import MyPodcastsScreen from './MyPodcastsScreen';
-import BankAccountScreen from './BankAccountScreen';
 
 export interface ApiTheme {
   id: string;
@@ -69,7 +70,7 @@ export interface ApiTheme {
   backgroundColor: string;
   textColor: string;
   gradientBackground?: string;
-  configJson?: { backgroundImage?: string; [key: string]: string | undefined };
+  configJson?: { backgroundImage?: string;[key: string]: string | undefined };
 }
 
 const defaultAvatarUrl = 'https://i.pravatar.cc/150?img=10';
@@ -110,13 +111,14 @@ const MENU_ITEMS = [
     items: [
       { icon: 'person-outline', label: 'Thông tin tài khoản', color: '#55C5F1' },
       { icon: 'card-outline', label: 'Gói đăng ký', color: '#A78BFA', badge: 'Premium' },
+      { icon: 'receipt-outline', label: 'Lịch sử giao dịch', color: '#10B981' },
     ],
   },
   {
     group: 'Quản lý Podcast (Creator)',
     items: [
       { icon: 'mic-outline', label: 'Quản lý Podcast', color: '#F59E0B' },
-      { icon: 'receipt-outline', label: 'Doanh thu & Lịch sử', color: '#10B981' },
+      { icon: 'trending-up-outline', label: 'Quản lý doanh thu', color: '#10B981' },
       { icon: 'card-outline', label: 'Tài khoản ngân hàng', color: '#3B82F6' },
     ],
   },
@@ -184,7 +186,7 @@ function sortPlaylistsNewestFirst(playlists: UserPlaylistResponse[]): UserPlayli
 
 // ─── Settings Drawer ────────────────────────────────────
 
-function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountInfo, onOpenSubscription, onOpenThemeSettings, themeLabel, subscriptionPlanLabel, onLogout, palette, isDarkMode }: {
+function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountInfo, onOpenSubscription, onOpenThemeSettings, onOpenMyPodcasts, onOpenRevenueHistory, onOpenTransactionHistory, onOpenBankAccount, themeLabel, subscriptionPlanLabel, onLogout, palette, isDarkMode, isPremium }: {
   isOpen: boolean;
   onClose: () => void;
   onOpenChangePassword?: () => void;
@@ -192,6 +194,7 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
   onOpenSubscription?: () => void;
   onOpenThemeSettings?: () => void;
   onOpenMyPodcasts?: () => void;
+  onOpenRevenueHistory?: () => void;
   onOpenTransactionHistory?: () => void;
   onOpenBankAccount?: () => void;
   themeLabel?: string;
@@ -199,6 +202,7 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
   onLogout?: () => void;
   palette: typeof SoundMateLightColors | typeof SoundMateColors;
   isDarkMode: boolean;
+  isPremium?: boolean;
 }) {
   const styles = createProfileStyles(palette);
   const openAfterClose = (callback?: () => void) => {
@@ -217,7 +221,9 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
       openAfterClose(onOpenSubscription);
     } else if (label === 'Quản lý Podcast' && onOpenMyPodcasts) {
       openAfterClose(onOpenMyPodcasts);
-    } else if (label === 'Doanh thu & Lịch sử' && onOpenTransactionHistory) {
+    } else if (label === 'Quản lý doanh thu' && onOpenRevenueHistory) {
+      openAfterClose(onOpenRevenueHistory);
+    } else if (label === 'Lịch sử giao dịch' && onOpenTransactionHistory) {
       openAfterClose(onOpenTransactionHistory);
     } else if (label === 'Tài khoản ngân hàng' && onOpenBankAccount) {
       openAfterClose(onOpenBankAccount);
@@ -246,7 +252,11 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
 
           <ScrollView>
             {/* Menu sections */}
-            {MENU_ITEMS.map((section) => (
+            {MENU_ITEMS.map((section) => {
+              if (section.group === 'Quản lý Podcast (Creator)' && !isPremium) {
+                return null;
+              }
+              return (
               <View key={section.group} style={styles.settingsSection}>
                 <Text style={[styles.settingsSectionTitle, { color: palette.textMuted }]}>{section.group}</Text>
                 {section.items.map((item) => (
@@ -281,7 +291,8 @@ function SettingsDrawer({ isOpen, onClose, onOpenChangePassword, onOpenAccountIn
                   })()
                 ))}
               </View>
-            ))}
+              );
+            })}
 
             {/* Logout */}
             <View style={[styles.settingsLogoutContainer, { borderTopColor: palette.border }]}>
@@ -369,6 +380,7 @@ export default function ProfileScreen({
   const [showAccountInfo, setShowAccountInfo] = useState(false);
   const [showSubscriptionDetails, setShowSubscriptionDetails] = useState(false);
   const [showMyPodcasts, setShowMyPodcasts] = useState(false);
+  const [showRevenueHistory, setShowRevenueHistory] = useState(false);
   const [showTransactionHistory, setShowTransactionHistory] = useState(false);
   const [showBankAccount, setShowBankAccount] = useState(false);
   const [showCreatePost, setShowCreatePost] = useState(false);
@@ -507,6 +519,7 @@ export default function ProfileScreen({
     || showAccountInfo
     || showSubscriptionDetails
     || showMyPodcasts
+    || showRevenueHistory
     || showTransactionHistory
     || showBankAccount
     || showCreatePost
@@ -1725,14 +1738,14 @@ export default function ProfileScreen({
                       <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: theme.primaryColor, marginRight: 12, borderWidth: 1, borderColor: palette.border, justifyContent: 'center', alignItems: 'center' }}>
                         {locked && <Ionicons name="lock-closed" size={10} color="#FFFFFF" />}
                       </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>{theme.name}</Text>
-                      <Text style={{ fontSize: 12, color: palette.textSecondary, marginTop: 2 }}>
-                        {locked ? (!hasPaidPlan ? '🔒 Dành cho gói trả phí' : '🔒 Dành cho gói Premium') : (theme.mode === 'dark' ? '🌙 Giao diện tối' : '☀️ Giao diện sáng')}
-                      </Text>
-                    </View>
-                    {previewThemeId === theme.id && !locked && <Ionicons name="checkmark-circle" size={22} color="#10B981" />}
-                  </TouchableOpacity>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.popupOptionText, { color: palette.textPrimary }]}>{theme.name}</Text>
+                        <Text style={{ fontSize: 12, color: palette.textSecondary, marginTop: 2 }}>
+                          {locked ? (!hasPaidPlan ? '🔒 Dành cho gói trả phí' : '🔒 Dành cho gói Premium') : (theme.mode === 'dark' ? '🌙 Giao diện tối' : '☀️ Giao diện sáng')}
+                        </Text>
+                      </View>
+                      {previewThemeId === theme.id && !locked && <Ionicons name="checkmark-circle" size={22} color="#10B981" />}
+                    </TouchableOpacity>
                   );
                 })
               )}
@@ -2006,6 +2019,7 @@ export default function ProfileScreen({
           }
         }}
         onOpenMyPodcasts={() => setShowMyPodcasts(true)}
+        onOpenRevenueHistory={() => setShowRevenueHistory(true)}
         onOpenTransactionHistory={() => setShowTransactionHistory(true)}
         onOpenBankAccount={() => setShowBankAccount(true)}
         onOpenThemeSettings={handleOpenThemeSettings}
@@ -2014,6 +2028,7 @@ export default function ProfileScreen({
         onLogout={onLogout}
         palette={palette}
         isDarkMode={isDarkMode}
+        isPremium={hasActiveSubscription || (user?.roleName || '').toLowerCase() === 'premium'}
       />
 
       {showSubscriptionDetails && (
@@ -2035,6 +2050,17 @@ export default function ProfileScreen({
           onRequestClose={() => setShowMyPodcasts(false)}
         >
           <MyPodcastsScreen onBack={() => setShowMyPodcasts(false)} />
+        </Modal>
+      )}
+
+      {showRevenueHistory && (
+        <Modal
+          visible={showRevenueHistory}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={() => setShowRevenueHistory(false)}
+        >
+          <RevenueScreen onBack={() => setShowRevenueHistory(false)} />
         </Modal>
       )}
 

@@ -20,9 +20,9 @@ import Animated, {
 import Toast from 'react-native-toast-message';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { podcastService } from '../../api';
+import { PodcastPurchaseModal } from '../../components/common/PodcastPurchaseModal';
 import { useAudioPlayer } from '../../context/AudioPlayerContext';
 import { useTheme } from '../../context/ThemeContext';
-import { PodcastPurchaseModal } from '../../components/common/PodcastPurchaseModal';
 
 const { width, height } = Dimensions.get('window');
 
@@ -99,6 +99,10 @@ export function PodcastDetailScreen({ onBack, podcast }: PodcastDetailScreenProp
     try {
       setLoadingEpisodes(true);
       const detail = await podcastService.getById(podcast.id);
+
+      if (detail.isPurchased) {
+        setLocalPurchased(true);
+      }
 
       const realEpisodes = detail.allEpisodes || [];
       const episodeList: EpisodeVM[] = realEpisodes.map((ep, i) => ({

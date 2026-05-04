@@ -4,7 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { registerRootComponent } from 'expo';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StatusBar, StyleSheet, View } from 'react-native';
+import { DeviceEventEmitter, StatusBar, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
@@ -26,6 +26,7 @@ import {
     PaymentResultScreen,
     ProfileScreen,
     ProfileSetupScreen,
+    PublicProfileScreen,
     RegisterScreen,
     SubscriptionScreen
 } from './src/pages';
@@ -63,6 +64,7 @@ type RootStackParamList = {
     PaymentCheckout: undefined;
     PaymentResult: undefined;
     EditProfile: undefined;
+    PublicProfile: { userId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -644,6 +646,27 @@ function AppContent() {
                             </Stack.Screen>
                             <Stack.Screen name="EditProfile">
                                 {(props) => <EditProfileScreen onBack={() => props.navigation.goBack()} />}
+                            </Stack.Screen>
+
+                            <Stack.Screen name="PublicProfile">
+                                {(props) => (
+                                    <PublicProfileScreen
+                                        userId={(props.route.params as any)?.userId}
+                                        onBack={() => props.navigation.goBack()}
+                                        onNavigateToPodcast={(podcastId) => {
+                                            props.navigation.navigate('Home');
+                                            DeviceEventEmitter.emit('NavigateToPodcast', podcastId);
+                                        }}
+                                        onNavigateToPost={(postId) => {
+                                            props.navigation.navigate('Home');
+                                            DeviceEventEmitter.emit('NavigateToPost', postId);
+                                        }}
+                                        onNavigateToPlaylist={(playlist) => {
+                                            props.navigation.navigate('Home');
+                                            DeviceEventEmitter.emit('OpenPlaylistModal', playlist);
+                                        }}
+                                    />
+                                )}
                             </Stack.Screen>
 
                         </Stack.Navigator>

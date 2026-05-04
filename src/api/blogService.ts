@@ -110,6 +110,8 @@ export interface ReactionResponse {
     id: string;
     postId: string;
     userId: string;
+    userFullName?: string;
+    userAvatarUrl?: string;
     reactionType: string;
     createdAt: string;
 }

@@ -134,7 +134,7 @@ export function PodcastPurchaseModal({
                 targetType: 'Podcast',
                 targetId: podcastId,
                 method: selectedPayment,
-                totalAmount: price,
+                totalAmount: price + 5000,
             });
 
             if (!result.success || !result.data?.paymentUrl) {
@@ -173,7 +173,7 @@ export function PodcastPurchaseModal({
 
     return (
         <Modal visible={visible} animationType="slide" transparent>
-            <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]} edges={['top', 'left', 'right', 'bottom']}>
+            <View style={[styles.container, { backgroundColor: palette.background, paddingTop: insets.top }]}>
                 {/* Header */}
                 <View style={[styles.header, { backgroundColor: palette.surface, borderBottomColor: palette.border }]}>
                     <TouchableOpacity
@@ -221,6 +221,11 @@ export function PodcastPurchaseModal({
                                 <View style={styles.orderRow}>
                                     <Text style={[styles.orderRowLabel, { color: palette.textSecondary }]}>Đơn giá</Text>
                                     <Text style={[styles.orderRowValue, { color: palette.textPrimary }]}>{formatCurrency(price)}đ</Text>
+                                </View>
+                                <View style={[styles.orderDivider, { backgroundColor: palette.border }]} />
+                                <View style={styles.orderRow}>
+                                    <Text style={[styles.orderRowLabel, { color: palette.textSecondary }]}>Phí dịch vụ</Text>
+                                    <Text style={[styles.orderRowValue, { color: palette.textPrimary }]}>{formatCurrency(5000)}đ</Text>
                                 </View>
                             </View>
                         </View>
@@ -273,7 +278,7 @@ export function PodcastPurchaseModal({
                         <Text style={[styles.bottomPriceLabel, { color: palette.textSecondary }]}>Tổng thanh toán</Text>
                         <View style={styles.bottomPriceRow}>
                             <Text style={[styles.bottomPriceCurrency, { color: palette.textPrimary }]}>đ</Text>
-                            <Text style={[styles.bottomPriceAmount, { color: palette.textPrimary }]}>{formatCurrency(price)}</Text>
+                            <Text style={[styles.bottomPriceAmount, { color: palette.textPrimary }]}>{formatCurrency(price + 5000)}</Text>
                         </View>
                     </View>
 
@@ -307,7 +312,7 @@ export function PodcastPurchaseModal({
                     presentationStyle="fullScreen"
                     onRequestClose={handleClosePaymentWebView}
                 >
-                    <SafeAreaView style={styles.webViewScreen} edges={['top', 'bottom']}>
+                    <View style={[styles.webViewScreen, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
                         <View style={styles.webViewHeader}>
                             <TouchableOpacity onPress={handleClosePaymentWebView} style={styles.webViewCloseButton}>
                                 <Ionicons name="close" size={24} color="#1E293B" />
@@ -341,9 +346,9 @@ export function PodcastPurchaseModal({
                                 <Text style={styles.webViewVerifyText}>Đang xác thực kết quả thanh toán...</Text>
                             </View>
                         )}
-                    </SafeAreaView>
+                    </View>
                 </Modal>
-            </SafeAreaView>
+            </View>
         </Modal>
     );
 }

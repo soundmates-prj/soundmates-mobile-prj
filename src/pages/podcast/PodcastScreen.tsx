@@ -4,26 +4,26 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    DeviceEventEmitter,
-    Dimensions,
-    Image,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  DeviceEventEmitter,
+  Dimensions,
+  Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import Animated, {
-    Extrapolate,
-    FadeInDown,
-    FadeInRight,
-    interpolate,
-    useAnimatedScrollHandler,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring
+  Extrapolate,
+  FadeInDown,
+  FadeInRight,
+  interpolate,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring
 } from 'react-native-reanimated';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { PodcastResponse, podcastService } from '../../api';
@@ -48,7 +48,13 @@ interface PodcastVM {
   isNew: boolean;
   isTrending: boolean;
   createdAt: string;
+  price: number;
+  isPaid: boolean;
+  isPurchased: boolean;
 }
+
+const formatVnd = (value: number): string =>
+  !value || Number.isNaN(value) ? '0' : value.toLocaleString('vi-VN');
 
 const DEFAULT_COVER =
   'https://images.unsplash.com/photo-1531369333294-39fa52b799ef?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=600';
@@ -77,6 +83,9 @@ const mapToPodcastVM = (raw: PodcastResponse): PodcastVM => ({
   isNew: isRecentlyCreated(raw.createdAt),
   isTrending: false,
   createdAt: raw.createdAt,
+  price: raw.price || 0,
+  isPaid: raw.isPaid || false,
+  isPurchased: raw.isPurchased || false,
 });
 
 const CATEGORIES = ['Tất cả', 'Mới nhất', 'Thịnh hành'];
@@ -101,8 +110,8 @@ function FeaturedPodcast({ podcast, onPress }: { podcast: PodcastVM; onPress: ()
 
   return (
     <Animated.View style={[styles.featuredWrap, animatedStyle]}>
-      <TouchableOpacity 
-        activeOpacity={1} 
+      <TouchableOpacity
+        activeOpacity={1}
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
@@ -116,6 +125,20 @@ function FeaturedPodcast({ podcast, onPress }: { podcast: PodcastVM; onPress: ()
         />
 
         <BlurView intensity={20} style={styles.featuredGlassOverlay} tint={isDarkMode ? 'dark' : 'light'} />
+
+        {podcast.price > 0 && (
+          podcast.isPurchased ? (
+            <View style={[styles.featuredPriceBadge, { backgroundColor: 'rgba(16, 185, 129, 0.9)' }]}>
+              <Ionicons name="checkmark-circle" size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
+              <Text style={styles.featuredPriceText}>Đã sở hữu</Text>
+            </View>
+          ) : (
+            <View style={[styles.featuredPriceBadge, { backgroundColor: '#F59E0B', borderColor: '#F59E0B' }]}>
+              {podcast.isPaid && <Ionicons name="lock-closed" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />}
+              <Text style={styles.featuredPriceText}>{formatVnd(podcast.price)}₫</Text>
+            </View>
+          )
+        )}
 
         <View style={styles.featuredContent}>
           <View style={styles.featuredBadgeRow}>
@@ -157,16 +180,38 @@ function PodcastCard({ podcast, onPress }: { podcast: PodcastVM; onPress: () => 
 
   return (
     <Animated.View entering={FadeInDown.duration(400)}>
-      <TouchableOpacity 
-        activeOpacity={0.7} 
-        style={[styles.podcastCard, { backgroundColor: palette.surface, borderColor: palette.border }]} 
+      <TouchableOpacity
+        activeOpacity={0.7}
+        style={[styles.podcastCard, { backgroundColor: palette.surface, borderColor: palette.border }]}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           onPress();
         }}
       >
-        <View style={styles.cardImageContainer}>
-          <Image source={{ uri: podcast.coverImage }} style={styles.cardImage} />
+        <View style={{ position: 'relative' }}>
+          <View style={styles.cardImageContainer}>
+            <Image source={{ uri: podcast.coverImage }} style={styles.cardImage} />
+          </View>
+          {podcast.price > 0 && (
+            <View style={[
+              styles.cardPriceBadge,
+              podcast.isPurchased
+                ? { backgroundColor: 'rgba(16, 185, 129, 0.9)', borderColor: 'rgba(16, 185, 129, 0.9)' }
+                : { backgroundColor: '#F59E0B', borderColor: '#F59E0B' }
+            ]}>
+              {podcast.isPurchased ? (
+                <>
+                  <Ionicons name="checkmark-circle" size={10} color="#FFFFFF" style={{ marginRight: 2 }} />
+                  <Text style={styles.cardPriceText}>Đã sở hữu</Text>
+                </>
+              ) : (
+                <>
+                  {podcast.isPaid && <Ionicons name="lock-closed" size={11} color="#FFFFFF" style={{ marginRight: 2 }} />}
+                  <Text style={styles.cardPriceText}>{formatVnd(podcast.price)}₫</Text>
+                </>
+              )}
+            </View>
+          )}
           {podcast.isNew && (
             <View style={styles.cardNewBadge}>
               <View style={styles.cardNewDot} />
@@ -181,7 +226,7 @@ function PodcastCard({ podcast, onPress }: { podcast: PodcastVM; onPress: () => 
           <Text style={[styles.cardSubtitle, { color: palette.textSecondary }]} numberOfLines={1}>
             {podcast.subtitle}
           </Text>
-          
+
           <View style={styles.cardMeta}>
             <View style={styles.metaItem}>
               <Ionicons name="mic-outline" size={12} color={palette.textSecondary} />
@@ -317,26 +362,26 @@ export default function PodcastScreen({
 
   if (loading) {
     return (
-      <View style={[styles.screen, styles.centerContent, { backgroundColor: palette.background }]}> 
+      <View style={[styles.screen, styles.centerContent, { backgroundColor: palette.background }]}>
         <ActivityIndicator size="large" color={palette.primary} />
       </View>
     );
   }
 
   return (
-    <View style={[styles.screen, { backgroundColor: palette.background }]}> 
+    <View style={[styles.screen, { backgroundColor: palette.background }]}>
       {/* Animated Sticky Header */}
       {!hideStickyHeader && (
         <Animated.View style={[
-          styles.stickyHeader, 
+          styles.stickyHeader,
           headerAnimatedStyle,
           { backgroundColor: palette.surface + 'CC' }
         ]}>
           <BlurView intensity={80} style={StyleSheet.absoluteFill} tint={isDarkMode ? 'dark' : 'light'} />
           <View style={styles.headerContent}>
             <Text style={[styles.headerTitle, { color: palette.textPrimary }]}>Podcast</Text>
-            <TouchableOpacity 
-              activeOpacity={0.7} 
+            <TouchableOpacity
+              activeOpacity={0.7}
               onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
             >
               <Ionicons name="search" size={22} color={palette.textPrimary} />
@@ -359,14 +404,14 @@ export default function PodcastScreen({
             Podcast
           </Animated.Text>
           <Animated.View entering={FadeInDown.delay(200)} style={styles.searchPlaceholder}>
-             <Ionicons name="search" size={20} color={palette.textSecondary} />
-             <Text style={[styles.searchText, { color: palette.textSecondary }]}>Tìm kiếm podcast...</Text>
+            <Ionicons name="search" size={20} color={palette.textSecondary} />
+            <Text style={[styles.searchText, { color: palette.textSecondary }]}>Tìm kiếm podcast...</Text>
           </Animated.View>
         </View>
 
         {/* Featured Carousels */}
         {featuredPodcasts.length > 0 && (
-          <View 
+          <View
             style={styles.featuredSection}
             onTouchStart={() => DeviceEventEmitter.emit('HorizontalListActive', true)}
             onTouchEnd={() => DeviceEventEmitter.emit('HorizontalListActive', false)}
@@ -375,8 +420,8 @@ export default function PodcastScreen({
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: palette.textPrimary }]}>Nổi bật</Text>
             </View>
-            <ScrollView 
-              horizontal 
+            <ScrollView
+              horizontal
               showsHorizontalScrollIndicator={false}
               snapToInterval={width * 0.85 + 16}
               decelerationRate="fast"
@@ -390,7 +435,7 @@ export default function PodcastScreen({
         )}
 
         {/* Categories */}
-        <View 
+        <View
           style={styles.categoriesSection}
           onTouchStart={() => DeviceEventEmitter.emit('HorizontalListActive', true)}
           onTouchEnd={() => DeviceEventEmitter.emit('HorizontalListActive', false)}
@@ -412,12 +457,12 @@ export default function PodcastScreen({
                     }}
                     activeOpacity={0.8}
                     style={[
-                      styles.categoryChip, 
+                      styles.categoryChip,
                       isActive ? { backgroundColor: palette.primary } : { backgroundColor: palette.surface, borderColor: palette.border }
                     ]}
                   >
                     <Text style={[
-                      styles.categoryText, 
+                      styles.categoryText,
                       isActive ? { color: '#FFFFFF' } : { color: palette.textSecondary }
                     ]}>
                       {category}
@@ -472,7 +517,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 100,
+    height: 50,
     zIndex: 10,
     justifyContent: 'flex-end',
     paddingBottom: 12,
@@ -604,6 +649,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 16,
   },
+  featuredPriceBadge: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    left: 'auto',
+    alignSelf: 'flex-end',
+    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  featuredPriceText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
   featuredFooter: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -693,6 +762,27 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     backgroundColor: '#34C759',
+  },
+  cardPriceBadge: {
+    position: 'absolute',
+    bottom: 6,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  cardPriceText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
   },
   cardInfo: {
     flex: 1,

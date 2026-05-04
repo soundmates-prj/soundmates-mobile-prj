@@ -14,6 +14,7 @@ import Animated, { FadeInUp, FadeOutDown } from 'react-native-reanimated';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { NotificationItem, notificationService } from '../../api/notificationService';
 import { useTheme } from '../../context/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface NotificationScreenProps {
     onBack: () => void;
@@ -39,6 +40,7 @@ export default function NotificationScreen({ onBack }: NotificationScreenProps) 
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isMarkingAll, setIsMarkingAll] = useState(false);
+    const insets = useSafeAreaInsets();
 
     const fetchNotifications = useCallback(async (isRefresh = false) => {
         if (isRefresh) {
@@ -101,7 +103,7 @@ export default function NotificationScreen({ onBack }: NotificationScreenProps) 
     const unreadCount = notifications.filter((n) => !n.isRead).length;
 
     return (
-        <Animated.View style={[styles.container, { backgroundColor: palette.background }]} entering={FadeInUp} exiting={FadeOutDown}>
+        <Animated.View style={[styles.container, { backgroundColor: palette.background, paddingTop: insets.top }]} entering={FadeInUp} exiting={FadeOutDown}>
             <View style={[styles.header, { borderBottomColor: palette.border, backgroundColor: palette.surface }]}>
                 <TouchableOpacity onPress={onBack} style={styles.iconButton} activeOpacity={0.8}>
                     <Ionicons name="arrow-back" size={24} color={palette.textPrimary} />

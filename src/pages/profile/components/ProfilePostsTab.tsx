@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import React from 'react';
 import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { BlogPostCard, DisplayPost, ReactionType } from '../../../components/blog/BlogPostCard';
@@ -44,6 +45,8 @@ export default function ProfilePostsTab({
   onDeletePost,
   onLoadMore,
 }: ProfilePostsTabProps) {
+  const navigation = useNavigation<any>();
+
   return (
     <>
       <View style={styles.composerContainer}>
@@ -87,6 +90,7 @@ export default function ProfilePostsTab({
               post={post}
               onReaction={(type) => onReactPost(post.id, type)}
               onNavigateToDetail={onOpenPostDetail}
+              onNavigateToUser={(userId) => navigation.navigate('PublicProfile', { userId })}
               showOwnerActions
               onEdit={() => onEditPost(post)}
               onDelete={() => onDeletePost(post.id)}

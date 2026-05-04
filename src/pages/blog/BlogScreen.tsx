@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
@@ -99,6 +100,7 @@ export default function BlogScreen({
 }: BlogScreenProps) {
     const { isDarkMode } = useTheme();
     const { user } = useUser();
+    const navigation = useNavigation<any>();
     const palette = isDarkMode ? SoundMateDarkColors : SoundMateLightColors;
 
     // ─── State ───
@@ -530,6 +532,7 @@ export default function BlogScreen({
                         post={item}
                         onReaction={(type) => handleReaction(item.id, type)}
                         onNavigateToDetail={onNavigateToPostDetail}
+                        onNavigateToUser={(userId) => navigation.navigate('PublicProfile', { userId })}
                     />
                 )}
                 contentContainerStyle={[styles.listContent, { paddingBottom: 100 + paddingBottom }]}

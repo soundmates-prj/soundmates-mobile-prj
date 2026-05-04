@@ -20,6 +20,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import Animated, { FadeInDown, FadeInUp, useAnimatedStyle, useSharedValue, withSequence, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
@@ -81,6 +82,7 @@ function normalizeShareMusic(post: any) {
 
 export default function PostDetailScreen({ postId, onBack }: PostDetailScreenProps) {
     const insets = useSafeAreaInsets();
+    const navigation = useNavigation<any>();
     const { user } = useUser();
     const { isDarkMode } = useTheme();
     const palette = isDarkMode ? SoundMateColors : SoundMateLightColors;
@@ -566,10 +568,12 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                 style={[styles.commentContainer, isReply && { marginTop: -4 }]}
             >
                 <View style={[styles.commentMainRow, isReply && { paddingLeft: 44 }]}>
-                    <Image
-                        source={{ uri: comment.userAvatarUrl || `https://api.dicebear.com/7.x/initials/png?seed=${comment.userId}&backgroundColor=55C5F1` }}
-                        style={[styles.commentAvatar, isReply && { width: 28, height: 28, borderRadius: 14 }]}
-                    />
+                    <TouchableOpacity onPress={() => navigation.navigate('PublicProfile', { userId: comment.userId })}>
+                        <Image
+                            source={{ uri: comment.userAvatarUrl || `https://api.dicebear.com/7.x/initials/png?seed=${comment.userId}&backgroundColor=55C5F1` }}
+                            style={[styles.commentAvatar, isReply && { width: 28, height: 28, borderRadius: 14 }]}
+                        />
+                    </TouchableOpacity>
                     <View style={styles.commentBubbleWrapper}>
                         <View style={[styles.commentBubble, { backgroundColor: isDarkMode ? '#262626' : '#F3F4F6' }]}>
                             <Text style={[styles.commentAuthor, { color: palette.textPrimary }]}>
@@ -686,10 +690,12 @@ export default function PostDetailScreen({ postId, onBack }: PostDetailScreenPro
                 {post && (
                     <Animated.View entering={FadeInUp.duration(600)}>
                         <View style={styles.authorRow}>
-                            <Image
-                                source={{ uri: post.userAvatarUrl || `https://api.dicebear.com/7.x/initials/png?seed=${post.userId}&backgroundColor=55C5F1` }}
-                                style={styles.authorAvatar}
-                            />
+                            <TouchableOpacity onPress={() => navigation.navigate('PublicProfile', { userId: post.userId })}>
+                                <Image
+                                    source={{ uri: post.userAvatarUrl || `https://api.dicebear.com/7.x/initials/png?seed=${post.userId}&backgroundColor=55C5F1` }}
+                                    style={styles.authorAvatar}
+                                />
+                            </TouchableOpacity>
                             <View>
                                 <Text style={[styles.authorName, { color: palette.textPrimary }]}>{post.userFullName || post.userId.substring(0, 10)}</Text>
                                 <Text style={[styles.postTime, { color: palette.textMuted }]}>{formatTimeAgo(post.publishedAt || post.createdAt)}</Text>

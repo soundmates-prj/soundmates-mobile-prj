@@ -46,6 +46,14 @@ export interface TransactionResponse {
     userProfile?: unknown;
 }
 
+export interface RevenueResponse {
+    id: string;
+    paymentId: string;
+    amount: number;
+    status: string;
+    createdAt: string;
+}
+
 export interface CreatePaymentRequest {
     targetType: string;
     targetId: string;
@@ -396,6 +404,31 @@ export const paymentService = {
             return {
                 success: false,
                 message: error.response?.data?.message || 'Không thể tải lịch sử giao dịch',
+            };
+        }
+    },
+    /**
+     * Get current user's revenue history
+     */
+    async getMyRevenues(): Promise<{
+        success: boolean;
+        data?: RevenueResponse[];
+        message?: string;
+    }> {
+        try {
+            const response = await authApiClient.get<ApiResponse<RevenueResponse[]>>(
+                TRANSACTION_ENDPOINTS.REVENUES
+            );
+            return {
+                success: response.data.success,
+                data: response.data.data,
+                message: response.data.message,
+            };
+        } catch (error: any) {
+            console.log('[PaymentService] getMyRevenues error:', error);
+            return {
+                success: false,
+                message: error.response?.data?.message || 'Không thể tải dữ liệu doanh thu',
             };
         }
     },

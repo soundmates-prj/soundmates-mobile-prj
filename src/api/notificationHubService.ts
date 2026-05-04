@@ -49,7 +49,7 @@ class NotificationHubService {
                 transport: signalR.HttpTransportType.WebSockets,
             })
             .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
-            .configureLogging(signalR.LogLevel.Warning)
+            .configureLogging(signalR.LogLevel.None)
             .build();
     }
 
@@ -73,7 +73,8 @@ class NotificationHubService {
                 console.log("[NotificationHub] Reconnected");
             });
             this.connection.onclose((err) => {
-                console.log("[NotificationHub] Connection closed", err);
+                const errMsg = err ? err.message || 'Unknown' : 'Clean disconnect';
+                console.log("[NotificationHub] Connection closed:", errMsg);
                 this.startPromise = null;
             });
         }

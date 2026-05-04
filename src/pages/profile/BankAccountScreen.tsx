@@ -1,25 +1,39 @@
+import { authService } from '@/src/api';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
+    Modal,
     Platform,
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { authService } from '../../api';
-import FormTextField from '../../components/ui/FormTextField';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 
 interface BankAccountScreenProps {
     onBack: () => void;
 }
+
+const BANK_OPTIONS = [
+    { id: '970415', name: 'VietinBank' },
+    { id: '970436', name: 'Vietcombank' },
+    { id: '970418', name: 'BIDV' },
+    { id: '970405', name: 'Agribank' },
+    { id: '970403', name: 'Sacombank' },
+    { id: '970407', name: 'Techcombank' },
+    { id: '970422', name: 'MBBank' },
+    { id: '970423', name: 'TPBank' },
+    { id: '970432', name: 'VPBank' },
+    { id: '970416', name: 'ACB' },
+];
 
 export default function BankAccountScreen({ onBack }: BankAccountScreenProps) {
     const { isDarkMode } = useTheme();
@@ -32,6 +46,7 @@ export default function BankAccountScreen({ onBack }: BankAccountScreenProps) {
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [showBankPicker, setShowBankPicker] = useState(false);
 
     useEffect(() => {
         const fetchBankAccount = async () => {
@@ -39,7 +54,17 @@ export default function BankAccountScreen({ onBack }: BankAccountScreenProps) {
             try {
                 const response = await authService.getBankAccount();
                 if (response.success && response.data) {
-                    setBankId(response.data.bankId || '');
+                    let fetchedBankId = response.data.bankId || '';
+                    
+                    // Normalize in case the database stored the bank name instead of the ID
+                    const matchedBank = BANK_OPTIONS.find(
+                        b => b.id === fetchedBankId || b.name.toLowerCase() === fetchedBankId.toLowerCase()
+                    );
+                    if (matchedBank) {
+                        fetchedBankId = matchedBank.id;
+                    }
+
+                    setBankId(fetchedBankId);
                     setAccountNumber(response.data.accountNumber || '');
                     setAccountName(response.data.accountName || '');
                 }
@@ -119,28 +144,42 @@ export default function BankAccountScreen({ onBack }: BankAccountScreenProps) {
                                 Nhập thông tin tài khoản ngân hàng để nhận doanh thu từ việc bán Podcast của bạn.
                             </Text>
 
-                            <FormTextField
-                                label="Tên ngân hàng (Bank Name)"
-                                value={bankId}
-                                onChangeText={setBankId}
-                                placeholder="Ví dụ: Vietcombank, MBBank..."
-                            />
+                            <View style={styles.inputGroup}>
+                                <Text style={[styles.label, { color: palette.textPrimary }]}>Tên ngân hàng</Text>
+                                <TouchableOpacity
+                                    style={[styles.input, { backgroundColor: palette.surface, borderColor: palette.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                                    onPress={() => setShowBankPicker(true)}
+                                >
+                                    <Text style={{ color: bankId ? palette.textPrimary : palette.textSecondary, fontSize: 15 }}>
+                                        {BANK_OPTIONS.find(b => b.id === bankId)?.name || (bankId ? bankId : 'Chọn ngân hàng...')}
+                                    </Text>
+                                    <Ionicons name="chevron-down" size={20} color={palette.textSecondary} />
+                                </TouchableOpacity>
+                            </View>
 
-                            <FormTextField
-                                label="Số tài khoản"
-                                value={accountNumber}
-                                onChangeText={setAccountNumber}
-                                placeholder="Nhập số tài khoản"
-                                keyboardType="number-pad"
-                            />
+                            <View style={styles.inputGroup}>
+                                <Text style={[styles.label, { color: palette.textPrimary }]}>Số tài khoản</Text>
+                                <TextInput
+                                    style={[styles.input, { backgroundColor: palette.surface, color: palette.textPrimary, borderColor: palette.border }]}
+                                    value={accountNumber}
+                                    onChangeText={setAccountNumber}
+                                    placeholder="Nhập số tài khoản"
+                                    keyboardType="number-pad"
+                                    placeholderTextColor={palette.textSecondary}
+                                />
+                            </View>
 
-                            <FormTextField
-                                label="Tên chủ tài khoản"
-                                value={accountName}
-                                onChangeText={(text) => setAccountName(text.toUpperCase())}
-                                placeholder="NGUYEN VAN A"
-                                autoCapitalize="characters"
-                            />
+                            <View style={styles.inputGroup}>
+                                <Text style={[styles.label, { color: palette.textPrimary }]}>Tên chủ tài khoản</Text>
+                                <TextInput
+                                    style={[styles.input, { backgroundColor: palette.surface, color: palette.textPrimary, borderColor: palette.border }]}
+                                    value={accountName}
+                                    onChangeText={(text) => setAccountName(text.toUpperCase())}
+                                    placeholder="NGUYEN VAN A"
+                                    autoCapitalize="characters"
+                                    placeholderTextColor={palette.textSecondary}
+                                />
+                            </View>
 
                             <TouchableOpacity
                                 style={[
@@ -162,6 +201,36 @@ export default function BankAccountScreen({ onBack }: BankAccountScreenProps) {
                     )}
                 </ScrollView>
             </KeyboardAvoidingView>
+
+            <Modal visible={showBankPicker} transparent animationType="fade">
+                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowBankPicker(false)}>
+                    <View style={[styles.modalContent, { backgroundColor: palette.surface }]}>
+                        <View style={[styles.modalHeader, { borderBottomColor: palette.border }]}>
+                            <Text style={[styles.modalTitle, { color: palette.textPrimary }]}>Chọn ngân hàng</Text>
+                            <TouchableOpacity onPress={() => setShowBankPicker(false)} style={{ padding: 4 }}>
+                                <Ionicons name="close" size={24} color={palette.textPrimary} />
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+                            {BANK_OPTIONS.map((bank) => (
+                                <TouchableOpacity
+                                    key={bank.id}
+                                    style={[styles.bankOption, { borderBottomColor: palette.border }, bankId === bank.id && { backgroundColor: palette.primary + '1A' }]}
+                                    onPress={() => {
+                                        setBankId(bank.id);
+                                        setShowBankPicker(false);
+                                    }}
+                                >
+                                    <Text style={[styles.bankOptionText, { color: palette.textPrimary }, bankId === bank.id && { color: palette.primary, fontWeight: 'bold' }]}>
+                                        {bank.name}
+                                    </Text>
+                                    {bankId === bank.id && <Ionicons name="checkmark" size={20} color={palette.primary} />}
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
         </View>
     );
 }
@@ -230,4 +299,26 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
     },
+    inputGroup: {
+        gap: 8,
+        marginBottom: 4,
+    },
+    label: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    input: {
+        borderWidth: 1,
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        fontSize: 15,
+        minHeight: 48,
+    },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+    modalContent: { width: '100%', borderRadius: 16, overflow: 'hidden' },
+    modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+    modalTitle: { fontSize: 16, fontWeight: 'bold' },
+    bankOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+    bankOptionText: { fontSize: 15 },
 });
