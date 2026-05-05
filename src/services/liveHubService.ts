@@ -383,7 +383,11 @@ class LiveHubService {
       if (parsed) callback(parsed.sessionId, parsed.count);
     };
     conn.on('ListenersUpdated', handler);
-    return () => conn.off('ListenersUpdated', handler);
+    conn.on('listenersupdated', handler);
+    return () => {
+      conn.off('ListenersUpdated', handler);
+      conn.off('listenersupdated', handler);
+    };
   }
 
   onSongChanged(callback: (song: SongChangedEvent) => void): () => void {

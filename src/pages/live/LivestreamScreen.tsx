@@ -1037,6 +1037,7 @@ export default function LivestreamScreen({
     let unsubHostMicStarted: (() => void) | null = null;
     let unsubHostMicStopped: (() => void) | null = null;
     let unsubGlobalVolumeUpdated: (() => void) | null = null;
+    let unsubListenersUpdated: (() => void) | null = null;
 
     const connectHub = async () => {
       try {
@@ -1095,6 +1096,12 @@ export default function LivestreamScreen({
           void setVolume(volume);
         });
 
+        unsubListenersUpdated = liveHubService.onListenersUpdated((hubSessionId, count) => {
+          if (hubSessionId === activeSession.id) {
+            setActiveSession((prev) => prev ? { ...prev, listenersCount: count } : prev);
+          }
+        });
+
         await liveHubService.start();
         await liveHubService.joinSession(activeSession.id, userId);
         console.log('[LivestreamScreen] SignalR joined session', activeSession.id);
@@ -1113,6 +1120,7 @@ export default function LivestreamScreen({
       if (unsubHostMicStarted) unsubHostMicStarted();
       if (unsubHostMicStopped) unsubHostMicStopped();
       if (unsubGlobalVolumeUpdated) unsubGlobalVolumeUpdated();
+      if (unsubListenersUpdated) unsubListenersUpdated();
       void liveHubService.leaveSession(activeSession.id, userId).catch(() => { });
     };
   }, [activeSession, user]);
