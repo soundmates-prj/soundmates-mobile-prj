@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, Dimensions, Easing, Image, Linking, PanResponder, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, DeviceEventEmitter, Dimensions, Easing, Image, Linking, Modal, PanResponder, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SoundMateColors, SoundMateLightColors } from '../../../constants/theme';
 import {
@@ -1798,17 +1798,6 @@ export default function HomeScreen({
                         />
                     )}
                 </View>
-            ) : showNotificationScreen ? (
-                <NotificationScreen
-                    onBack={() => {
-                        setShowNotificationScreen(false);
-                        // Refresh unread count when closing notification screen
-                        notificationService.getNotifications(1, 40).then(page => {
-                            const unread = page.items.filter(n => !n.isRead).length;
-                            setUnreadNotificationCount(unread);
-                        }).catch(() => {});
-                    }}
-                />
             ) : showCreatePost ? (
                 <CreatePostScreen
                     onBack={() => {
@@ -1823,6 +1812,32 @@ export default function HomeScreen({
                 />
             ) : (
                 <>
+                    {/* ── Notification Modal ── */}
+                    {showNotificationScreen && (
+                        <Modal
+                            visible={showNotificationScreen}
+                            animationType="slide"
+                            presentationStyle="fullScreen"
+                            onRequestClose={() => {
+                                setShowNotificationScreen(false);
+                                notificationService.getNotifications(1, 40).then(page => {
+                                    const unread = page.items.filter(n => !n.isRead).length;
+                                    setUnreadNotificationCount(unread);
+                                }).catch(() => {});
+                            }}
+                        >
+                            <NotificationScreen
+                                onBack={() => {
+                                    setShowNotificationScreen(false);
+                                    notificationService.getNotifications(1, 40).then(page => {
+                                        const unread = page.items.filter(n => !n.isRead).length;
+                                        setUnreadNotificationCount(unread);
+                                    }).catch(() => {});
+                                }}
+                            />
+                        </Modal>
+                    )}
+
                     <View style={styles.mainTabViewport} {...mainTabSwipeResponder.panHandlers}>
                         {previousMainTab ? (
                             <Animated.View
