@@ -736,10 +736,8 @@ export const blogService = {
     }> {
         try {
             const response = await authApiClient.post<ApiResponse<any>>(
-                `${BLOG_ENDPOINTS.REPORTS}`,
+                `${BLOG_ENDPOINTS.POSTS}/${postId}/reports`,
                 { 
-                    targetType: 'Post', 
-                    targetId: postId, 
                     reason, 
                     description 
                 }

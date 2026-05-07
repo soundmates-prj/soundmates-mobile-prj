@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DeviceEventEmitter, Image, PanResponder, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, DeviceEventEmitter, Image, PanResponder, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
     useAnimatedStyle,
     useSharedValue,
@@ -12,6 +12,7 @@ import { SoundMateDarkColors, SoundMateLightColors } from '../../../constants/th
 import { blogService } from '../../api';
 import { useTheme } from '../../context/ThemeContext';
 import { PostReactionsModal } from './PostReactionsModal';
+import { PostReportModal } from './PostReportModal';
 
 export type ReactionType = 'like' | 'love' | 'haha' | 'wow' | 'sad' | 'angry';
 
@@ -120,6 +121,7 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, onN
     const [reactionCountLocal, setReactionCountLocal] = useState(post.reactionCount);
     const [showOwnerMenu, setShowOwnerMenu] = useState(false);
     const [showReactionsModal, setShowReactionsModal] = useState(false);
+    const [showReportModal, setShowReportModal] = useState(false);
     const [topReactions, setTopReactions] = useState<ReactionType[]>([]);
 
     useEffect(() => {
@@ -333,6 +335,10 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, onN
         onDelete?.(post.id);
     }, [onDelete, post.id]);
 
+    const handleReportPost = useCallback(() => {
+        setShowReportModal(true);
+    }, []);
+
     const reactionAnimationStyle = useAnimatedStyle(() => ({
         transform: [{ scale: reactionScale.value }],
     }));
@@ -382,7 +388,7 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, onN
                             </Text>
                         </View>
                     </TouchableOpacity>
-                    {showOwnerActions && (
+                    {showOwnerActions ? (
                         <View style={styles.ownerActionsWrap}>
                             <TouchableOpacity
                                 style={styles.moreButton}
@@ -404,6 +410,16 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, onN
                                     </TouchableOpacity>
                                 </View>
                             )}
+                        </View>
+                    ) : (
+                        <View style={styles.ownerActionsWrap}>
+                            <TouchableOpacity
+                                style={styles.moreButton}
+                                onPress={handleReportPost}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons name="flag-outline" size={20} color={palette.textMuted} />
+                            </TouchableOpacity>
                         </View>
                     )}
                 </View>
@@ -609,6 +625,11 @@ export function BlogPostCard({ post, onReaction, onLike, onNavigateToDetail, onN
                 visible={showReactionsModal}
                 onClose={() => setShowReactionsModal(false)}
                 onNavigateToUser={onNavigateToUser}
+            />
+            <PostReportModal
+                postId={post.id}
+                visible={showReportModal}
+                onClose={() => setShowReportModal(false)}
             />
         </View>
     );
